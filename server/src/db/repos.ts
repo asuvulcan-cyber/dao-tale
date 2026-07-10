@@ -382,7 +382,12 @@ export const reposFrases = {
     capituloId: number,
     opcoes: { sobrescrever: boolean; sobrescreverEditadas: boolean },
   ): void {
-    if (!opcoes.sobrescrever) return; // padrão: só pendente/erro já estão "abertas"
+    // Frases que falharam voltam à fila em qualquer retomada — sem isso, um bloco
+    // com erro ficaria travado para sempre, já que o job só processa 'pendente'.
+    db.prepare(
+      "UPDATE frases SET status_traducao = 'pendente' WHERE capitulo_id = ? AND status_traducao = 'erro'",
+    ).run(capituloId);
+    if (!opcoes.sobrescrever) return; // padrão: só pendente/erro são retraduzidas
     if (opcoes.sobrescreverEditadas) {
       db.prepare("UPDATE frases SET status_traducao = 'pendente' WHERE capitulo_id = ?").run(capituloId);
     } else {

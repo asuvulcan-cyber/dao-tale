@@ -85,8 +85,11 @@ export function EditorCapitulo() {
   }, [data?.progresso.em_execucao, capituloId]);
 
   const traduzir = useMutation({
-    mutationFn: () =>
-      api('POST', `/capitulos/${capituloId}/traduzir`, provedorEscolhido ? { provedor: provedorEscolhido } : {}),
+    mutationFn: (opcoes: { sobrescrever?: boolean; sobrescrever_editadas?: boolean } = {}) =>
+      api('POST', `/capitulos/${capituloId}/traduzir`, {
+        ...(provedorEscolhido ? { provedor: provedorEscolhido } : {}),
+        ...opcoes,
+      }),
     onSuccess: () => {
       setErroJob('');
       conectarEventos();
@@ -94,6 +97,19 @@ export function EditorCapitulo() {
     },
     onError: (e) => setErroJob((e as Error).message),
   });
+
+  function retraduzirTudo(frases: Frase[]) {
+    if (!window.confirm('Retraduzir o capítulo inteiro com o provedor selecionado?')) return;
+    const editadas = frases.filter((f) => f.editado_manualmente).length;
+    let sobrescreverEditadas = false;
+    if (editadas > 0) {
+      sobrescreverEditadas = window.confirm(
+        `Há ${editadas} frase${editadas === 1 ? '' : 's'} editada${editadas === 1 ? '' : 's'} manualmente.\n\n` +
+          'OK — sobrescrever TAMBÉM as editadas.\nCancelar — preservar as editadas e retraduzir só o resto.',
+      );
+    }
+    traduzir.mutate({ sobrescrever: true, sobrescrever_editadas: sobrescreverEditadas });
+  }
 
   const cancelar = useMutation({
     mutationFn: () => api('POST', `/capitulos/${capituloId}/traduzir/cancelar`),
@@ -168,26 +184,31 @@ export function EditorCapitulo() {
               </Botao>
             </>
           ) : (
-            (pendentes > 0 || comErro > 0) && (
-              <>
-                <select
-                  value={provedorEscolhido}
-                  onChange={(e) => setProvedorEscolhido(e.target.value)}
-                  title="Provedor desta tradução (vazio = padrão da obra/global)"
-                  className="rounded border border-stone-300 px-2 py-1 text-sm"
-                >
-                  <option value="">Provedor padrão</option>
-                  {provedores?.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome}
-                    </option>
-                  ))}
-                </select>
-                <Botao onClick={() => traduzir.mutate()} disabled={traduzir.isPending}>
+            <>
+              <select
+                value={provedorEscolhido}
+                onChange={(e) => setProvedorEscolhido(e.target.value)}
+                title="Provedor desta tradução (vazio = padrão da obra/global)"
+                className="rounded border border-stone-300 px-2 py-1 text-sm"
+              >
+                <option value="">Provedor padrão</option>
+                {provedores?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+              {(pendentes > 0 || comErro > 0) && (
+                <Botao onClick={() => traduzir.mutate({})} disabled={traduzir.isPending}>
                   {frases.some((f) => f.status_traducao === 'traduzida') ? 'Retomar tradução' : 'Traduzir'}
                 </Botao>
-              </>
-            )
+              )}
+              {frases.some((f) => f.status_traducao === 'traduzida') && (
+                <Botao variante="secundario" onClick={() => retraduzirTudo(frases)} disabled={traduzir.isPending}>
+                  Retraduzir tudo
+                </Botao>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -198,7 +219,12 @@ export function EditorCapitulo() {
         {/* Editor bilíngue */}
         <div className="min-w-0 flex-1 space-y-4">
           {paragrafos.map(([idx, frasesDoParagrafo]) => (
-            <div key={idx} className="overflow-hidden rounded-lg border border-stone-300 bg-white">
+            // content-visibility: parágrafos fora da tela não são renderizados —
+            // mantém capítulos muito longos (600+ frases) fluidos sem virtualização.
+            <div
+              key={idx}
+              className="overflow-hidden rounded-lg border border-stone-300 bg-white [contain-intrinsic-size:auto_120px] [content-visibility:auto]"
+            >
               {frasesDoParagrafo.map((frase) => (
                 <LinhaFrase
                   key={frase.id}

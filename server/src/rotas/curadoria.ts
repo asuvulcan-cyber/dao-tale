@@ -100,7 +100,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
     const corpo = z.object({ csv: z.string().min(1) }).safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Envie o conteúdo CSV.' } }, 400);
     const obraId = Number(c.req.param('obraId'));
-    const linhas = corpo.data.csv.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
+    const linhas = corpo.data.csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim());
     let inseridos = 0;
     let duplicados = 0;
     let invalidos = 0;
@@ -132,7 +132,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
       linhas.push([campoCsv(e.termo_zh), campoCsv(e.termo_pt), e.categoria, campoCsv(e.nota)].join(','));
     }
     // BOM: necessário para o Excel no Windows abrir chinês corretamente (doc 03).
-    return c.body('﻿' + linhas.join('\n'), 200, {
+    return c.body('\uFEFF' + linhas.join('\n'), 200, {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="glossario.csv"',
     });
@@ -226,7 +226,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
         ].join(','),
       );
     }
-    return c.body('﻿' + linhas.join('\n'), 200, {
+    return c.body('\uFEFF' + linhas.join('\n'), 200, {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="banco_testes.csv"',
     });

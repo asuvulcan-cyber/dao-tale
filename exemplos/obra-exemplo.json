@@ -1,0 +1,190 @@
+{
+  "formato": "dao-tale-export",
+  "versao_schema": 1,
+  "exportado_em": "2026-07-10T20:00:00.000Z",
+  "obra": {
+    "titulo": "Dez Dias Até o Fim (exemplo)",
+    "titulo_original": "十日终焉",
+    "provedor_padrao": "mock",
+    "modelo_padrao": null
+  },
+  "prompts": [
+    {
+      "versao": "1.0",
+      "conteudo": "# Prompt de tradução — Dez Dias Até o Fim\n\n## 1. Tom e registro\n1.1 Manter o tom sombrio e contemplativo da obra original.\n1.2 Diálogos devem soar naturais em PT-BR, sem literalidade excessiva.\n\n## 2. Nomes e termos\n2.1 Nomes próprios e termos de mundo seguem o glossário da obra, sem exceção.\n2.2 Ao encontrar termo novo relevante, listar ao final com a tradução adotada.\n\n## 3. Estilo\n3.1 Preservar a pontuação expressiva (reticências, exclamações).",
+      "notas_versao": null,
+      "ativo": false,
+      "criado_em": "2026-07-01T12:00:00.000Z"
+    },
+    {
+      "versao": "1.1",
+      "conteudo": "# Prompt de tradução — Dez Dias Até o Fim\n\n## 1. Tom e registro\n1.1 Manter o tom sombrio e contemplativo da obra original.\n1.2 Diálogos devem soar naturais em PT-BR, sem literalidade excessiva.\n\n## 2. Nomes e termos\n2.1 Nomes próprios e termos de mundo seguem o glossário da obra, sem exceção.\n2.2 Ao encontrar termo novo relevante, listar ao final com a tradução adotada.\n\n## 3. Estilo\n3.1 Preservar a pontuação expressiva (reticências, exclamações).\n3.2 Não ocidentalizar metáforas chinesas quando compreensíveis no contexto.",
+      "notas_versao": "Regra 3.2 adicionada após dois casos recorrentes de metáforas achatadas na revisão.",
+      "ativo": true,
+      "criado_em": "2026-07-08T12:00:00.000Z"
+    }
+  ],
+  "capitulos": [
+    {
+      "numero": 1,
+      "titulo": "O início do fim",
+      "status": "revisado",
+      "texto_origem": "第一章 终焉之始\n「等等！」她喊道。「你不能就这样离开。」\n他沉默了……然后开口。「命运已经决定了。十日之后，一切终结。」\n她握紧了手中的灵剑，剑身上刻着古老的符文。\n「那我们就一起面对终焉。」\n夜色渐深，宗门的灯火在远处闪烁。",
+      "provedor": "mock",
+      "modelo": "mock-v1",
+      "prompt_versao": "1.1",
+      "criado_em": "2026-07-09T12:00:00.000Z",
+      "frases": [
+        {
+          "ordem": 0,
+          "paragrafo": 0,
+          "texto_zh": "第一章 终焉之始",
+          "texto_pt": "Capítulo 1 — O Início do Fim Derradeiro",
+          "texto_pt_original_ia": "Capítulo 1 — O Início do Fim Derradeiro",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 1,
+          "paragrafo": 1,
+          "texto_zh": "「等等！」她喊道。",
+          "texto_pt": "— Espera! — ela gritou.",
+          "texto_pt_original_ia": "— Espere! — ela gritou.",
+          "editado_manualmente": true,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 2,
+          "paragrafo": 1,
+          "texto_zh": "「你不能就这样离开。」",
+          "texto_pt": "— Você não pode simplesmente ir embora assim.",
+          "texto_pt_original_ia": "— Você não pode simplesmente ir embora assim.",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 3,
+          "paragrafo": 2,
+          "texto_zh": "他沉默了……然后开口。",
+          "texto_pt": "Ele ficou em silêncio… e então falou.",
+          "texto_pt_original_ia": "Ele ficou em silêncio… e então falou.",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 4,
+          "paragrafo": 2,
+          "texto_zh": "「命运已经决定了。十日之后，一切终结。」",
+          "texto_pt": "— O destino já foi decidido. Em dez dias, tudo chega ao fim.",
+          "texto_pt_original_ia": "— O destino já foi decidido. Em dez dias, tudo chega ao fim.",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 5,
+          "paragrafo": 3,
+          "texto_zh": "她握紧了手中的灵剑，剑身上刻着古老的符文。",
+          "texto_pt": "Ela apertou a espada espiritual em suas mãos; runas antigas estavam gravadas na lâmina.",
+          "texto_pt_original_ia": "Ela apertou a espada espiritual em suas mãos; runas antigas estavam gravadas na lâmina.",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 6,
+          "paragrafo": 4,
+          "texto_zh": "「那我们就一起面对终焉。」",
+          "texto_pt": "— Então enfrentaremos o Fim Derradeiro juntos.",
+          "texto_pt_original_ia": "— Então enfrentaremos o Fim Derradeiro juntos.",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        },
+        {
+          "ordem": 7,
+          "paragrafo": 5,
+          "texto_zh": "夜色渐深，宗门的灯火在远处闪烁。",
+          "texto_pt": "A noite se aprofundava; as luzes da seita cintilavam ao longe.",
+          "texto_pt_original_ia": "A noite se aprofundava; as luzes da seita cintilavam ao longe.",
+          "editado_manualmente": false,
+          "status_traducao": "traduzida"
+        }
+      ]
+    }
+  ],
+  "glossario": [
+    {
+      "termo_zh": "终焉",
+      "termo_pt": "Fim Derradeiro",
+      "categoria": "outro",
+      "nota": "Conceito central da obra; sempre com iniciais maiúsculas.",
+      "origem": "manual",
+      "criado_em": "2026-07-01T12:00:00.000Z"
+    },
+    {
+      "termo_zh": "灵剑",
+      "termo_pt": "espada espiritual",
+      "categoria": "poder-habilidade",
+      "nota": null,
+      "origem": "manual",
+      "criado_em": "2026-07-01T12:00:00.000Z"
+    },
+    {
+      "termo_zh": "宗门",
+      "termo_pt": "seita",
+      "categoria": "entidade",
+      "nota": "Nunca traduzir como \"clã\".",
+      "origem": "manual",
+      "criado_em": "2026-07-01T12:00:00.000Z"
+    },
+    {
+      "termo_zh": "符文",
+      "termo_pt": "runas",
+      "categoria": "poder-habilidade",
+      "nota": null,
+      "origem": "sugerido-ia",
+      "criado_em": "2026-07-09T12:00:00.000Z"
+    }
+  ],
+  "termos_sugeridos": [
+    {
+      "capitulo_numero": 1,
+      "termo_zh": "灯火",
+      "termo_pt": "luzes",
+      "categoria": "outro",
+      "contexto": "夜色渐深，宗门的灯火在远处闪烁。",
+      "status": "pendente",
+      "criado_em": "2026-07-09T12:05:00.000Z"
+    }
+  ],
+  "banco_testes": [
+    {
+      "capitulo_numero": 1,
+      "frase_ordem": 1,
+      "trecho_zh": "「等等！」她喊道。",
+      "pergunta": "\"Espere\" não ficou formal demais para uma fala urgente?",
+      "veredito": "incorreto",
+      "justificativa": "A regra 1.2 pede diálogos naturais; em urgência, o imperativo coloquial \"Espera!\" soa mais crível em PT-BR do que \"Espere!\".",
+      "secao_regra": "1.2-dialogos-naturais",
+      "correcao_proposta": "— Espera! — ela gritou.",
+      "status": "corrigido",
+      "provedor": "mock",
+      "modelo": "mock-v1",
+      "resposta_bruta": "{\"trecho_zh\":\"「等等！」她喊道。\",\"veredito\":\"incorreto\",\"justificativa\":\"A regra 1.2 pede diálogos naturais; em urgência, o imperativo coloquial soa mais crível.\",\"secao_regra\":\"1.2-dialogos-naturais\",\"correcao_proposta\":\"— Espera! — ela gritou.\"}",
+      "criado_em": "2026-07-09T12:10:00.000Z"
+    },
+    {
+      "capitulo_numero": 1,
+      "frase_ordem": 6,
+      "trecho_zh": "那我们就一起面对终焉",
+      "pergunta": "Por que \"Fim Derradeiro\" e não apenas \"o fim\"?",
+      "veredito": "correto",
+      "justificativa": "A regra 2.1 exige o termo canônico do glossário: 终焉 → Fim Derradeiro, conceito nomeado da obra, distinto de 结束 (fim comum).",
+      "secao_regra": "2.1-glossario-canonico",
+      "correcao_proposta": null,
+      "status": "confirmado",
+      "provedor": "mock",
+      "modelo": "mock-v1",
+      "resposta_bruta": "{\"trecho_zh\":\"那我们就一起面对终焉\",\"veredito\":\"correto\",\"justificativa\":\"A regra 2.1 exige o termo canônico do glossário.\",\"secao_regra\":\"2.1-glossario-canonico\",\"correcao_proposta\":null}",
+      "criado_em": "2026-07-09T12:15:00.000Z"
+    }
+  ]
+}

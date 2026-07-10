@@ -17,6 +17,8 @@ npm run start   # compila a interface na 1ª vez, sobe em http://127.0.0.1:8317 
 
 Sem chave de API dá para usar tudo com o provedor **Simulado**. Chaves reais (Claude/Gemini) são cadastradas em Configurações e guardadas no cofre de credenciais do sistema.
 
+**Primeiro teste?** Siga o roteiro de [`docs/07-guia-de-teste.md`](docs/07-guia-de-teste.md) — inclui uma obra de exemplo pronta (`exemplos/obra-exemplo.json`, importável com um clique) e soluções para os tropeços comuns.
+
 Desenvolvimento: `npm run dev` (servidor + Vite com reload) · testes: `npm test` · tipos: `npm run typecheck` · atalho de área de trabalho: `npm run atalho`.
 
 ## Documentação de projeto
