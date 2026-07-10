@@ -1,0 +1,230 @@
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Configuracoes as Config, EstadoConfiguracoes, ProvedorId } from '@dao-tale/shared';
+import { api } from '../api';
+import { Aviso, Botao, Etiqueta } from '../App';
+
+interface ProvedorInfo {
+  id: ProvedorId;
+  nome: string;
+  precisa_chave: boolean;
+  modelo_padrao: string;
+}
+
+export function Configuracoes() {
+  const clienteQuery = useQueryClient();
+
+  const { data: estado } = useQuery({
+    queryKey: ['configuracoes'],
+    queryFn: () => api<EstadoConfiguracoes>('GET', '/configuracoes'),
+  });
+
+  const { data: provedores } = useQuery({
+    queryKey: ['provedores'],
+    queryFn: () => api<ProvedorInfo[]>('GET', '/provedores'),
+  });
+
+  if (!estado || !provedores) return <p className="text-stone-500">Carregando…</p>;
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      <h1 className="text-2xl font-bold">Configurações</h1>
+
+      <section className="rounded-lg border border-stone-300 bg-white p-4">
+        <h2 className="mb-1 font-semibold">Chaves de API</h2>
+        <p className="mb-3 text-sm text-stone-600">
+          Guardadas {estado.modo_guarda_chaves === 'keyring' ? 'no cofre de credenciais do sistema operacional' : (
+            <>em arquivo local com permissão restrita (<code>credenciais.json</code> no diretório de dados) — o
+            cofre do sistema não está disponível nesta máquina</>
+          )}. As chaves nunca saem da sua máquina, exceto na chamada direta à API do provedor.
+        </p>
+        <div className="space-y-3">
+          {provedores
+            .filter((p) => p.precisa_chave)
+            .map((p) => (
+              <CartaoCredencial
+                key={p.id}
+                provedor={p}
+                configurada={estado.credenciais.find((c) => c.provedor === p.id)?.configurada ?? false}
+                aoMudar={() => clienteQuery.invalidateQueries({ queryKey: ['configuracoes'] })}
+              />
+            ))}
+        </div>
+      </section>
+
+      <FormularioPadroes
+        config={estado.configuracoes}
+        provedores={provedores}
+        aoSalvar={() => clienteQuery.invalidateQueries({ queryKey: ['configuracoes'] })}
+      />
+
+      <section className="rounded-lg border border-stone-300 bg-white p-4 text-sm text-stone-600">
+        <h2 className="mb-1 font-semibold text-stone-900">Dados</h2>
+        <p>
+          Banco de dados e arquivos do aplicativo: <code className="rounded bg-stone-100 px-1">{estado.caminho_dados}</code>
+        </p>
+        <p className="mt-1">Para backup manual, copie esse diretório inteiro com o aplicativo fechado.</p>
+      </section>
+    </div>
+  );
+}
+
+function CartaoCredencial({
+  provedor,
+  configurada,
+  aoMudar,
+}: {
+  provedor: ProvedorInfo;
+  configurada: boolean;
+  aoMudar: () => void;
+}) {
+  const [chave, setChave] = useState('');
+  const [mensagem, setMensagem] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+
+  const salvar = useMutation({
+    mutationFn: () => api('PUT', `/credenciais/${provedor.id}`, { chave }),
+    onSuccess: () => {
+      setChave('');
+      setMensagem({ tipo: 'ok', texto: 'Chave salva.' });
+      aoMudar();
+    },
+    onError: (e) => setMensagem({ tipo: 'erro', texto: (e as Error).message }),
+  });
+
+  const testar = useMutation({
+    mutationFn: () => api<{ ok: boolean; mensagem: string }>('POST', `/credenciais/${provedor.id}/testar`),
+    onSuccess: (r) => setMensagem({ tipo: r.ok ? 'ok' : 'erro', texto: r.mensagem }),
+  });
+
+  const remover = useMutation({
+    mutationFn: () => api('DELETE', `/credenciais/${provedor.id}`),
+    onSuccess: () => {
+      setMensagem({ tipo: 'ok', texto: 'Chave removida.' });
+      aoMudar();
+    },
+  });
+
+  return (
+    <div className="rounded border border-stone-200 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="font-medium">{provedor.nome}</span>
+        {configurada ? <Etiqueta cor="green">chave configurada</Etiqueta> : <Etiqueta>sem chave</Etiqueta>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <input
+          type="password"
+          value={chave}
+          onChange={(e) => setChave(e.target.value)}
+          placeholder={configurada ? 'Substituir chave…' : 'Colar chave de API…'}
+          className="flex-1 rounded border border-stone-300 px-2 py-1.5 text-sm"
+        />
+        <Botao onClick={() => salvar.mutate()} disabled={!chave.trim() || salvar.isPending}>
+          Salvar
+        </Botao>
+        {configurada && (
+          <>
+            <Botao variante="secundario" onClick={() => testar.mutate()} disabled={testar.isPending}>
+              {testar.isPending ? 'Testando…' : 'Testar'}
+            </Botao>
+            <Botao variante="perigo" onClick={() => remover.mutate()}>
+              Remover
+            </Botao>
+          </>
+        )}
+      </div>
+      {mensagem && <Aviso tipo={mensagem.tipo}>{mensagem.texto}</Aviso>}
+    </div>
+  );
+}
+
+function FormularioPadroes({
+  config,
+  provedores,
+  aoSalvar,
+}: {
+  config: Config;
+  provedores: ProvedorInfo[];
+  aoSalvar: () => void;
+}) {
+  const [valores, setValores] = useState<Config>(config);
+  const [salvo, setSalvo] = useState(false);
+
+  const salvar = useMutation({
+    mutationFn: () => api('PUT', '/configuracoes', valores),
+    onSuccess: () => {
+      setSalvo(true);
+      aoSalvar();
+      setTimeout(() => setSalvo(false), 3000);
+    },
+  });
+
+  return (
+    <section className="rounded-lg border border-stone-300 bg-white p-4">
+      <h2 className="mb-3 font-semibold">Padrões globais</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          Provedor padrão
+          <select
+            value={valores.provedor_padrao}
+            onChange={(e) => setValores({ ...valores, provedor_padrao: e.target.value as ProvedorId })}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          >
+            {provedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Modelo padrão (vazio = padrão do provedor)
+          <input
+            value={valores.modelo_padrao}
+            onChange={(e) => setValores({ ...valores, modelo_padrao: e.target.value })}
+            placeholder={provedores.find((p) => p.id === valores.provedor_padrao)?.modelo_padrao}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+        <label className="block text-sm">
+          Frases por bloco de tradução
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={valores.tamanho_bloco}
+            onChange={(e) => setValores({ ...valores, tamanho_bloco: Number(e.target.value) })}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+        <label className="block text-sm">
+          Frases vizinhas na revisão (cada lado)
+          <input
+            type="number"
+            min={0}
+            max={10}
+            value={valores.vizinhas_revisao}
+            onChange={(e) => setValores({ ...valores, vizinhas_revisao: Number(e.target.value) })}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+        <label className="block text-sm">
+          Cauda de contexto entre blocos (frases)
+          <input
+            type="number"
+            min={0}
+            max={10}
+            value={valores.cauda_contexto}
+            onChange={(e) => setValores({ ...valores, cauda_contexto: Number(e.target.value) })}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+          Salvar padrões
+        </Botao>
+        {salvo && <span className="text-sm text-green-700">Salvo.</span>}
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,21 @@
+{
+  "name": "dao-tale",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Aplicativo local de tradução e revisão assistida (chinês → PT-BR)",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm -w server run dev\" \"npm -w web run dev\"",
+    "build": "npm -w web run build",
+    "start": "node scripts/start.mjs",
+    "test": "npm -w server run test",
+    "typecheck": "npm -w server run typecheck && npm -w web run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
