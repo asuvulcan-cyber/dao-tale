@@ -27,12 +27,14 @@ Nota: a lista virtualizada para capítulos muito longos ficou de fora do MVP —
 - [x] **Mesclar/dividir frases** no editor (correção de segmentação) com renumeração transacional em duas fases e religação dos casos de teste.
 - [x] **Exportação completa da obra** (JSON `dao-tale-export` v1, chaves naturais) e reimportação com remapeamento de ids.
 
-## Fase 3 — Refinamento e empacotamento
+## Fase 3 — Refinamento e empacotamento — ✅ CONCLUÍDA (exceto empacotamento, adiado por decisão)
 
-- [ ] **Versionamento do prompt mãe — tela completa:** histórico, diff entre versões, notas, reverter (o modelo de dados já suporta desde a Fase 1; a Fase 1 só precisa de criar/ativar).
-- [ ] **Alerta "regra nova necessária":** agregado por `secao_regra`, badge quando 2+ casos não confirmados da mesma seção.
-- [ ] **Empacotamento desktop** (Tauri com sidecar Node, ou Electron) **se** o formato web local se mostrar limitante no uso diário — decisão adiada de propósito.
-- [ ] Varredura reversa de consistência do glossário (doc 05 §4.2).
+- [x] **Versionamento do prompt mãe — tela completa:** histórico, diff entre versões (LCS por linha, com notas da versão), reverter.
+- [x] **Alerta "regra nova necessária":** agregado por `secao_regra`, alerta clicável quando 2+ casos não confirmados da mesma seção (entregue na Fase 2).
+- [x] **Varredura reversa de consistência do glossário** (doc 05 §4.2): botão "Consistência" no editor aponta frases onde o termo canônico do glossário não aparece na tradução, com navegação direta à frase.
+- [x] **Seleção de provedor/modelo por obra e por tradução** (requisito 4.7 do briefing): preferências de IA na página da obra + seletor de provedor na barra do editor a cada tradução.
+- [x] **Atalho de "abrir um programa"** sem empacotamento: `npm run atalho` cria atalho de área de trabalho (Windows, .vbs sem console) ou entrada no menu de aplicativos (Linux, .desktop).
+- [ ] **Empacotamento desktop** (Tauri com sidecar Node, ou Electron) — deliberadamente adiado: o critério do briefing era "se o formato web local se mostrar limitante no uso diário", o que só o uso real pode responder. O atalho acima cobre a experiência de abrir com um clique; se ainda assim incomodar, este item volta.
 
 ## Riscos e pontos de atenção
 

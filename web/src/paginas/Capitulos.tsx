@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Capitulo, CapituloResumo } from '@dao-tale/shared';
+import type { Capitulo, CapituloResumo, Obra, ProvedorId } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
 
@@ -110,6 +110,83 @@ export function Capitulos() {
             </div>
           );
         })}
+      </div>
+
+      <PreferenciasObra />
+    </div>
+  );
+}
+
+function PreferenciasObra() {
+  const { obraId } = useParams();
+  const clienteQuery = useQueryClient();
+  const [salvo, setSalvo] = useState(false);
+
+  const { data: obra } = useQuery({
+    queryKey: ['obra', obraId],
+    queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
+  });
+  const { data: provedores } = useQuery({
+    queryKey: ['provedores'],
+    queryFn: () => api<{ id: ProvedorId; nome: string; modelo_padrao: string }[]>('GET', '/provedores'),
+  });
+
+  const [provedor, setProvedor] = useState<string | null>(null);
+  const [modelo, setModelo] = useState<string | null>(null);
+  const provedorAtual = provedor ?? obra?.provedor_padrao ?? '';
+  const modeloAtual = modelo ?? obra?.modelo_padrao ?? '';
+
+  const salvar = useMutation({
+    mutationFn: () =>
+      api('PUT', `/obras/${obraId}`, {
+        provedor_padrao: provedorAtual || null,
+        modelo_padrao: modeloAtual || null,
+      }),
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['obra', obraId] });
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+    },
+  });
+
+  if (!obra || !provedores) return null;
+
+  return (
+    <div className="mt-6 rounded-lg border border-stone-300 bg-white p-4">
+      <h3 className="mb-1 text-sm font-semibold">Preferências de IA desta obra</h3>
+      <p className="mb-3 text-xs text-stone-500">
+        Usadas em toda tradução e revisão da obra; deixe em branco para herdar o padrão global das Configurações. Cada
+        tradução ainda pode escolher outro provedor na hora (útil para comparar modelos no mesmo texto).
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block text-sm">
+          Provedor
+          <select
+            value={provedorAtual}
+            onChange={(e) => setProvedor(e.target.value)}
+            className="mt-1 block rounded border border-stone-300 px-2 py-1.5"
+          >
+            <option value="">Padrão global</option>
+            {provedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Modelo (vazio = padrão do provedor)
+          <input
+            value={modeloAtual}
+            onChange={(e) => setModelo(e.target.value)}
+            placeholder={provedores.find((p) => p.id === provedorAtual)?.modelo_padrao ?? ''}
+            className="mt-1 block w-64 rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+        <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+          Salvar
+        </Botao>
+        {salvo && <span className="pb-2 text-sm text-green-700">Salvo.</span>}
       </div>
     </div>
   );

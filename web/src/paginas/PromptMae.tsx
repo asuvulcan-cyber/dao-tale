@@ -4,12 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PromptMae as Prompt } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
+import { diffLinhas } from '../util/diff';
 
 export function PromptMae() {
   const { obraId } = useParams();
   const clienteQuery = useQueryClient();
   const [selecionado, setSelecionado] = useState<number | null>(null);
   const [mostrarNova, setMostrarNova] = useState(false);
+  const [comparando, setComparando] = useState(false);
   const [erro, setErro] = useState('');
 
   const { data: versoes } = useQuery({
@@ -52,9 +54,14 @@ export function PromptMae() {
       <div className="flex gap-4">
         {/* Histórico de versões */}
         <div className="w-64 shrink-0 space-y-2">
-          <Botao className="w-full" onClick={() => setMostrarNova((v) => !v)}>
+          <Botao className="w-full" onClick={() => { setMostrarNova((v) => !v); setComparando(false); }}>
             {mostrarNova ? 'Cancelar' : 'Nova versão'}
           </Botao>
+          {(versoes?.length ?? 0) >= 2 && (
+            <Botao variante="secundario" className="w-full" onClick={() => { setComparando((v) => !v); setMostrarNova(false); }}>
+              {comparando ? 'Fechar comparação' : 'Comparar versões'}
+            </Botao>
+          )}
           {versoes?.map((v) => (
             <div
               key={v.id}
@@ -87,7 +94,9 @@ export function PromptMae() {
 
         {/* Conteúdo */}
         <div className="min-w-0 flex-1">
-          {mostrarNova ? (
+          {comparando && versoes ? (
+            <ComparadorVersoes versoes={versoes} />
+          ) : mostrarNova ? (
             <FormularioNovaVersao
               conteudoInicial={ativo?.conteudo ?? ''}
               versaoSugerida={sugerirVersao(versoes ?? [])}
@@ -110,6 +119,63 @@ export function PromptMae() {
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ComparadorVersoes({ versoes }: { versoes: Prompt[] }) {
+  // Ordem cronológica: por padrão compara a penúltima com a mais recente.
+  const cronologicas = [...versoes].sort((a, b) => a.criado_em.localeCompare(b.criado_em));
+  const [deId, setDeId] = useState(cronologicas[cronologicas.length - 2].id);
+  const [paraId, setParaId] = useState(cronologicas[cronologicas.length - 1].id);
+  const de = versoes.find((v) => v.id === deId)!;
+  const para = versoes.find((v) => v.id === paraId)!;
+  const diff = diffLinhas(de.conteudo, para.conteudo);
+  const mudancas = diff.filter((l) => l.tipo !== 'igual').length;
+
+  const estiloLinha = {
+    igual: 'text-stone-600',
+    adicionada: 'bg-green-50 text-green-900',
+    removida: 'bg-red-50 text-red-800 line-through decoration-red-300',
+  } as const;
+  const marcador = { igual: '  ', adicionada: '+ ', removida: '- ' } as const;
+
+  return (
+    <div className="rounded-lg border border-stone-300 bg-white p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <span>Comparar</span>
+        <select value={deId} onChange={(e) => setDeId(Number(e.target.value))} className="rounded border border-stone-300 px-2 py-1">
+          {cronologicas.map((v) => (
+            <option key={v.id} value={v.id}>
+              v{v.versao}
+            </option>
+          ))}
+        </select>
+        <span>→</span>
+        <select value={paraId} onChange={(e) => setParaId(Number(e.target.value))} className="rounded border border-stone-300 px-2 py-1">
+          {cronologicas.map((v) => (
+            <option key={v.id} value={v.id}>
+              v{v.versao}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-stone-500">
+          {mudancas === 0 ? 'conteúdos idênticos' : `${mudancas} linha${mudancas === 1 ? '' : 's'} alterada${mudancas === 1 ? '' : 's'}`}
+        </span>
+      </div>
+      {para.notas_versao && (
+        <p className="mb-2 rounded bg-stone-50 px-2 py-1 text-xs text-stone-600">
+          Notas da v{para.versao}: {para.notas_versao}
+        </p>
+      )}
+      <pre className="max-h-[36rem] overflow-auto text-xs leading-relaxed">
+        {diff.map((l, i) => (
+          <div key={i} className={`px-1 whitespace-pre-wrap ${estiloLinha[l.tipo]}`}>
+            {marcador[l.tipo]}
+            {l.texto || ' '}
+          </div>
+        ))}
+      </pre>
     </div>
   );
 }

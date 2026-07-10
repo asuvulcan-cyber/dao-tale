@@ -2,7 +2,7 @@
 
 Aplicativo local de tradução e revisão assistida para tradução literária chinês → PT-BR (webnovels). Substitui o fluxo manual de chat com IA + planilha de revisão por uma ferramenta única: editor bilíngue, prompt mãe versionado, glossário por obra e banco de testes alimentado automaticamente pelo Protocolo de Revisão.
 
-**Status atual: Fases 1 e 2 implementadas** — fluxo completo funcional (obra → capítulo → segmentação → tradução em blocos → editor bilíngue → Protocolo de Revisão → banco de testes), com provedores Claude, Gemini e Simulado, mesclar/dividir frases e exportação/reimportação completa da obra. Falta a Fase 3 (diff de versões do prompt, empacotamento desktop).
+**Status atual: Fases 1, 2 e 3 implementadas** — fluxo completo funcional: obra → capítulo → segmentação → tradução em blocos → editor bilíngue → Protocolo de Revisão → banco de testes, com provedores Claude, Gemini e Simulado; mesclar/dividir frases; exportação/reimportação completa da obra; diff entre versões do prompt mãe; verificação de consistência do glossário; provedor/modelo configurável por obra e por tradução. Único item adiado: empacotamento desktop (só se o formato web local incomodar no uso real — `npm run atalho` já dá o "abrir com um clique").
 
 ## Como rodar
 
@@ -17,7 +17,7 @@ npm run start   # compila a interface na 1ª vez, sobe em http://127.0.0.1:8317 
 
 Sem chave de API dá para usar tudo com o provedor **Simulado**. Chaves reais (Claude/Gemini) são cadastradas em Configurações e guardadas no cofre de credenciais do sistema.
 
-Desenvolvimento: `npm run dev` (servidor + Vite com reload) · testes: `npm test` · tipos: `npm run typecheck`.
+Desenvolvimento: `npm run dev` (servidor + Vite com reload) · testes: `npm test` · tipos: `npm run typecheck` · atalho de área de trabalho: `npm run atalho`.
 
 ## Documentação de projeto
 

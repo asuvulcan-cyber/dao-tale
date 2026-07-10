@@ -6,6 +6,7 @@ import type {
   CasoTeste,
   Frase,
   ProgressoTraducao,
+  ProvedorId,
   RespostaRevisao,
   StatusCapitulo,
 } from '@dao-tale/shared';
@@ -18,13 +19,29 @@ interface DetalheCapitulo {
   progresso: ProgressoTraducao;
 }
 
+interface ViolacaoConsistencia {
+  frase_id: number;
+  ordem: number;
+  termo_zh: string;
+  termo_pt: string;
+  texto_zh: string;
+  texto_pt: string;
+}
+
 export function EditorCapitulo() {
   const { obraId, capituloId } = useParams();
   const clienteQuery = useQueryClient();
   const [fraseSelecionada, setFraseSelecionada] = useState<number | null>(null);
   const [progressoVivo, setProgressoVivo] = useState<ProgressoTraducao | null>(null);
   const [erroJob, setErroJob] = useState('');
+  const [provedorEscolhido, setProvedorEscolhido] = useState('');
+  const [mostrarConsistencia, setMostrarConsistencia] = useState(false);
   const fonteEventos = useRef<EventSource | null>(null);
+
+  const { data: provedores } = useQuery({
+    queryKey: ['provedores'],
+    queryFn: () => api<{ id: ProvedorId; nome: string }[]>('GET', '/provedores'),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['capitulo', capituloId],
@@ -68,7 +85,8 @@ export function EditorCapitulo() {
   }, [data?.progresso.em_execucao, capituloId]);
 
   const traduzir = useMutation({
-    mutationFn: () => api('POST', `/capitulos/${capituloId}/traduzir`, {}),
+    mutationFn: () =>
+      api('POST', `/capitulos/${capituloId}/traduzir`, provedorEscolhido ? { provedor: provedorEscolhido } : {}),
     onSuccess: () => {
       setErroJob('');
       conectarEventos();
@@ -135,6 +153,11 @@ export function EditorCapitulo() {
           </Etiqueta>
         )}
         <div className="ml-auto flex items-center gap-2">
+          {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
+            <Botao variante="secundario" onClick={() => setMostrarConsistencia(true)}>
+              Consistência
+            </Botao>
+          )}
           {emExecucao ? (
             <>
               <span className="text-sm text-blue-700">
@@ -146,9 +169,24 @@ export function EditorCapitulo() {
             </>
           ) : (
             (pendentes > 0 || comErro > 0) && (
-              <Botao onClick={() => traduzir.mutate()} disabled={traduzir.isPending}>
-                {frases.some((f) => f.status_traducao === 'traduzida') ? 'Retomar tradução' : 'Traduzir'}
-              </Botao>
+              <>
+                <select
+                  value={provedorEscolhido}
+                  onChange={(e) => setProvedorEscolhido(e.target.value)}
+                  title="Provedor desta tradução (vazio = padrão da obra/global)"
+                  className="rounded border border-stone-300 px-2 py-1 text-sm"
+                >
+                  <option value="">Provedor padrão</option>
+                  {provedores?.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}
+                    </option>
+                  ))}
+                </select>
+                <Botao onClick={() => traduzir.mutate()} disabled={traduzir.isPending}>
+                  {frases.some((f) => f.status_traducao === 'traduzida') ? 'Retomar tradução' : 'Traduzir'}
+                </Botao>
+              </>
             )
           )}
         </div>
@@ -184,6 +222,20 @@ export function EditorCapitulo() {
           />
         )}
       </div>
+
+      {mostrarConsistencia && (
+        <ModalConsistencia
+          capituloId={capituloId!}
+          aoFechar={() => setMostrarConsistencia(false)}
+          aoIrParaFrase={(fraseId) => {
+            setMostrarConsistencia(false);
+            setFraseSelecionada(fraseId);
+            requestAnimationFrame(() =>
+              document.getElementById(`frase-${fraseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -221,6 +273,7 @@ function LinhaFrase({
 
   return (
     <div
+      id={`frase-${frase.id}`}
       className={`grid grid-cols-2 border-b border-l-4 border-stone-200 last:border-b-0 ${corStatus} ${
         selecionada ? 'bg-amber-50' : ''
       }`}
@@ -393,6 +446,68 @@ function PainelRevisao({
         />
       )}
     </aside>
+  );
+}
+
+function ModalConsistencia({
+  capituloId,
+  aoFechar,
+  aoIrParaFrase,
+}: {
+  capituloId: string;
+  aoFechar: () => void;
+  aoIrParaFrase: (fraseId: number) => void;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['consistencia', capituloId],
+    queryFn: () =>
+      api<{ ocorrencias: number; violacoes: ViolacaoConsistencia[] }>('GET', `/capitulos/${capituloId}/consistencia`),
+    staleTime: 0,
+  });
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
+      <div className="max-h-[80vh] w-[42rem] max-w-full space-y-3 overflow-auto rounded-lg bg-white p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <h3 className="font-semibold">Consistência do glossário</h3>
+          <button onClick={aoFechar} className="text-stone-400 hover:text-stone-700">
+            ✕
+          </button>
+        </div>
+        {isLoading && <p className="text-sm text-stone-500">Verificando…</p>}
+        {data && (
+          <>
+            <p className="text-sm text-stone-600">
+              {data.ocorrencias} ocorrência{data.ocorrencias === 1 ? '' : 's'} de termos do glossário neste capítulo ·{' '}
+              {data.violacoes.length === 0 ? (
+                <span className="font-medium text-green-700">todas seguem o cânone.</span>
+              ) : (
+                <span className="font-medium text-red-700">{data.violacoes.length} fora do cânone:</span>
+              )}
+            </p>
+            <div className="space-y-2">
+              {data.violacoes.map((v, i) => (
+                <div key={i} className="rounded border border-red-200 bg-red-50 p-3 text-sm">
+                  <p className="mb-1">
+                    <span className="texto-zh font-medium">{v.termo_zh}</span> deveria virar{' '}
+                    <span className="font-medium">“{v.termo_pt}”</span> (frase {v.ordem + 1})
+                  </p>
+                  <p className="texto-zh text-xs text-stone-600">{v.texto_zh}</p>
+                  <p className="mb-2 text-xs text-stone-600">{v.texto_pt}</p>
+                  <Botao variante="secundario" onClick={() => aoIrParaFrase(v.frase_id)}>
+                    Ir à frase
+                  </Botao>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-stone-400">
+              Verificação heurística: compara sem maiúsculas/acentos e não entende flexões (plural, gênero) — trate
+              como sinalização, não veredito.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

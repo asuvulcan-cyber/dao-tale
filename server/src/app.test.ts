@@ -285,6 +285,39 @@ describe('fluxo completo com provedor mock', () => {
     expect(futuro.total).toBe(0);
   });
 
+  it('varredura de consistência do glossário aponta termos fora do cânone', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Obra',
+        prompt_inicial: { versao: '1.0', conteudo: 'P.' },
+        glossario_inicial: [{ termo_zh: '终焉', termo_pt: 'Fim Derradeiro' }],
+      }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '终焉来了。他走了。' }),
+    );
+    const capId = criado.capitulo.id;
+    const frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+
+    await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock' });
+    for (let i = 0; i < 100; i++) {
+      const d = await json(await chamar('GET', `/api/capitulos/${capId}`));
+      if (d.frases.every((f: any) => f.status_traducao === 'traduzida')) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+
+    // Mock traduz como "[tradução simulada] 终焉来了。" — não contém "Fim Derradeiro" → 1 violação
+    const resultado = await json(await chamar('GET', `/api/capitulos/${capId}/consistencia`));
+    expect(resultado.ocorrencias).toBe(1);
+    expect(resultado.violacoes.length).toBe(1);
+    expect(resultado.violacoes[0].termo_pt).toBe('Fim Derradeiro');
+
+    // Corrige a frase usando o cânone (acentos/maiúsculas ignorados) → zero violações
+    await chamar('PATCH', `/api/frases/${frases[0].id}`, { texto_pt: 'O FIM DERRADEIRO chegou.' });
+    const depois = await json(await chamar('GET', `/api/capitulos/${capId}/consistencia`));
+    expect(depois.violacoes.length).toBe(0);
+  });
+
   it('versionamento do prompt: só um ativo por vez', async () => {
     const obra = await json(
       await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'v1' } }),

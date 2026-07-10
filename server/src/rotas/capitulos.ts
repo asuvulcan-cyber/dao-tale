@@ -3,7 +3,7 @@ import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import type { EventoTraducao } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposObras } from '../db/repos.js';
+import { reposCapitulos, reposFrases, reposGlossario, reposObras } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
 import {
   cancelarJob,
@@ -93,6 +93,54 @@ export function rotasCapitulos(db: BancoDados): Hono {
     const ok = reposCapitulos.excluir(db, id);
     if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
     return c.json({ ok: true });
+  });
+
+  // ── Varredura reversa de consistência do glossário (doc 05 §4.2) ────────
+  // Heurística: para cada termo do glossário presente no chinês de uma frase
+  // traduzida, a tradução PT deve conter o termo canônico (comparação sem
+  // maiúsculas/acentos). Aponta onde a IA ou uma edição manual fugiu do cânone.
+
+  app.get('/capitulos/:id/consistencia', (c) => {
+    const id = Number(c.req.param('id'));
+    const capitulo = reposCapitulos.obter(db, id);
+    if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
+
+    const normalizar = (t: string) =>
+      t
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase();
+
+    const frases = reposFrases.listarPorCapitulo(db, id);
+    const glossario = reposGlossario.listar(db, capitulo.obra_id);
+    const violacoes: {
+      frase_id: number;
+      ordem: number;
+      termo_zh: string;
+      termo_pt: string;
+      texto_zh: string;
+      texto_pt: string;
+    }[] = [];
+    let ocorrencias = 0;
+
+    for (const g of glossario) {
+      for (const f of frases) {
+        if (f.status_traducao !== 'traduzida' || !f.texto_zh.includes(g.termo_zh)) continue;
+        ocorrencias++;
+        if (!normalizar(f.texto_pt).includes(normalizar(g.termo_pt))) {
+          violacoes.push({
+            frase_id: f.id,
+            ordem: f.ordem,
+            termo_zh: g.termo_zh,
+            termo_pt: g.termo_pt,
+            texto_zh: f.texto_zh,
+            texto_pt: f.texto_pt,
+          });
+        }
+      }
+    }
+
+    return c.json({ ocorrencias, violacoes });
   });
 
   // ── Tradução ────────────────────────────────────────────────────────────
