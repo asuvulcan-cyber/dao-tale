@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { BancoDados } from '../db/index.js';
 import { reposObras, reposPrompts } from '../db/repos.js';
+import { exportarObra, importarObra } from '../db/portabilidade.js';
 
 const criarObraSchema = z.object({
   titulo: z.string().min(1),
@@ -66,6 +67,29 @@ export function rotasObras(db: BancoDados): Hono {
     const ok = reposObras.excluir(db, id);
     if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     return c.json({ ok: true });
+  });
+
+  // ── Exportação / reimportação completa (formato dao-tale-export v1) ──────
+
+  app.get('/obras/:id/exportar', (c) => {
+    const id = Number(c.req.param('id'));
+    const dados = exportarObra(db, id);
+    if (!dados) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    const nomeArquivo = `dao-tale-obra-${id}.json`;
+    return c.body(JSON.stringify(dados, null, 2), 200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${nomeArquivo}"`,
+    });
+  });
+
+  app.post('/obras/importar', async (c) => {
+    const dados = await c.req.json().catch(() => null);
+    if (!dados) return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Envie o JSON exportado.' } }, 400);
+    const resultado = importarObra(db, dados);
+    if ('erro' in resultado) {
+      return c.json({ erro: { codigo: 'import-invalido', mensagem: resultado.erro } }, 400);
+    }
+    return c.json(resultado, 201);
   });
 
   // ── Prompt mãe ──────────────────────────────────────────────────────────

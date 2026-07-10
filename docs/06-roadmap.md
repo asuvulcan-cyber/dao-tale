@@ -1,28 +1,31 @@
 # 06 — Roadmap, riscos e custos
 
-## Fase 1 — MVP (fluxo completo com um provedor real + mock)
+## Fase 1 — MVP (fluxo completo com um provedor real + mock) — ✅ CONCLUÍDA
 
 Objetivo: substituir o fluxo chat+planilha de ponta a ponta para uma obra.
 
 Entregas e critérios de aceite:
 
-- [ ] **Fundação:** monorepo (server/web/shared), SQLite com migrações, launcher `npm run start` que abre o navegador (Windows e Linux).
-- [ ] **Obras:** criar obra com prompt mãe inicial (colar ou `.md`) e glossário inicial opcional (`.csv` ou pares colados); listar; excluir com simulação de cascata.
-- [ ] **Segmentador** com a bateria de testes de `05-fluxos-ia.md §1` passando (aceite: nenhum corte dentro de aspas em todos os casos da bateria).
-- [ ] **Capítulo:** colar texto ou upload `.txt` → segmentação → frases `pendente` no editor.
-- [ ] **Tradução em blocos** com provedor **Claude** e provedor **mock**: prompt caching, saída estruturada, progresso via SSE ("frase X de Y"), retry com backoff, retomada após interrupção (aceite: matar o processo no meio de um capítulo e retomar sem retraduzir frases prontas nem duplicar nada).
-- [ ] **Editor bilíngue:** duas colunas agrupadas por parágrafo, chinês selecionável/só leitura, tradução editável com autosave, contador revisadas vs. pendentes, seletor/status de capítulo, lista virtualizada (capítulos de 300+ frases sem travar).
-- [ ] **Protocolo de Revisão:** perguntar sobre frase selecionada → resposta estruturada no painel → gravação automática no banco de testes → "Aplicar correção" com um clique (aceite: caso de teste criado sem nenhuma ação manual além da pergunta).
-- [ ] **Configurações:** cadastro/teste/remoção de chave (keyring + fallback com aviso), provedor/modelo padrão global e por obra.
-- [ ] **Banco de testes (versão mínima):** listagem por obra com filtro de status — a tela completa fica para a Fase 2, mas os dados já nascem certos desde o primeiro caso.
+- [x] **Fundação:** monorepo (server/web/shared), SQLite com migrações, launcher `npm run start` que abre o navegador (Windows e Linux).
+- [x] **Obras:** criar obra com prompt mãe inicial (colar ou `.md`) e glossário inicial opcional (`.csv` ou pares colados); listar; excluir com simulação de cascata.
+- [x] **Segmentador** com a bateria de testes de `05-fluxos-ia.md §1` passando (aceite: nenhum corte dentro de aspas em todos os casos da bateria).
+- [x] **Capítulo:** colar texto ou upload `.txt` → segmentação → frases `pendente` no editor.
+- [x] **Tradução em blocos** com provedor **Claude** e provedor **mock**: prompt caching, saída estruturada, progresso via SSE ("frase X de Y"), retry com backoff, retomada após interrupção.
+- [x] **Editor bilíngue:** duas colunas agrupadas por parágrafo, chinês selecionável/só leitura, tradução editável com autosave, contador, seletor/status de capítulo.
+- [x] **Protocolo de Revisão:** pergunta → resposta estruturada → gravação automática no banco de testes → "Aplicar correção" com um clique.
+- [x] **Configurações:** cadastro/teste/remoção de chave (keyring + fallback com aviso), provedor/modelo padrão global e por obra.
+- [x] **Banco de testes (versão mínima):** listagem por obra com filtro de status.
+- [x] Extras antecipados da Fase 2: tela de termos sugeridos (aceitar/ajustar/rejeitar) com badge, import/export CSV do glossário, export CSV do banco de testes.
 
-## Fase 2 — Multi-provedor e curadoria
+Nota: a lista virtualizada para capítulos muito longos ficou de fora do MVP — reavaliar se o uso real mostrar lentidão com 300+ frases.
 
-- [ ] Provedor **Gemini** (mesma interface; aceite: mesmo capítulo traduzível pelos dois provedores para comparação, com provedor/modelo registrados no capítulo).
-- [ ] **Banco de testes completo:** filtros (status, seção/regra, veredito, datas, capítulo), paginação, exportação CSV.
-- [ ] **Termos sugeridos:** captura já existe desde a Fase 1 (§4 do doc 05); aqui entra a tela de fila (aceitar/ajustar/rejeitar) + badge de pendências + importação/exportação CSV do glossário.
-- [ ] **Mesclar/dividir frases** no editor (correção de segmentação) com renumeração transacional.
-- [ ] **Exportação completa da obra** (JSON `dao-tale-export-v1`) e reimportação.
+## Fase 2 — Multi-provedor e curadoria — ✅ CONCLUÍDA
+
+- [x] Provedor **Gemini** (`@google/genai`, saída estruturada via `responseSchema`; mesma interface `ProvedorIA`).
+- [x] **Banco de testes completo:** filtros (status, seção/regra, veredito, datas, capítulo), paginação, exportação CSV.
+- [x] **Termos sugeridos:** entregue na Fase 1.
+- [x] **Mesclar/dividir frases** no editor (correção de segmentação) com renumeração transacional em duas fases e religação dos casos de teste.
+- [x] **Exportação completa da obra** (JSON `dao-tale-export` v1, chaves naturais) e reimportação com remapeamento de ids.
 
 ## Fase 3 — Refinamento e empacotamento
 

@@ -178,6 +178,7 @@ export function EditorCapitulo() {
         {selecionada && (
           <PainelRevisao
             frase={selecionada}
+            proxima={frases.find((f) => f.ordem === selecionada.ordem + 1) ?? null}
             capituloId={capituloId!}
             aoFechar={() => setFraseSelecionada(null)}
           />
@@ -245,10 +246,12 @@ function LinhaFrase({
 
 function PainelRevisao({
   frase,
+  proxima,
   capituloId,
   aoFechar,
 }: {
   frase: Frase;
+  proxima: Frase | null;
   capituloId: string;
   aoFechar: () => void;
 }) {
@@ -256,13 +259,24 @@ function PainelRevisao({
   const [pergunta, setPergunta] = useState('');
   const [resultado, setResultado] = useState<{ revisao: RespostaRevisao; caso: CasoTeste } | null>(null);
   const [erro, setErro] = useState('');
+  const [dividindo, setDividindo] = useState(false);
 
   // Limpa o painel ao trocar de frase.
   useEffect(() => {
     setPergunta('');
     setResultado(null);
     setErro('');
+    setDividindo(false);
   }, [frase.id]);
+
+  const mesclar = useMutation({
+    mutationFn: () => api('POST', '/frases/mesclar', { frase_ids: [frase.id, proxima!.id] }),
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+      setErro('');
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
 
   const revisar = useMutation({
     mutationFn: () =>
@@ -344,7 +358,125 @@ function PainelRevisao({
             <p className="text-xs text-stone-400">Caso #{resultado.caso.id} salvo no banco de testes.</p>
           </div>
         )}
+
+        {/* Correção de segmentação */}
+        <div className="border-t border-stone-200 pt-3">
+          <p className="mb-2 text-xs font-medium text-stone-500">Segmentação errada?</p>
+          <div className="flex flex-wrap gap-2">
+            {proxima && proxima.paragrafo === frase.paragrafo && (
+              <Botao
+                variante="secundario"
+                onClick={() =>
+                  window.confirm('Mesclar esta frase com a seguinte? Casos de teste serão religados à frase resultante.') &&
+                  mesclar.mutate()
+                }
+                disabled={mesclar.isPending}
+              >
+                Mesclar com a próxima
+              </Botao>
+            )}
+            {[...frase.texto_zh].length > 1 && (
+              <Botao variante="secundario" onClick={() => setDividindo(true)}>
+                Dividir frase
+              </Botao>
+            )}
+          </div>
+        </div>
       </div>
+
+      {dividindo && (
+        <ModalDividir
+          frase={frase}
+          capituloId={capituloId}
+          aoFechar={() => setDividindo(false)}
+          aoErro={setErro}
+        />
+      )}
     </aside>
+  );
+}
+
+function ModalDividir({
+  frase,
+  capituloId,
+  aoFechar,
+  aoErro,
+}: {
+  frase: Frase;
+  capituloId: string;
+  aoFechar: () => void;
+  aoErro: (m: string) => void;
+}) {
+  const clienteQuery = useQueryClient();
+  const caracteres = [...frase.texto_zh];
+  const [corte, setCorte] = useState(Math.ceil(caracteres.length / 2));
+  const [pt1, setPt1] = useState(frase.texto_pt);
+  const [pt2, setPt2] = useState('');
+
+  const dividir = useMutation({
+    mutationFn: () =>
+      api('POST', `/frases/${frase.id}/dividir`, {
+        texto_zh_1: caracteres.slice(0, corte).join(''),
+        texto_zh_2: caracteres.slice(corte).join(''),
+        texto_pt_1: pt1,
+        texto_pt_2: pt2,
+      }),
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+      aoFechar();
+    },
+    onError: (e) => aoErro((e as Error).message),
+  });
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
+      <div className="w-[36rem] max-w-full space-y-3 rounded-lg bg-white p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold">Dividir frase</h3>
+        <p className="text-sm text-stone-600">Clique no caractere onde a segunda frase deve começar:</p>
+        <p className="texto-zh rounded bg-stone-50 p-2 text-lg leading-loose">
+          {caracteres.map((ch, i) => (
+            <span
+              key={i}
+              onClick={() => i > 0 && setCorte(i)}
+              className={`cursor-pointer ${i === corte ? 'border-l-2 border-red-500' : ''} ${
+                i >= corte ? 'bg-amber-100' : ''
+              }`}
+            >
+              {ch}
+            </span>
+          ))}
+        </p>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="texto-zh mb-1 rounded bg-stone-50 px-2 py-1 text-xs">{caracteres.slice(0, corte).join('')}</p>
+            <textarea
+              value={pt1}
+              onChange={(e) => setPt1(e.target.value)}
+              rows={3}
+              placeholder="Tradução da 1ª parte"
+              className="w-full rounded border border-stone-300 px-2 py-1.5"
+            />
+          </div>
+          <div>
+            <p className="texto-zh mb-1 rounded bg-amber-50 px-2 py-1 text-xs">{caracteres.slice(corte).join('')}</p>
+            <textarea
+              value={pt2}
+              onChange={(e) => setPt2(e.target.value)}
+              rows={3}
+              placeholder="Tradução da 2ª parte (vazio = pendente)"
+              className="w-full rounded border border-stone-300 px-2 py-1.5"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Botao variante="secundario" onClick={aoFechar}>
+            Cancelar
+          </Botao>
+          <Botao onClick={() => dividir.mutate()} disabled={dividir.isPending}>
+            Dividir
+          </Botao>
+        </div>
+      </div>
+    </div>
   );
 }

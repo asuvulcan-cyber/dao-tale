@@ -99,9 +99,10 @@ describe('fluxo completo com provedor mock', () => {
     );
     expect(revisao2.caso.status).toBe('confirmado');
 
-    // Banco de testes filtrável
+    // Banco de testes filtrável (paginado)
     const casos = await json(await chamar('GET', `/api/obras/${obra.id}/testes?status=corrigido`));
-    expect(casos.length).toBe(1);
+    expect(casos.total).toBe(1);
+    expect(casos.casos.length).toBe(1);
   });
 
   it('retomada: frases já traduzidas não são retraduzidas', async () => {
@@ -157,6 +158,131 @@ describe('fluxo completo com provedor mock', () => {
       }),
     );
     expect(importado).toEqual({ inseridos: 2, duplicados: 1, invalidos: 0 });
+  });
+
+  it('mesclar e dividir frases renumera e religa casos de teste', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'P.' } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。乙说。丙说。丁说。' }),
+    );
+    const capId = criado.capitulo.id;
+    let frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+    expect(frases.length).toBe(4);
+
+    // Caso de teste apontando para a 2ª frase (será absorvida na mescla)
+    const revisao = await json(
+      await chamar('POST', `/api/frases/${frases[1].id}/revisar`, { pergunta: 'Por quê?', provedor: 'mock' }),
+    );
+
+    // Mescla frases 0 e 1
+    const mesclada = await json(
+      await chamar('POST', '/api/frases/mesclar', { frase_ids: [frases[0].id, frases[1].id] }),
+    );
+    expect(mesclada.texto_zh).toBe('甲说。乙说。');
+    frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+    expect(frases.length).toBe(3);
+    expect(frases.map((f: any) => f.ordem)).toEqual([0, 1, 2]);
+
+    // O caso de teste foi religado à frase resultante
+    const casos = await json(await chamar('GET', `/api/obras/${obra.id}/testes`));
+    expect(casos.casos[0].id).toBe(revisao.caso.id);
+    expect(casos.casos[0].frase_id).toBe(mesclada.id);
+
+    // Mescla não-adjacente é rejeitada
+    const invalida = await chamar('POST', '/api/frases/mesclar', { frase_ids: [frases[0].id, frases[2].id] });
+    expect(invalida.status).toBe(400);
+
+    // Divide a frase mesclada de volta em duas
+    const divisao = await json(
+      await chamar('POST', `/api/frases/${mesclada.id}/dividir`, {
+        texto_zh_1: '甲说。',
+        texto_zh_2: '乙说。',
+        texto_pt_1: 'A falou.',
+        texto_pt_2: '',
+      }),
+    );
+    expect(divisao.primeira.texto_zh).toBe('甲说。');
+    expect(divisao.segunda.status_traducao).toBe('pendente');
+    frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+    expect(frases.length).toBe(4);
+    expect(frases.map((f: any) => f.ordem)).toEqual([0, 1, 2, 3]);
+    expect(frases.map((f: any) => f.texto_zh)).toEqual(['甲说。', '乙说。', '丙说。', '丁说。']);
+
+    // Divisão que não reconstitui o original é rejeitada
+    const divisaoInvalida = await chamar('POST', `/api/frases/${frases[2].id}/dividir`, {
+      texto_zh_1: '丙',
+      texto_zh_2: 'XYZ',
+    });
+    expect(divisaoInvalida.status).toBe(400);
+  });
+
+  it('exportação e reimportação completa da obra (roundtrip)', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Original',
+        titulo_original: '原作',
+        prompt_inicial: { versao: '1.0', conteudo: 'Prompt v1.' },
+        glossario_inicial: [{ termo_zh: '终焉', termo_pt: 'Fim', categoria: 'outro' }],
+      }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。乙说。' }),
+    );
+    await chamar('POST', `/api/capitulos/${criado.capitulo.id}/traduzir`, { provedor: 'mock' });
+    for (let i = 0; i < 100; i++) {
+      const d = await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`));
+      if (d.frases.every((f: any) => f.status_traducao === 'traduzida')) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const frases = (await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`))).frases;
+    await chamar('POST', `/api/frases/${frases[0].id}/revisar`, { pergunta: 'Ok?', provedor: 'mock' });
+
+    // Exporta
+    const exportado = await json(await chamar('GET', `/api/obras/${obra.id}/exportar`));
+    expect(exportado.formato).toBe('dao-tale-export');
+    expect(exportado.capitulos[0].frases.length).toBe(2);
+    expect(exportado.banco_testes.length).toBe(1);
+
+    // Reimporta como obra nova
+    const importada = await json(await chamar('POST', '/api/obras/importar', exportado));
+    expect(importada.id).not.toBe(obra.id);
+    expect(importada.titulo).toBe('Original');
+
+    const capsImportados = await json(await chamar('GET', `/api/obras/${importada.id}/capitulos`));
+    expect(capsImportados.length).toBe(1);
+    expect(capsImportados[0].frases_total).toBe(2);
+    expect(capsImportados[0].frases_traduzidas).toBe(2);
+    const casosImportados = await json(await chamar('GET', `/api/obras/${importada.id}/testes`));
+    expect(casosImportados.total).toBe(1);
+    const glossarioImportado = await json(await chamar('GET', `/api/obras/${importada.id}/glossario`));
+    expect(glossarioImportado.length).toBe(1);
+
+    // Arquivo inválido é rejeitado
+    const invalido = await chamar('POST', '/api/obras/importar', { formato: 'outra-coisa' });
+    expect(invalido.status).toBe(400);
+  });
+
+  it('banco de testes: filtro por data e paginação', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'P.' } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。' }),
+    );
+    const frases = (await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`))).frases;
+    for (let i = 0; i < 3; i++) {
+      await chamar('POST', `/api/frases/${frases[0].id}/revisar`, { pergunta: `Pergunta ${i}?`, provedor: 'mock' });
+    }
+    const hoje = new Date().toISOString().slice(0, 10);
+    const pagina1 = await json(await chamar('GET', `/api/obras/${obra.id}/testes?de=${hoje}&ate=${hoje}&limite=2&pagina=1`));
+    expect(pagina1.total).toBe(3);
+    expect(pagina1.casos.length).toBe(2);
+    const pagina2 = await json(await chamar('GET', `/api/obras/${obra.id}/testes?limite=2&pagina=2`));
+    expect(pagina2.casos.length).toBe(1);
+    const futuro = await json(await chamar('GET', `/api/obras/${obra.id}/testes?de=2099-01-01`));
+    expect(futuro.total).toBe(0);
   });
 
   it('versionamento do prompt: só um ativo por vez', async () => {

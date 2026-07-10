@@ -272,6 +272,110 @@ export const reposFrases = {
     tx();
   },
 
+  /**
+   * Renumera `ordem` de todo o capítulo em duas fases (negativos → finais) para
+   * não violar UNIQUE(capitulo_id, ordem) no meio da atualização.
+   */
+  renumerar(db: BancoDados, capituloId: number): void {
+    const ids = (
+      db.prepare('SELECT id FROM frases WHERE capitulo_id = ? ORDER BY ordem').all(capituloId) as { id: number }[]
+    ).map((l) => l.id);
+    const negativa = db.prepare('UPDATE frases SET ordem = ? WHERE id = ?');
+    ids.forEach((id, i) => negativa.run(-(i + 1), id));
+    db.prepare('UPDATE frases SET ordem = -ordem - 1 WHERE capitulo_id = ? AND ordem < 0').run(capituloId);
+  },
+
+  /**
+   * Mescla frases adjacentes numa só (correção de segmentação). Casos de teste
+   * das frases absorvidas são religados à frase resultante.
+   */
+  mesclar(db: BancoDados, fraseIds: number[]): Frase | 'invalido' {
+    if (fraseIds.length < 2) return 'invalido';
+    const frases = fraseIds
+      .map((id) => this.obter(db, id))
+      .filter((f): f is Frase => f !== undefined)
+      .sort((a, b) => a.ordem - b.ordem);
+    if (frases.length !== fraseIds.length) return 'invalido';
+    const capituloId = frases[0].capitulo_id;
+    if (!frases.every((f) => f.capitulo_id === capituloId)) return 'invalido';
+    const adjacentes = frases.every((f, i) => i === 0 || f.ordem === frases[i - 1].ordem + 1);
+    if (!adjacentes) return 'invalido';
+
+    const primeira = frases[0];
+    return db.transaction(() => {
+      const textoZh = frases.map((f) => f.texto_zh).join('');
+      const textoPt = frases.map((f) => f.texto_pt).filter(Boolean).join(' ');
+      const originais = frases.map((f) => f.texto_pt_original_ia).filter(Boolean);
+      const todasTraduzidas = frases.every((f) => f.status_traducao === 'traduzida');
+      db.prepare(
+        `UPDATE frases SET texto_zh = ?, texto_pt = ?, texto_pt_original_ia = ?,
+          editado_manualmente = ?, status_traducao = ? WHERE id = ?`,
+      ).run(
+        textoZh,
+        textoPt,
+        originais.length > 0 ? originais.join(' ') : null,
+        frases.some((f) => f.editado_manualmente) ? 1 : 0,
+        todasTraduzidas ? 'traduzida' : 'pendente',
+        primeira.id,
+      );
+      const absorvidas = frases.slice(1).map((f) => f.id);
+      const marcadores = absorvidas.map(() => '?').join(',');
+      db.prepare(`UPDATE banco_testes SET frase_id = ? WHERE frase_id IN (${marcadores})`).run(
+        primeira.id,
+        ...absorvidas,
+      );
+      db.prepare(`DELETE FROM frases WHERE id IN (${marcadores})`).run(...absorvidas);
+      this.renumerar(db, capituloId);
+      return this.obter(db, primeira.id)!;
+    })();
+  },
+
+  /**
+   * Divide uma frase em duas (correção de segmentação). As metades zh precisam
+   * reconstituir exatamente o texto original; casos de teste ficam na primeira.
+   */
+  dividir(
+    db: BancoDados,
+    id: number,
+    partes: { texto_zh_1: string; texto_zh_2: string; texto_pt_1: string; texto_pt_2: string },
+  ): { primeira: Frase; segunda: Frase } | 'invalido' | undefined {
+    const frase = this.obter(db, id);
+    if (!frase) return undefined;
+    if (partes.texto_zh_1 + partes.texto_zh_2 !== frase.texto_zh) return 'invalido';
+    if (!partes.texto_zh_1.trim() || !partes.texto_zh_2.trim()) return 'invalido';
+
+    return db.transaction(() => {
+      // Abre espaço: desloca as ordens seguintes em duas fases (UNIQUE-safe).
+      db.prepare('UPDATE frases SET ordem = -(ordem + 1) WHERE capitulo_id = ? AND ordem > ?').run(
+        frase.capitulo_id,
+        frase.ordem,
+      );
+      db.prepare('UPDATE frases SET ordem = -ordem WHERE capitulo_id = ? AND ordem < 0').run(frase.capitulo_id);
+
+      db.prepare(
+        `UPDATE frases SET texto_zh = ?, texto_pt = ?, editado_manualmente = 1,
+          status_traducao = ? WHERE id = ?`,
+      ).run(partes.texto_zh_1, partes.texto_pt_1, partes.texto_pt_1.trim() ? 'traduzida' : 'pendente', id);
+      const info = db
+        .prepare(
+          `INSERT INTO frases (capitulo_id, ordem, paragrafo, texto_zh, texto_pt, editado_manualmente, status_traducao)
+           VALUES (?, ?, ?, ?, ?, 1, ?)`,
+        )
+        .run(
+          frase.capitulo_id,
+          frase.ordem + 1,
+          frase.paragrafo,
+          partes.texto_zh_2,
+          partes.texto_pt_2,
+          partes.texto_pt_2.trim() ? 'traduzida' : 'pendente',
+        );
+      return {
+        primeira: this.obter(db, id)!,
+        segunda: this.obter(db, Number(info.lastInsertRowid))!,
+      };
+    })();
+  },
+
   /** Reabre frases para retradução (respeitando edições manuais, salvo ordem em contrário). */
   reabrirParaTraducao(
     db: BancoDados,
@@ -434,8 +538,17 @@ export const reposTestes = {
   listar(
     db: BancoDados,
     obraId: number,
-    filtros: { status?: string; veredito?: string; secao_regra?: string; capitulo_id?: number } = {},
-  ): CasoTeste[] {
+    filtros: {
+      status?: string;
+      veredito?: string;
+      secao_regra?: string;
+      capitulo_id?: number;
+      de?: string;
+      ate?: string;
+      limite?: number;
+      offset?: number;
+    } = {},
+  ): { casos: CasoTeste[]; total: number } {
     const clausulas = ['t.obra_id = ?'];
     const params: unknown[] = [obraId];
     if (filtros.status) {
@@ -454,11 +567,20 @@ export const reposTestes = {
       clausulas.push('t.frase_id IN (SELECT id FROM frases WHERE capitulo_id = ?)');
       params.push(filtros.capitulo_id);
     }
-    return db
-      .prepare(
-        `SELECT t.* FROM banco_testes t WHERE ${clausulas.join(' AND ')} ORDER BY t.criado_em DESC`,
-      )
-      .all(...params) as CasoTeste[];
+    if (filtros.de) {
+      clausulas.push('t.criado_em >= ?');
+      params.push(`${filtros.de}T00:00:00.000Z`);
+    }
+    if (filtros.ate) {
+      clausulas.push('t.criado_em <= ?');
+      params.push(`${filtros.ate}T23:59:59.999Z`);
+    }
+    const onde = clausulas.join(' AND ');
+    const total = (db.prepare(`SELECT COUNT(*) n FROM banco_testes t WHERE ${onde}`).get(...params) as { n: number }).n;
+    const casos = db
+      .prepare(`SELECT t.* FROM banco_testes t WHERE ${onde} ORDER BY t.criado_em DESC LIMIT ? OFFSET ?`)
+      .all(...params, filtros.limite ?? 50, filtros.offset ?? 0) as CasoTeste[];
+    return { casos, total };
   },
 
   obter(db: BancoDados, id: number): CasoTeste | undefined {

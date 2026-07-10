@@ -1,11 +1,13 @@
 import type { ProvedorId } from '@dao-tale/shared';
 import type { ProvedorIA } from './provedor.js';
 import { provedorClaude } from './claude.js';
+import { provedorGemini } from './gemini.js';
 import { provedorMock } from './mock.js';
 
-// Adicionar um provedor novo (ex.: Gemini na Fase 2) = criar o arquivo e registrar aqui.
+// Adicionar um provedor novo = criar o arquivo e registrar aqui.
 const provedores: Record<string, ProvedorIA> = {
   claude: provedorClaude,
+  gemini: provedorGemini,
   mock: provedorMock,
 };
 

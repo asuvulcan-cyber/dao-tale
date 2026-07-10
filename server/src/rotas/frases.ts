@@ -32,6 +32,44 @@ export function rotasFrases(db: BancoDados): Hono {
     return c.json(frase);
   });
 
+  // ── Correção de segmentação: mesclar / dividir (Fase 2) ─────────────────
+
+  app.post('/frases/mesclar', async (c) => {
+    const corpo = z
+      .object({ frase_ids: z.array(z.number().int()).min(2) })
+      .safeParse(await c.req.json());
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const resultado = reposFrases.mesclar(db, corpo.data.frase_ids);
+    if (resultado === 'invalido') {
+      return c.json(
+        { erro: { codigo: 'mescla-invalida', mensagem: 'As frases precisam existir, ser do mesmo capítulo e adjacentes.' } },
+        400,
+      );
+    }
+    return c.json(resultado);
+  });
+
+  app.post('/frases/:id/dividir', async (c) => {
+    const corpo = z
+      .object({
+        texto_zh_1: z.string(),
+        texto_zh_2: z.string(),
+        texto_pt_1: z.string().default(''),
+        texto_pt_2: z.string().default(''),
+      })
+      .safeParse(await c.req.json());
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const resultado = reposFrases.dividir(db, Number(c.req.param('id')), corpo.data);
+    if (resultado === undefined) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
+    if (resultado === 'invalido') {
+      return c.json(
+        { erro: { codigo: 'divisao-invalida', mensagem: 'As duas metades precisam reconstituir exatamente o texto chinês original, sem partes vazias.' } },
+        400,
+      );
+    }
+    return c.json(resultado);
+  });
+
   // ── Protocolo de Revisão (doc 05 §3) ────────────────────────────────────
 
   app.post('/frases/:id/revisar', async (c) => {

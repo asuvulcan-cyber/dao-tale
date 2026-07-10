@@ -166,13 +166,20 @@ export function rotasCuradoria(db: BancoDados): Hono {
   // ── Banco de testes ─────────────────────────────────────────────────────
 
   app.get('/obras/:obraId/testes', (c) => {
+    const pagina = Math.max(1, Number(c.req.query('pagina') ?? 1));
+    const limite = Math.min(200, Math.max(1, Number(c.req.query('limite') ?? 50)));
     const filtros = {
       status: c.req.query('status'),
       veredito: c.req.query('veredito'),
       secao_regra: c.req.query('secao_regra'),
       capitulo_id: c.req.query('capitulo') ? Number(c.req.query('capitulo')) : undefined,
+      de: c.req.query('de'),
+      ate: c.req.query('ate'),
+      limite,
+      offset: (pagina - 1) * limite,
     };
-    return c.json(reposTestes.listar(db, Number(c.req.param('obraId')), filtros));
+    const { casos, total } = reposTestes.listar(db, Number(c.req.param('obraId')), filtros);
+    return c.json({ casos, total, pagina, limite });
   });
 
   app.get('/obras/:obraId/testes/recorrencias', (c) =>
@@ -199,7 +206,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
   });
 
   app.get('/obras/:obraId/testes/exportar', (c) => {
-    const casos = reposTestes.listar(db, Number(c.req.param('obraId')));
+    const { casos } = reposTestes.listar(db, Number(c.req.param('obraId')), { limite: 1_000_000 });
     const linhas = ['id,frase_id,trecho_zh,pergunta,veredito,justificativa,secao_regra,correcao_proposta,status,provedor,modelo,criado_em'];
     for (const t of casos) {
       linhas.push(

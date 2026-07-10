@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, CriarObraPayload, Obra, ObraComContadores } from '@dao-tale/shared';
@@ -26,6 +26,20 @@ export function ListaObras() {
     onError: (e) => setErro((e as Error).message),
   });
 
+  const inputImportar = useRef<HTMLInputElement>(null);
+  const importar = useMutation({
+    mutationFn: async (arquivo: File) => {
+      const dados = JSON.parse(await arquivo.text());
+      return api<Obra>('POST', '/obras/importar', dados);
+    },
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['obras'] });
+      setErro('');
+    },
+    onError: (e) =>
+      setErro(e instanceof SyntaxError ? 'O arquivo selecionado não é um JSON válido.' : (e as Error).message),
+  });
+
   const excluir = useMutation({
     mutationFn: async (obra: ObraComContadores) => {
       const impacto = await api<Record<string, number>>('DELETE', `/obras/${obra.id}?simular=1`);
@@ -46,9 +60,25 @@ export function ListaObras() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Obras</h1>
-        <Botao onClick={() => setMostrarFormulario((v) => !v)}>
-          {mostrarFormulario ? 'Cancelar' : 'Nova obra'}
-        </Botao>
+        <div className="flex gap-2">
+          <input
+            ref={inputImportar}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo) importar.mutate(arquivo);
+              e.target.value = '';
+            }}
+          />
+          <Botao variante="secundario" onClick={() => inputImportar.current?.click()} disabled={importar.isPending}>
+            {importar.isPending ? 'Importando…' : 'Importar obra (.json)'}
+          </Botao>
+          <Botao onClick={() => setMostrarFormulario((v) => !v)}>
+            {mostrarFormulario ? 'Cancelar' : 'Nova obra'}
+          </Botao>
+        </div>
       </div>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
@@ -67,9 +97,14 @@ export function ListaObras() {
                 <h2 className="text-lg font-semibold">{obra.titulo}</h2>
                 {obra.titulo_original && <p className="texto-zh text-sm text-stone-500">{obra.titulo_original}</p>}
               </Link>
-              <Botao variante="perigo" onClick={() => excluir.mutate(obra)}>
-                Excluir
-              </Botao>
+              <div className="flex shrink-0 gap-2">
+                <a href={`/api/obras/${obra.id}/exportar`} download title="Backup completo (capítulos, glossário, prompts e banco de testes) — reimportável">
+                  <Botao variante="secundario">Exportar</Botao>
+                </a>
+                <Botao variante="perigo" onClick={() => excluir.mutate(obra)}>
+                  Excluir
+                </Botao>
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Etiqueta>{obra.capitulos_total} capítulos</Etiqueta>
