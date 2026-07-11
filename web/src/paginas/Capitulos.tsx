@@ -96,7 +96,11 @@ export function Capitulos() {
             <div key={cap.id} className="flex items-center justify-between rounded-lg border border-stone-300 bg-white px-4 py-3">
               <Link to={`/obras/${obraId}/capitulos/${cap.id}`} className="flex-1 hover:underline">
                 <span className="font-semibold">Capítulo {cap.numero}</span>
-                {cap.titulo && <span className="ml-2 text-stone-600">{cap.titulo}</span>}
+                {(cap.titulo_pt || cap.titulo) && (
+                  <span className="ml-2 text-stone-600" title={cap.titulo_pt && cap.titulo ? cap.titulo : undefined}>
+                    {cap.titulo_pt ?? cap.titulo}
+                  </span>
+                )}
               </Link>
               <div className="flex items-center gap-3 text-sm">
                 <span className="text-stone-500">

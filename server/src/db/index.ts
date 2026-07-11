@@ -34,16 +34,29 @@ function migrar(db: BancoDados): void {
     .readdirSync(dirMigrations)
     .filter((f) => f.endsWith('.sql'))
     .sort();
-  for (const arquivo of arquivos) {
-    if (aplicadas.has(arquivo)) continue;
-    const sql = fs.readFileSync(path.join(dirMigrations, arquivo), 'utf-8');
-    db.transaction(() => {
-      db.exec(sql);
-      db.prepare('INSERT INTO migracoes (nome, aplicada_em) VALUES (?, ?)').run(
-        arquivo,
-        new Date().toISOString(),
-      );
-    })();
+  const pendentes = arquivos.filter((a) => !aplicadas.has(a));
+  if (pendentes.length === 0) return;
+
+  // FKs desligadas durante migrações (padrão SQLite para recriar tabelas sem
+  // disparar cascatas); a integridade é conferida ao final com foreign_key_check.
+  db.pragma('foreign_keys = OFF');
+  try {
+    for (const arquivo of pendentes) {
+      const sql = fs.readFileSync(path.join(dirMigrations, arquivo), 'utf-8');
+      db.transaction(() => {
+        db.exec(sql);
+        db.prepare('INSERT INTO migracoes (nome, aplicada_em) VALUES (?, ?)').run(
+          arquivo,
+          new Date().toISOString(),
+        );
+      })();
+    }
+    const quebradas = db.pragma('foreign_key_check') as unknown[];
+    if (quebradas.length > 0) {
+      throw new Error(`Migração deixou ${quebradas.length} referência(s) quebrada(s): ${JSON.stringify(quebradas[0])}`);
+    }
+  } finally {
+    db.pragma('foreign_keys = ON');
   }
 }
 

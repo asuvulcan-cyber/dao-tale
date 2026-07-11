@@ -51,8 +51,9 @@ CREATE TABLE capitulos (
   obra_id       INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
   numero        INTEGER NOT NULL,
   titulo        TEXT,                             -- (+) capítulos de webnovel têm título; opcional
-  status        TEXT NOT NULL DEFAULT 'rascunho'
-                CHECK (status IN ('rascunho','traduzindo','revisado','finalizado')),
+  titulo_pt     TEXT,                             -- (+) título traduzido pela IA junto com o 1º bloco
+  status        TEXT NOT NULL DEFAULT 'rascunho'  -- 'traduzido' = job completo, aguardando revisão
+                CHECK (status IN ('rascunho','traduzindo','traduzido','revisado','finalizado')),
   texto_origem  TEXT NOT NULL,                    -- chinês bruto, como recebido
   provedor      TEXT,                             -- (+) provedor usado na última tradução
   modelo        TEXT,                             -- (+) modelo usado na última tradução

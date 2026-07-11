@@ -34,6 +34,7 @@ export const provedorMock: ProvedorIA = {
       ordem: f.ordem,
       texto_pt: `[tradução simulada] ${f.texto_zh}`,
     }));
+    if (req.titulo) traducoes.unshift({ ordem: -1, texto_pt: `[título simulado] ${req.titulo}` });
     // Sugere um termo falso por bloco a partir da frase mais longa, para exercitar
     // o fluxo de termos sugeridos de ponta a ponta.
     const maisLonga = [...req.frases].sort((a, b) => b.texto_zh.length - a.texto_zh.length)[0];

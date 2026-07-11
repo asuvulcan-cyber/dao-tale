@@ -159,7 +159,7 @@ export const reposCapitulos = {
   listar(db: BancoDados, obraId: number): CapituloResumo[] {
     return db
       .prepare(
-        `SELECT c.id, c.obra_id, c.numero, c.titulo, c.status, c.provedor, c.modelo, c.prompt_id,
+        `SELECT c.id, c.obra_id, c.numero, c.titulo, c.titulo_pt, c.status, c.provedor, c.modelo, c.prompt_id,
                 c.criado_em, c.atualizado_em,
            (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id) AS frases_total,
            (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'traduzida') AS frases_traduzidas,
@@ -195,15 +195,16 @@ export const reposCapitulos = {
   atualizar(
     db: BancoDados,
     id: number,
-    campos: Partial<{ titulo: string | null; status: StatusCapitulo; provedor: string | null; modelo: string | null; prompt_id: number | null }>,
+    campos: Partial<{ titulo: string | null; titulo_pt: string | null; status: StatusCapitulo; provedor: string | null; modelo: string | null; prompt_id: number | null }>,
   ): Capitulo | undefined {
     const atual = this.obter(db, id);
     if (!atual) return undefined;
     db.prepare(
-      `UPDATE capitulos SET titulo = ?, status = ?, provedor = ?, modelo = ?, prompt_id = ?,
+      `UPDATE capitulos SET titulo = ?, titulo_pt = ?, status = ?, provedor = ?, modelo = ?, prompt_id = ?,
         atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
     ).run(
       campos.titulo !== undefined ? campos.titulo : atual.titulo,
+      campos.titulo_pt !== undefined ? campos.titulo_pt : atual.titulo_pt,
       campos.status ?? atual.status,
       campos.provedor !== undefined ? campos.provedor : atual.provedor,
       campos.modelo !== undefined ? campos.modelo : atual.modelo,
@@ -590,6 +591,12 @@ export const reposTestes = {
 
   obter(db: BancoDados, id: number): CasoTeste | undefined {
     return db.prepare('SELECT * FROM banco_testes WHERE id = ?').get(id) as CasoTeste | undefined;
+  },
+
+  listarPorFrase(db: BancoDados, fraseId: number): CasoTeste[] {
+    return db
+      .prepare('SELECT * FROM banco_testes WHERE frase_id = ? ORDER BY criado_em DESC')
+      .all(fraseId) as CasoTeste[];
   },
 
   criar(

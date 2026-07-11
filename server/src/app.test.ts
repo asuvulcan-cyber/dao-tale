@@ -44,6 +44,7 @@ describe('fluxo completo com provedor mock', () => {
     const criado = await json(
       await chamar('POST', `/api/obras/${obra.id}/capitulos`, {
         numero: 1,
+        titulo: '第一章 终焉之始',
         texto_origem: '「等等！」她喊道。「别走。」\n他沉默了……然后开口。',
       }),
     );
@@ -65,6 +66,11 @@ describe('fluxo completo com provedor mock', () => {
     expect(frases.every((f) => f.status_traducao === 'traduzida')).toBe(true);
     expect(frases[0].texto_pt).toContain('tradução simulada');
     expect(frases[0].texto_pt_original_ia).toBe(frases[0].texto_pt);
+
+    // Título traduzido junto com o 1º bloco; capítulo completo sai de "traduzindo".
+    const capDepois = (await json(await chamar('GET', `/api/capitulos/${capId}`))).capitulo;
+    expect(capDepois.titulo_pt).toContain('[título simulado]');
+    expect(capDepois.status).toBe('traduzido');
 
     // Termos sugeridos foram capturados
     const sugestoes = await json(await chamar('GET', `/api/obras/${obra.id}/termos-sugeridos?status=pendente`));
@@ -305,11 +311,16 @@ describe('fluxo completo com provedor mock', () => {
     const resposta = await chamar('GET', `/api/capitulos/${capId}/baixar`);
     expect(resposta.headers.get('content-disposition')).toContain('capitulo-7.txt');
     const texto = await resposta.text();
-    // Frases do mesmo parágrafo unidas por espaço; parágrafos separados por linha em branco
-    expect(texto).toBe('A falou. B falou.\n\nC falou.');
+    // Cabeçalho com o número; frases do mesmo parágrafo unidas por espaço;
+    // parágrafos separados por linha em branco
+    expect(texto).toBe('Capítulo 7\n\nA falou. B falou.\n\nC falou.');
+
+    const md = await chamar('GET', `/api/capitulos/${capId}/baixar?formato=md`);
+    expect(md.headers.get('content-disposition')).toContain('capitulo-7.md');
+    expect(await md.text()).toBe('# Capítulo 7\n\nA falou. B falou.\n\nC falou.');
 
     const bilingue = await (await chamar('GET', `/api/capitulos/${capId}/baixar?formato=bilingue`)).text();
-    expect(bilingue).toBe('甲说。乙说。\nA falou. B falou.\n\n丙说。\nC falou.');
+    expect(bilingue).toBe('Capítulo 7\n\n甲说。乙说。\nA falou. B falou.\n\n丙说。\nC falou.');
   });
 
   it('varredura de consistência do glossário aponta termos fora do cânone', async () => {
@@ -375,6 +386,44 @@ describe('fluxo completo com provedor mock', () => {
     expect(retomada).toBe(202);
     // As frases não processadas ficaram pendentes (não "erro"): retraduzíveis.
     expect(frases.map((f: any) => f.status_traducao)).toEqual(['traduzida', 'pendente', 'pendente']);
+
+    // Espera o job da retomada morrer (bate no limite de novo): o registro de jobs
+    // é global por capitulo_id e um job vivo vazaria para o teste seguinte.
+    for (let i = 0; i < 100; i++) {
+      const det = await json(await chamar('GET', `/api/capitulos/${capId}`));
+      if (!det.progresso.em_execucao) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  });
+
+  it('job só de título traduz o título de capítulo já concluído sem mudar o status', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'p' } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。\n乙说。' }),
+    );
+    const capId = criado.capitulo.id;
+
+    await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock' });
+    for (let i = 0; i < 100; i++) {
+      const det = await json(await chamar('GET', `/api/capitulos/${capId}`));
+      if (det.frases.every((f: any) => f.status_traducao === 'traduzida') && !det.progresso.em_execucao) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+
+    // Título chega depois (ex.: capítulo importado sem título) e a obra já foi finalizada.
+    await chamar('PUT', `/api/capitulos/${capId}`, { titulo: '第一章 终焉', status: 'finalizado' });
+
+    expect((await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock' })).status).toBe(202);
+    let cap: any = null;
+    for (let i = 0; i < 100; i++) {
+      cap = (await json(await chamar('GET', `/api/capitulos/${capId}`))).capitulo;
+      if (cap.titulo_pt) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(cap.titulo_pt).toContain('[título simulado]');
+    expect(cap.status).toBe('finalizado');
   });
 
   it('versionamento do prompt: só um ativo por vez', async () => {

@@ -101,16 +101,24 @@ export async function iniciarTraducao(
     sobrescreverEditadas: opcoes.sobrescrever_editadas ?? false,
   });
 
+  // Título ainda em chinês (ou retradução completa): traduz junto com o 1º bloco.
+  const traduzirTitulo = !!capitulo.titulo && (!capitulo.titulo_pt || (opcoes.sobrescrever ?? false));
+
   const todas = reposFrases.listarPorCapitulo(db, capituloId);
   const pendentes = todas.filter((f) => f.status_traducao !== 'traduzida');
-  if (pendentes.length === 0) return { ok: false, erro: 'Nenhuma frase pendente de tradução neste capítulo.' };
+  if (pendentes.length === 0 && !traduzirTitulo) {
+    return { ok: false, erro: 'Nenhuma frase pendente de tradução neste capítulo.' };
+  }
 
-  reposCapitulos.atualizar(db, capituloId, {
-    status: 'traduzindo',
-    provedor: provedorId,
-    modelo,
-    prompt_id: promptAtivo.id,
-  });
+  // Job só de título (capítulo já concluído) não mexe no status do capítulo.
+  if (pendentes.length > 0) {
+    reposCapitulos.atualizar(db, capituloId, {
+      status: 'traduzindo',
+      provedor: provedorId,
+      modelo,
+      prompt_id: promptAtivo.id,
+    });
+  }
 
   const job: JobAtivo = {
     cancelar: false,
@@ -125,7 +133,7 @@ export async function iniciarTraducao(
   };
   jobs.set(capituloId, job);
 
-  void executarJob(db, capituloId, job, { provedorId, modelo, chave, promptMae: promptAtivo.conteudo, config });
+  void executarJob(db, capituloId, job, { provedorId, modelo, chave, promptMae: promptAtivo.conteudo, config, traduzirTitulo });
   return { ok: true };
 }
 
@@ -139,10 +147,12 @@ async function executarJob(
     chave: string | null;
     promptMae: string;
     config: ReturnType<typeof reposConfig.obterTodas>;
+    traduzirTitulo: boolean;
   },
 ): Promise<void> {
   const provedor = obterProvedor(ctx.provedorId);
   const capitulo = reposCapitulos.obter(db, capituloId)!;
+  let tituloPendente = ctx.traduzirTitulo;
 
   try {
     // Blocos são recomputados a cada iteração a partir do banco — assim uma frase
@@ -153,11 +163,13 @@ async function executarJob(
       const todas = reposFrases.listarPorCapitulo(db, capituloId);
       const glossario = reposGlossario.listar(db, capitulo.obra_id);
       const pendentes = todas.filter((f) => f.status_traducao === 'pendente');
-      if (pendentes.length === 0) break;
+      if (pendentes.length === 0 && !tituloPendente) break;
 
+      // Bloco pode ser vazio quando só o título falta (capítulo já traduzido):
+      // as ordens-sentinela deixam a cauda com o fim do capítulo e zero "próximas".
       const bloco = pendentes.slice(0, ctx.config.tamanho_bloco);
-      const primeiraOrdem = bloco[0].ordem;
-      const ultimaOrdem = bloco[bloco.length - 1].ordem;
+      const primeiraOrdem = bloco[0]?.ordem ?? todas.length;
+      const ultimaOrdem = bloco[bloco.length - 1]?.ordem ?? todas.length;
 
       // Cauda: últimas N frases traduzidas imediatamente antes do bloco.
       const caudaAnterior = todas
@@ -175,6 +187,7 @@ async function executarJob(
         modelo: ctx.modelo,
         promptMae: ctx.promptMae,
         glossario,
+        titulo: tituloPendente ? (capitulo.titulo ?? undefined) : undefined,
         caudaAnterior,
         frases: bloco.map((f) => ({ ordem: f.ordem, texto_zh: f.texto_zh })),
         proximas,
@@ -207,6 +220,19 @@ async function executarJob(
         continue;
       }
 
+      // Título traduzido vem como ordem -1; se o modelo não devolver, tenta no próximo bloco.
+      const tituloTraduzido = resultado.resposta.traducoes.find((t) => t.ordem === -1)?.texto_pt.trim();
+      if (tituloPendente && tituloTraduzido) {
+        reposCapitulos.atualizar(db, capituloId, { titulo_pt: tituloTraduzido });
+        tituloPendente = false;
+      }
+
+      if (bloco.length === 0) {
+        // Job só de título: uma única tentativa, com ou sem sucesso (evita laço infinito).
+        emitir(capituloId, { tipo: 'progresso', dados: { ...job.progresso } });
+        break;
+      }
+
       // Sucesso: valida ordens e persiste (doc 05 §2 — faltantes viram erro, excedentes são descartados).
       const porOrdem = new Map(bloco.map((f) => [f.ordem, f]));
       const traduzidasNesteBloco = new Set<number>();
@@ -229,6 +255,16 @@ async function executarJob(
       if (novos > 0) emitir(capituloId, { tipo: 'termos_sugeridos', dados: { quantidade: novos } });
 
       emitir(capituloId, { tipo: 'progresso', dados: { ...job.progresso } });
+    }
+
+    // Capítulo completo (nada pendente/erro e não cancelado): sai de "traduzindo".
+    // Só promove a partir de 'traduzindo' — não rebaixa revisado/finalizado
+    // (ex.: job só de título num capítulo já concluído).
+    if (!job.cancelar && reposCapitulos.obter(db, capituloId)?.status === 'traduzindo') {
+      const finais = reposFrases.listarPorCapitulo(db, capituloId);
+      if (finais.length > 0 && finais.every((f) => f.status_traducao === 'traduzida')) {
+        reposCapitulos.atualizar(db, capituloId, { status: 'traduzido' });
+      }
     }
   } finally {
     job.progresso.em_execucao = false;

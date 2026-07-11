@@ -11,7 +11,7 @@ import type {
   StatusCapitulo,
 } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
+import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO, STATUS_CASO_ROTULO } from '../App';
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -54,7 +54,11 @@ export function EditorCapitulo() {
     fonteEventos.current?.close();
     const fonte = new EventSource(`/api/capitulos/${capituloId}/traducao/eventos`);
     fonteEventos.current = fonte;
-    fonte.addEventListener('progresso', (e) => setProgressoVivo(JSON.parse(e.data)));
+    fonte.addEventListener('progresso', (e) => {
+      setProgressoVivo(JSON.parse(e.data));
+      // As frases do bloco recém-concluído aparecem no editor sem esperar o job acabar.
+      clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+    });
     fonte.addEventListener('termos_sugeridos', () => {
       clienteQuery.invalidateQueries({ queryKey: ['termos-sugeridos', obraId, 'pendente'] });
     });
@@ -139,6 +143,9 @@ export function EditorCapitulo() {
   const comErro = frases.filter((f) => f.status_traducao === 'erro').length;
   const emExecucao = progresso.em_execucao;
   const selecionada = frases.find((f) => f.id === fraseSelecionada) ?? null;
+  const pct = progresso.frases_total > 0 ? Math.round((progresso.frases_prontas / progresso.frases_total) * 100) : 0;
+  const palavrasPt = frases.reduce((n, f) => n + (f.texto_pt.trim() ? f.texto_pt.trim().split(/\s+/).length : 0), 0);
+  const caracteresZh = frases.reduce((n, f) => n + [...f.texto_zh].length, 0);
 
   return (
     <div>
@@ -146,7 +153,14 @@ export function EditorCapitulo() {
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-white px-4 py-2.5">
         <h2 className="font-semibold">
           Capítulo {capitulo.numero}
-          {capitulo.titulo && <span className="ml-2 font-normal text-stone-600">{capitulo.titulo}</span>}
+          {(capitulo.titulo_pt || capitulo.titulo) && (
+            <span className="ml-2 font-normal text-stone-600">{capitulo.titulo_pt ?? capitulo.titulo}</span>
+          )}
+          {capitulo.titulo_pt && capitulo.titulo && capitulo.titulo !== capitulo.titulo_pt && (
+            <span className="texto-zh ml-2 text-sm font-normal text-stone-400" title="Título original">
+              {capitulo.titulo}
+            </span>
+          )}
         </h2>
         <select
           value={capitulo.status}
@@ -162,6 +176,11 @@ export function EditorCapitulo() {
         <span className="text-sm text-stone-500">
           {frases.length - pendentes - comErro}/{frases.length} traduzidas
           {comErro > 0 && <span className="text-red-600"> · {comErro} com erro</span>}
+          {palavrasPt > 0 && (
+            <span title={`${caracteresZh.toLocaleString('pt-BR')} caracteres no original chinês`}>
+              {' '}· {palavrasPt.toLocaleString('pt-BR')} palavras
+            </span>
+          )}
         </span>
         {capitulo.provedor && (
           <Etiqueta>
@@ -171,8 +190,11 @@ export function EditorCapitulo() {
         <div className="ml-auto flex items-center gap-2">
           {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
             <>
-              <a href={`/api/capitulos/${capitulo.id}/baixar`} download title="Baixa o capítulo traduzido em texto corrido, com os parágrafos originais">
-                <Botao variante="secundario">Baixar .txt</Botao>
+              <a href={`/api/capitulos/${capitulo.id}/baixar?formato=md`} download title="Markdown: preserva itálico/negrito que a tradução usar, com título do capítulo">
+                <Botao variante="secundario">Baixar .md</Botao>
+              </a>
+              <a href={`/api/capitulos/${capitulo.id}/baixar`} download title="Texto puro corrido, com os parágrafos originais">
+                <Botao variante="secundario">.txt</Botao>
               </a>
               <a href={`/api/capitulos/${capitulo.id}/baixar?formato=bilingue`} download title="Versão com pares chinês/português por parágrafo, para revisão externa">
                 <Botao variante="secundario">Bilíngue</Botao>
@@ -184,8 +206,18 @@ export function EditorCapitulo() {
           )}
           {emExecucao ? (
             <>
-              <span className="text-sm text-blue-700">
-                Traduzindo… {progresso.frases_prontas}/{progresso.frases_total}
+              <span className="relative flex h-2.5 w-2.5" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
+              </span>
+              <div className="h-2 w-36 overflow-hidden rounded-full bg-stone-200" title={`${pct}% traduzido`}>
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-700"
+                  style={{ width: `${Math.max(pct, 3)}%` }}
+                />
+              </div>
+              <span className="text-sm tabular-nums text-blue-700">
+                {progresso.frases_prontas}/{progresso.frases_total} · {pct}%
               </span>
               <Botao variante="secundario" onClick={() => cancelar.mutate()}>
                 Cancelar
@@ -209,6 +241,16 @@ export function EditorCapitulo() {
               {(pendentes > 0 || comErro > 0) && (
                 <Botao onClick={() => traduzir.mutate({})} disabled={traduzir.isPending}>
                   {frases.some((f) => f.status_traducao === 'traduzida') ? 'Retomar tradução' : 'Traduzir'}
+                </Botao>
+              )}
+              {pendentes === 0 && comErro === 0 && capitulo.titulo && !capitulo.titulo_pt && (
+                <Botao
+                  variante="secundario"
+                  onClick={() => traduzir.mutate({})}
+                  disabled={traduzir.isPending}
+                  title="O capítulo já está traduzido — isto pede à IA apenas a tradução do título"
+                >
+                  Traduzir título
                 </Botao>
               )}
               {frases.some((f) => f.status_traducao === 'traduzida') && (
@@ -365,12 +407,19 @@ function PainelRevisao({
     onError: (e) => setErro((e as Error).message),
   });
 
+  // Consultas anteriores desta frase no banco de testes (item 12 do backlog).
+  const { data: historico } = useQuery({
+    queryKey: ['testes-frase', frase.id],
+    queryFn: () => api<CasoTeste[]>('GET', `/frases/${frase.id}/testes`),
+  });
+
   const revisar = useMutation({
     mutationFn: () =>
       api<{ revisao: RespostaRevisao; caso: CasoTeste }>('POST', `/frases/${frase.id}/revisar`, { pergunta }),
     onSuccess: (dados) => {
       setResultado(dados);
       setErro('');
+      clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
     },
     onError: (e) => setErro((e as Error).message),
   });
@@ -379,6 +428,7 @@ function PainelRevisao({
     mutationFn: () => api('POST', `/testes/${resultado!.caso.id}/aplicar-correcao`),
     onSuccess: () => {
       clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+      clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
       setResultado((r) => (r ? { ...r, caso: { ...r.caso, status: 'corrigido' } } : r));
     },
     onError: (e) => setErro((e as Error).message),
@@ -446,6 +496,41 @@ function PainelRevisao({
           </div>
         )}
 
+        {/* Consultas anteriores desta frase */}
+        {historico && historico.length > 0 && (
+          <details className="border-t border-stone-200 pt-3" open={historico.length <= 2 && !resultado}>
+            <summary className="cursor-pointer text-xs font-medium text-stone-500 hover:text-stone-800">
+              Revisões anteriores desta frase ({historico.length})
+            </summary>
+            <div className="mt-2 space-y-2">
+              {historico.map((caso) => (
+                <div key={caso.id} className="rounded border border-stone-200 bg-stone-50 p-2 text-xs">
+                  <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                    <Etiqueta cor={caso.veredito === 'correto' ? 'green' : 'red'}>
+                      {caso.veredito === 'correto' ? 'Correto' : 'Incorreto'}
+                    </Etiqueta>
+                    {STATUS_CASO_ROTULO[caso.status] && (
+                      <Etiqueta cor={STATUS_CASO_ROTULO[caso.status].cor}>
+                        {STATUS_CASO_ROTULO[caso.status].texto}
+                      </Etiqueta>
+                    )}
+                    <span className="text-stone-400">
+                      {new Date(caso.criado_em).toLocaleDateString('pt-BR')} · caso #{caso.id}
+                    </span>
+                  </div>
+                  <p className="font-medium text-stone-700">{caso.pergunta}</p>
+                  <p className="mt-0.5 text-stone-600">{caso.justificativa}</p>
+                  {caso.correcao_proposta && (
+                    <p className="mt-0.5 text-stone-600">
+                      <span className="font-medium">Proposta:</span> {caso.correcao_proposta}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
         {/* Correção de segmentação */}
         <div className="border-t border-stone-200 pt-3">
           <p className="mb-2 text-xs font-medium text-stone-500">Segmentação errada?</p>
@@ -495,7 +580,10 @@ function ModalConsistencia({
   const { data, isLoading } = useQuery({
     queryKey: ['consistencia', capituloId],
     queryFn: () =>
-      api<{ ocorrencias: number; violacoes: ViolacaoConsistencia[] }>('GET', `/capitulos/${capituloId}/consistencia`),
+      api<{ ocorrencias: number; violacoes: ViolacaoConsistencia[]; termos_curtos_ignorados: number }>(
+        'GET',
+        `/capitulos/${capituloId}/consistencia`,
+      ),
     staleTime: 0,
   });
 
@@ -537,6 +625,14 @@ function ModalConsistencia({
             <p className="text-xs text-stone-400">
               Verificação heurística: compara sem maiúsculas/acentos e não entende flexões (plural, gênero) — trate
               como sinalização, não veredito.
+              {data.termos_curtos_ignorados > 0 && (
+                <>
+                  {' '}
+                  {data.termos_curtos_ignorados} termo{data.termos_curtos_ignorados === 1 ? '' : 's'} de 1 caractere
+                  do glossário {data.termos_curtos_ignorados === 1 ? 'foi ignorado' : 'foram ignorados'} (ambíguos
+                  demais — aparecem dentro de palavras comuns); prefira cadastrar o composto (ex.: 人级 em vez de 人).
+                </>
+              )}
             </p>
           </>
         )}

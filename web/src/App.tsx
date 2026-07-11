@@ -65,6 +65,7 @@ export function Etiqueta({ children, cor = 'stone' }: { children: React.ReactNod
     amber: 'bg-amber-100 text-amber-800',
     red: 'bg-red-100 text-red-800',
     blue: 'bg-blue-100 text-blue-800',
+    teal: 'bg-teal-100 text-teal-800',
   };
   return <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${cores[cor]}`}>{children}</span>;
 }
@@ -72,6 +73,7 @@ export function Etiqueta({ children, cor = 'stone' }: { children: React.ReactNod
 export const STATUS_CAPITULO_ROTULO: Record<string, { texto: string; cor: string }> = {
   rascunho: { texto: 'Rascunho', cor: 'stone' },
   traduzindo: { texto: 'Traduzindo', cor: 'blue' },
+  traduzido: { texto: 'Traduzido', cor: 'teal' },
   revisado: { texto: 'Revisado', cor: 'amber' },
   finalizado: { texto: 'Finalizado', cor: 'green' },
 };

@@ -39,8 +39,10 @@ API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (
 | `GET /obras/:id/capitulos` | Lista com status e progresso (`frases_total`, `frases_traduzidas`, `frases_erro`) |
 | `POST /obras/:id/capitulos` | `{ numero, titulo?, texto_origem }` → segmenta imediatamente e devolve o capítulo com as frases em `pendente`. Segmentação é local e síncrona (rápida) |
 | `GET /capitulos/:id` | Capítulo + frases ordenadas (com `paragrafo`, para o editor agrupar) |
-| `PUT /capitulos/:id` | Muda `status`, `titulo`, provedor/modelo do capítulo |
+| `PUT /capitulos/:id` | Muda `status`, `titulo`, `titulo_pt`, provedor/modelo do capítulo |
 | `DELETE /capitulos/:id` | Com `?simular=1` como em obras |
+| `GET /capitulos/:id/baixar` | Download da tradução: `?formato=txt` (padrão), `md` (preserva itálico/negrito) ou `bilingue`; todos com cabeçalho de título |
+| `GET /capitulos/:id/consistencia` | Varredura reversa do glossário: `{ ocorrencias, violacoes[], termos_curtos_ignorados }` (termos de 1 caractere são ignorados; termo contido em termo mais longo presente na frase é coberto pelo longo) |
 | `POST /capitulos/:id/traduzir` | Inicia (ou **retoma**) o job de tradução em blocos: `{ provedor?, modelo?, sobrescrever_editadas?: bool }`. 409 se já há job ativo no capítulo. Só frases `pendente`/`erro` são traduzidas — retomar é a mesma chamada |
 | `POST /capitulos/:id/traduzir/cancelar` | Cancela o job após o bloco corrente; frases restantes ficam `pendente` |
 | `GET /capitulos/:id/traducao/eventos` | **SSE** de progresso: eventos `bloco_concluido {frases_prontas, total}`, `frase_erro`, `termos_sugeridos`, `job_concluido`, `job_erro`. A interface cai para polling de `GET /capitulos/:id` se o SSE desconectar |
@@ -51,6 +53,7 @@ API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (
 |---|---|
 | `PATCH /frases/:id` | `{ texto_pt }` → grava e marca `editado_manualmente`. Autosave com debounce na interface |
 | `POST /frases/:id/reverter-ia` | Restaura `texto_pt_original_ia` |
+| `GET /frases/:id/testes` | Histórico do Protocolo de Revisão da frase (casos do banco de testes, mais recente primeiro) |
 | `POST /frases/:id/revisar` | **Protocolo de Revisão**: `{ pergunta, provedor?, modelo? }` → resposta estruturada `{ trecho_zh, veredito, justificativa, secao_regra, correcao_proposta }`, já gravada em `banco_testes`; retorna também `caso_teste_id` |
 | `POST /frases/mesclar` · `POST /frases/:id/dividir` | Fase 2 — correção manual de segmentação, transacional com renumeração |
 

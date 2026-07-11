@@ -32,7 +32,9 @@ const exportSchema = z.object({
     z.object({
       numero: z.number().int(),
       titulo: z.string().nullable(),
-      status: z.enum(['rascunho', 'traduzindo', 'revisado', 'finalizado']),
+      // default(null): compatibilidade com exports anteriores à migração 002.
+      titulo_pt: z.string().nullable().default(null),
+      status: z.enum(['rascunho', 'traduzindo', 'traduzido', 'revisado', 'finalizado']),
       texto_origem: z.string(),
       provedor: z.string().nullable(),
       modelo: z.string().nullable(),
@@ -129,6 +131,7 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
     capitulos: capitulos.map((cap) => ({
       numero: cap.numero,
       titulo: cap.titulo,
+      titulo_pt: cap.titulo_pt,
       status: cap.status,
       texto_origem: cap.texto_origem,
       provedor: cap.provedor,
@@ -220,13 +223,14 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
     for (const cap of dados.capitulos) {
       const info = db
         .prepare(
-          `INSERT INTO capitulos (obra_id, numero, titulo, status, texto_origem, provedor, modelo, prompt_id, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO capitulos (obra_id, numero, titulo, titulo_pt, status, texto_origem, provedor, modelo, prompt_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           obraId,
           cap.numero,
           cap.titulo,
+          cap.titulo_pt,
           cap.status,
           cap.texto_origem,
           cap.provedor,

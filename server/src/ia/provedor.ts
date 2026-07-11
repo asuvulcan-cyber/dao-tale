@@ -11,6 +11,8 @@ export interface RequisicaoTraducaoBloco {
   modelo: string;
   promptMae: string;
   glossario: EntradaGlossario[];
+  /** Título do capítulo ainda sem tradução: entra no bloco como frase de número -1. */
+  titulo?: string;
   /** Últimas frases já traduzidas antes do bloco (continuidade de tom). */
   caudaAnterior: { texto_zh: string; texto_pt: string }[];
   frases: FraseParaTraduzir[];

@@ -32,6 +32,13 @@ export function rotasFrases(db: BancoDados): Hono {
     return c.json(frase);
   });
 
+  // Histórico do Protocolo de Revisão desta frase (casos do banco de testes).
+  app.get('/frases/:id/testes', (c) => {
+    const frase = reposFrases.obter(db, Number(c.req.param('id')));
+    if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
+    return c.json(reposTestes.listarPorFrase(db, frase.id));
+  });
+
   // ── Correção de segmentação: mesclar / dividir (Fase 2) ─────────────────
 
   app.post('/frases/mesclar', async (c) => {

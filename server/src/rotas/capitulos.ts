@@ -21,7 +21,8 @@ const criarCapituloSchema = z.object({
 
 const atualizarCapituloSchema = z.object({
   titulo: z.string().nullable().optional(),
-  status: z.enum(['rascunho', 'traduzindo', 'revisado', 'finalizado']).optional(),
+  titulo_pt: z.string().nullable().optional(),
+  status: z.enum(['rascunho', 'traduzindo', 'traduzido', 'revisado', 'finalizado']).optional(),
   provedor: z.enum(['claude', 'gemini', 'mock']).nullable().optional(),
   modelo: z.string().nullable().optional(),
 });
@@ -103,7 +104,8 @@ export function rotasCapitulos(db: BancoDados): Hono {
     const id = Number(c.req.param('id'));
     const capitulo = reposCapitulos.obter(db, id);
     if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
-    const formato = c.req.query('formato') === 'bilingue' ? 'bilingue' : 'txt';
+    const param = c.req.query('formato');
+    const formato: 'txt' | 'md' | 'bilingue' = param === 'bilingue' ? 'bilingue' : param === 'md' ? 'md' : 'txt';
 
     const frases = reposFrases.listarPorCapitulo(db, id);
     const porParagrafo = new Map<number, typeof frases>();
@@ -114,26 +116,35 @@ export function rotasCapitulos(db: BancoDados): Hono {
     }
     const paragrafos = [...porParagrafo.entries()].sort(([a], [b]) => a - b).map(([, fs]) => fs);
 
+    const tituloPt = capitulo.titulo_pt || capitulo.titulo;
+    const cabecalhoPt = tituloPt ? `Capítulo ${capitulo.numero} — ${tituloPt}` : `Capítulo ${capitulo.numero}`;
+
     let conteudo: string;
     if (formato === 'bilingue') {
-      conteudo = paragrafos
-        .map((fs) => {
-          const zh = fs.map((f) => f.texto_zh).join('');
-          const pt = fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' ');
-          return `${zh}\n${pt || '(pendente de tradução)'}`;
-        })
-        .join('\n\n');
+      const cabecalho = capitulo.titulo && capitulo.titulo_pt ? `${capitulo.titulo}\n${cabecalhoPt}` : cabecalhoPt;
+      conteudo =
+        `${cabecalho}\n\n` +
+        paragrafos
+          .map((fs) => {
+            const zh = fs.map((f) => f.texto_zh).join('');
+            const pt = fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' ');
+            return `${zh}\n${pt || '(pendente de tradução)'}`;
+          })
+          .join('\n\n');
     } else {
-      conteudo = paragrafos
+      // md preserva a formatação (itálico/negrito) que a tradução usar; txt é texto puro.
+      const corpo = paragrafos
         .map((fs) => fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' '))
         .filter(Boolean)
         .join('\n\n');
+      conteudo = formato === 'md' ? `# ${cabecalhoPt}\n\n${corpo}` : `${cabecalhoPt}\n\n${corpo}`;
     }
 
     const sufixo = formato === 'bilingue' ? '-bilingue' : '';
+    const extensao = formato === 'md' ? 'md' : 'txt';
     return c.body(conteudo, 200, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Content-Disposition': `attachment; filename="capitulo-${capitulo.numero}${sufixo}.txt"`,
+      'Content-Type': formato === 'md' ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8',
+      'Content-Disposition': `attachment; filename="capitulo-${capitulo.numero}${sufixo}.${extensao}"`,
     });
   });
 
@@ -141,6 +152,10 @@ export function rotasCapitulos(db: BancoDados): Hono {
   // Heurística: para cada termo do glossário presente no chinês de uma frase
   // traduzida, a tradução PT deve conter o termo canônico (comparação sem
   // maiúsculas/acentos). Aponta onde a IA ou uma edição manual fugiu do cânone.
+  // Dois filtros contra falso positivo: termos de 1 caractere são ignorados
+  // (aparecem dentro de dezenas de palavras comuns, ex. 人 em 所有人) e um termo
+  // que é parte de outro termo do glossário também presente na frase é coberto
+  // pelo mais longo (ex. 剑 dentro de 灵剑).
 
   app.get('/capitulos/:id/consistencia', (c) => {
     const id = Number(c.req.param('id'));
@@ -155,6 +170,9 @@ export function rotasCapitulos(db: BancoDados): Hono {
 
     const frases = reposFrases.listarPorCapitulo(db, id);
     const glossario = reposGlossario.listar(db, capitulo.obra_id);
+    const curtos = new Set(glossario.filter((g) => [...g.termo_zh].length < 2).map((g) => g.termo_zh));
+    const utilizaveis = glossario.filter((g) => !curtos.has(g.termo_zh));
+
     const violacoes: {
       frase_id: number;
       ordem: number;
@@ -165,9 +183,12 @@ export function rotasCapitulos(db: BancoDados): Hono {
     }[] = [];
     let ocorrencias = 0;
 
-    for (const g of glossario) {
-      for (const f of frases) {
-        if (f.status_traducao !== 'traduzida' || !f.texto_zh.includes(g.termo_zh)) continue;
+    for (const f of frases) {
+      if (f.status_traducao !== 'traduzida') continue;
+      const presentes = utilizaveis.filter((g) => f.texto_zh.includes(g.termo_zh));
+      for (const g of presentes) {
+        // Coberto por um termo mais longo nesta mesma frase? (ex.: 剑 e 灵剑)
+        if (presentes.some((outro) => outro.termo_zh !== g.termo_zh && outro.termo_zh.includes(g.termo_zh))) continue;
         ocorrencias++;
         if (!normalizar(f.texto_pt).includes(normalizar(g.termo_pt))) {
           violacoes.push({
@@ -182,7 +203,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
       }
     }
 
-    return c.json({ ocorrencias, violacoes });
+    return c.json({ ocorrencias, violacoes, termos_curtos_ignorados: curtos.size });
   });
 
   // ── Tradução ────────────────────────────────────────────────────────────

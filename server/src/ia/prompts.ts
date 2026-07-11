@@ -34,6 +34,7 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
     partes.push('');
   }
   partes.push('### Frases a traduzir:');
+  if (req.titulo) partes.push(`[-1] ${req.titulo} (título do capítulo — traduza como título)`);
   for (const f of req.frases) partes.push(`[${f.ordem}] ${f.texto_zh}`);
   if (req.proximas.length > 0) {
     partes.push('');

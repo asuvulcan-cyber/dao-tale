@@ -4,7 +4,7 @@
 
 export type ProvedorId = 'claude' | 'gemini' | 'mock';
 
-export type StatusCapitulo = 'rascunho' | 'traduzindo' | 'revisado' | 'finalizado';
+export type StatusCapitulo = 'rascunho' | 'traduzindo' | 'traduzido' | 'revisado' | 'finalizado';
 export type StatusTraducaoFrase = 'pendente' | 'traduzida' | 'erro';
 export type CategoriaGlossario =
   | 'local'
@@ -49,6 +49,8 @@ export interface Capitulo {
   obra_id: number;
   numero: number;
   titulo: string | null;
+  /** Título traduzido pela IA (junto com o primeiro bloco do capítulo). */
+  titulo_pt: string | null;
   status: StatusCapitulo;
   texto_origem: string;
   provedor: ProvedorId | null;
