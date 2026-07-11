@@ -1,9 +1,11 @@
-import type { ProvedorIA, RequisicaoRevisao, RequisicaoTraducaoBloco } from './provedor.js';
+import { ErroProvedor, type ProvedorIA, type RequisicaoRevisao, type RequisicaoTraducaoBloco } from './provedor.js';
 
 // Provedor simulado (decisão D4): permite desenvolver, demonstrar e testar todo o
 // fluxo do aplicativo sem chave de API e sem rede. Determinístico de propósito.
 
-const LATENCIA_MS = Number(process.env.DAO_TALE_MOCK_LATENCIA ?? 150);
+// Lida a cada chamada (não no load do módulo): os testes definem a variável
+// depois dos imports, que são içados pelo ES modules.
+const latenciaMs = () => Number(process.env.DAO_TALE_MOCK_LATENCIA ?? 150);
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -22,7 +24,12 @@ export const provedorMock: ProvedorIA = {
   },
 
   async traduzirBloco(_chave, req: RequisicaoTraducaoBloco) {
-    await espera(LATENCIA_MS);
+    await espera(latenciaMs());
+    // Gatilho determinístico para testar o comportamento de limite de cota (429):
+    // qualquer frase contendo o marcador simula a resposta de limite do provedor.
+    if (req.frases.some((f) => f.texto_zh.includes('MOCK_LIMITE'))) {
+      throw new ErroProvedor('Limite de requisições simulado atingido (429).', 'limite');
+    }
     const traducoes = req.frases.map((f) => ({
       ordem: f.ordem,
       texto_pt: `[tradução simulada] ${f.texto_zh}`,
@@ -45,7 +52,7 @@ export const provedorMock: ProvedorIA = {
   },
 
   async revisarFrase(_chave, req: RequisicaoRevisao) {
-    await espera(LATENCIA_MS);
+    await espera(latenciaMs());
     // Heurística simulada: perguntas que sugerem erro geram veredito "incorreto".
     const pareceErro = /errad|incorret|estranh|dúvida|duvido|não seria/i.test(req.pergunta);
     const dados = pareceErro

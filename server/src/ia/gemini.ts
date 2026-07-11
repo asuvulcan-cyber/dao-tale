@@ -69,6 +69,9 @@ function classificarErro(e: unknown): ErroProvedor {
     if (status === 400) {
       return new ErroProvedor(`Requisição rejeitada pela API do Gemini: ${e.message}`, 'fatal');
     }
+    if (status === 429) {
+      return new ErroProvedor('Limite de requisições do Gemini atingido (429).', 'limite');
+    }
     return new ErroProvedor(`Erro da API do Gemini (${status}): ${e.message}`, 'transitorio');
   }
   return new ErroProvedor(`Falha de rede ao chamar o Gemini: ${String((e as Error).message ?? e)}`, 'transitorio');

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Capitulo, CapituloResumo, Obra, ProvedorId } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
+import { SeletorModelo } from '../componentes/SeletorModelo';
 
 export function Capitulos() {
   const { obraId } = useParams();
@@ -174,13 +175,13 @@ function PreferenciasObra() {
             ))}
           </select>
         </label>
-        <label className="block text-sm">
+        <label className="block w-72 text-sm">
           Modelo (vazio = padrão do provedor)
-          <input
-            value={modeloAtual}
-            onChange={(e) => setModelo(e.target.value)}
-            placeholder={provedores.find((p) => p.id === provedorAtual)?.modelo_padrao ?? ''}
-            className="mt-1 block w-64 rounded border border-stone-300 px-2 py-1.5"
+          <SeletorModelo
+            provedor={provedorAtual}
+            valor={modeloAtual}
+            aoMudar={setModelo}
+            modeloPadraoProvedor={provedores.find((p) => p.id === provedorAtual)?.modelo_padrao ?? ''}
           />
         </label>
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>

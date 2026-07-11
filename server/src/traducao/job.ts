@@ -180,11 +180,22 @@ async function executarJob(
         proximas,
       };
 
-      const resultado = await traduzirBlocoComRetry(provedor, ctx.chave, req);
+      const resultado = await traduzirBlocoComRetry(provedor, ctx.chave, req, {
+        pararNoLimite: ctx.config.parar_no_limite,
+      });
 
       if (resultado.tipo === 'fatal') {
         job.progresso.erro_fatal = resultado.mensagem;
         emitir(capituloId, { tipo: 'job_erro', dados: { mensagem: resultado.mensagem } });
+        return;
+      }
+
+      if (resultado.tipo === 'limite') {
+        // Parada limpa: as frases do bloco continuam pendentes, então
+        // "Retomar tradução" recomeça exatamente daqui quando a cota renovar.
+        const mensagem = `${resultado.mensagem} Tradução pausada para não passar da cota gratuita — use "Retomar tradução" quando o limite renovar.`;
+        job.progresso.erro_fatal = mensagem;
+        emitir(capituloId, { tipo: 'job_erro', dados: { mensagem } });
         return;
       }
 
@@ -231,12 +242,14 @@ async function executarJob(
 type ResultadoBloco =
   | { tipo: 'ok'; resposta: Awaited<ReturnType<import('../ia/provedor.js').ProvedorIA['traduzirBloco']>> }
   | { tipo: 'transitorio-esgotado'; mensagem: string }
+  | { tipo: 'limite'; mensagem: string }
   | { tipo: 'fatal'; mensagem: string };
 
 async function traduzirBlocoComRetry(
   provedor: import('../ia/provedor.js').ProvedorIA,
   chave: string | null,
   req: RequisicaoTraducaoBloco,
+  opcoes: { pararNoLimite: boolean },
 ): Promise<ResultadoBloco> {
   let ultimoErro = '';
   for (let tentativa = 0; tentativa <= BACKOFF_MS.length; tentativa++) {
@@ -246,6 +259,7 @@ async function traduzirBlocoComRetry(
     } catch (e) {
       const erro = e instanceof ErroProvedor ? e : new ErroProvedor(String((e as Error).message ?? e), 'transitorio');
       if (erro.tipo === 'fatal') return { tipo: 'fatal', mensagem: erro.message };
+      if (erro.tipo === 'limite' && opcoes.pararNoLimite) return { tipo: 'limite', mensagem: erro.message };
       ultimoErro = erro.message;
       if (tentativa < BACKOFF_MS.length) {
         await new Promise((r) => setTimeout(r, BACKOFF_MS[tentativa]));

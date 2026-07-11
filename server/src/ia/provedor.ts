@@ -46,12 +46,14 @@ export interface RespostaRevisaoProvedor extends RespostaRevisao {
   bruta: string;
 }
 
-// ── Erros classificados (doc 05 §2: transitório vs fatal) ──────────────────
+// ── Erros classificados (doc 05 §2: transitório vs fatal; 'limite' é o 429 —
+// transitório por natureza, mas com tratamento próprio quando o usuário optou
+// por não passar da cota gratuita) ──────────────────────────────────────────
 
 export class ErroProvedor extends Error {
   constructor(
     mensagem: string,
-    public readonly tipo: 'transitorio' | 'fatal',
+    public readonly tipo: 'transitorio' | 'fatal' | 'limite',
   ) {
     super(mensagem);
     this.name = 'ErroProvedor';

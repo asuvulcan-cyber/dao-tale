@@ -123,6 +123,9 @@ export interface Configuracoes {
   tamanho_bloco: number;
   vizinhas_revisao: number;
   cauda_contexto: number;
+  /** Se true, a tradução para (em vez de insistir) ao receber 429 do provedor —
+   * útil para quem quer ficar só na cota gratuita. */
+  parar_no_limite: boolean;
 }
 
 export const CONFIG_PADRAO: Configuracoes = {
@@ -131,6 +134,7 @@ export const CONFIG_PADRAO: Configuracoes = {
   tamanho_bloco: 20,
   vizinhas_revisao: 3,
   cauda_contexto: 2,
+  parar_no_limite: false,
 };
 
 export interface EstadoConfiguracoes {

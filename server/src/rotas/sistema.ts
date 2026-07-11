@@ -13,6 +13,7 @@ const configSchema = z.object({
   tamanho_bloco: z.number().int().min(1).max(100).optional(),
   vizinhas_revisao: z.number().int().min(0).max(10).optional(),
   cauda_contexto: z.number().int().min(0).max(10).optional(),
+  parar_no_limite: z.boolean().optional(),
 });
 
 export function rotasSistema(db: BancoDados): Hono {

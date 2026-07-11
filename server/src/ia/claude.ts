@@ -29,6 +29,9 @@ function classificarErro(e: unknown): ErroProvedor {
     if (status === 400) {
       return new ErroProvedor(`Requisição rejeitada pela API da Anthropic: ${e.message}`, 'fatal');
     }
+    if (status === 429) {
+      return new ErroProvedor('Limite de requisições da Anthropic atingido (429).', 'limite');
+    }
     return new ErroProvedor(`Erro da API da Anthropic (${status}): ${e.message}`, 'transitorio');
   }
   return new ErroProvedor(`Falha de rede ao chamar a Anthropic: ${String((e as Error).message ?? e)}`, 'transitorio');

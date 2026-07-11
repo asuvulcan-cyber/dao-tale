@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Configuracoes as Config, EstadoConfiguracoes, ProvedorId } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
+import { SeletorModelo } from '../componentes/SeletorModelo';
 
 interface ProvedorInfo {
   id: ProvedorId;
@@ -177,12 +178,12 @@ function FormularioPadroes({
           </select>
         </label>
         <label className="block text-sm">
-          Modelo padrão (vazio = padrão do provedor)
-          <input
-            value={valores.modelo_padrao}
-            onChange={(e) => setValores({ ...valores, modelo_padrao: e.target.value })}
-            placeholder={provedores.find((p) => p.id === valores.provedor_padrao)?.modelo_padrao}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          Modelo padrão
+          <SeletorModelo
+            provedor={valores.provedor_padrao}
+            valor={valores.modelo_padrao}
+            aoMudar={(novo) => setValores({ ...valores, modelo_padrao: novo })}
+            modeloPadraoProvedor={provedores.find((p) => p.id === valores.provedor_padrao)?.modelo_padrao}
           />
         </label>
         <label className="block text-sm">
@@ -219,6 +220,19 @@ function FormularioPadroes({
           />
         </label>
       </div>
+      <label className="mt-3 flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={valores.parar_no_limite}
+          onChange={(e) => setValores({ ...valores, parar_no_limite: e.target.checked })}
+          className="mt-0.5"
+        />
+        <span>
+          Usar somente a cota gratuita: ao atingir o limite de requisições do provedor (erro 429), a tradução{' '}
+          <strong>para e avisa</strong> em vez de insistir. As frases restantes ficam pendentes — use "Retomar
+          tradução" quando o limite renovar.
+        </span>
+      </label>
       <div className="mt-3 flex items-center gap-3">
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar padrões

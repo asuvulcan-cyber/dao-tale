@@ -345,6 +345,38 @@ describe('fluxo completo com provedor mock', () => {
     expect(depois.violacoes.length).toBe(0);
   });
 
+  it('parar_no_limite: 429 interrompe o job e deixa as frases restantes pendentes', async () => {
+    await chamar('PUT', '/api/configuracoes', { parar_no_limite: true, tamanho_bloco: 1 });
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'p' } }),
+    );
+    // Bloco 1 traduz; bloco 2 contém o marcador que faz o mock devolver 429.
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, {
+        numero: 1,
+        texto_origem: '第一句话。\nMOCK_LIMITE第二句话。\n第三句话。',
+      }),
+    );
+    const capId = criado.capitulo.id;
+
+    expect((await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock' })).status).toBe(202);
+
+    // Espera o bloco 1 traduzir e o job parar no limite (sem backoff). O fim do
+    // job é observável pela retomada: só é aceita (202, não 409) quando ele morre.
+    let frases: any[] = [];
+    let retomada = 0;
+    for (let i = 0; i < 200; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+      if (frases[0].status_traducao !== 'traduzida') continue;
+      retomada = (await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock' })).status;
+      if (retomada === 202) break;
+    }
+    expect(retomada).toBe(202);
+    // As frases não processadas ficaram pendentes (não "erro"): retraduzíveis.
+    expect(frases.map((f: any) => f.status_traducao)).toEqual(['traduzida', 'pendente', 'pendente']);
+  });
+
   it('versionamento do prompt: só um ativo por vez', async () => {
     const obra = await json(
       await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'v1' } }),

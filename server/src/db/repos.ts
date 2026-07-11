@@ -665,6 +665,7 @@ export const reposConfig = {
       tamanho_bloco: mapa.tamanho_bloco ? Number(mapa.tamanho_bloco) : CONFIG_PADRAO.tamanho_bloco,
       vizinhas_revisao: mapa.vizinhas_revisao ? Number(mapa.vizinhas_revisao) : CONFIG_PADRAO.vizinhas_revisao,
       cauda_contexto: mapa.cauda_contexto ? Number(mapa.cauda_contexto) : CONFIG_PADRAO.cauda_contexto,
+      parar_no_limite: mapa.parar_no_limite ? mapa.parar_no_limite === 'true' : CONFIG_PADRAO.parar_no_limite,
     };
   },
 
