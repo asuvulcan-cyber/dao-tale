@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTestes } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTestes, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
@@ -112,6 +112,7 @@ export function rotasFrases(db: BancoDados): Hono {
     };
 
     try {
+      reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.revisarFrase(chave, {
         modelo,
         promptMae: promptAtivo.conteudo,

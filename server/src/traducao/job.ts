@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { EventoTraducao, ProgressoTraducao, ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
@@ -195,6 +195,8 @@ async function executarJob(
 
       const resultado = await traduzirBlocoComRetry(provedor, ctx.chave, req, {
         pararNoLimite: ctx.config.parar_no_limite,
+        // Cada tentativa real conta contra a cota diária do provedor (retries inclusive).
+        aoTentar: () => reposUso.registrar(db, ctx.provedorId, ctx.modelo),
       });
 
       if (resultado.tipo === 'fatal') {
@@ -285,11 +287,12 @@ async function traduzirBlocoComRetry(
   provedor: import('../ia/provedor.js').ProvedorIA,
   chave: string | null,
   req: RequisicaoTraducaoBloco,
-  opcoes: { pararNoLimite: boolean },
+  opcoes: { pararNoLimite: boolean; aoTentar?: () => void },
 ): Promise<ResultadoBloco> {
   let ultimoErro = '';
   for (let tentativa = 0; tentativa <= BACKOFF_MS.length; tentativa++) {
     try {
+      opcoes.aoTentar?.();
       const resposta = await provedor.traduzirBloco(chave, req);
       return { tipo: 'ok', resposta };
     } catch (e) {

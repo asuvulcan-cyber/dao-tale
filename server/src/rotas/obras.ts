@@ -7,6 +7,8 @@ import { exportarObra, importarObra } from '../db/portabilidade.js';
 const criarObraSchema = z.object({
   titulo: z.string().min(1),
   titulo_original: z.string().optional(),
+  sinopse: z.string().optional(),
+  tags: z.array(z.string().min(1)).max(20).optional(),
   prompt_inicial: z.object({ versao: z.string().min(1), conteudo: z.string().min(1) }).optional(),
   glossario_inicial: z
     .array(
@@ -23,9 +25,14 @@ const criarObraSchema = z.object({
 const atualizarObraSchema = z.object({
   titulo: z.string().min(1).optional(),
   titulo_original: z.string().nullable().optional(),
+  sinopse: z.string().nullable().optional(),
+  tags: z.array(z.string().min(1)).max(20).optional(),
   provedor_padrao: z.enum(['claude', 'gemini', 'mock']).nullable().optional(),
   modelo_padrao: z.string().nullable().optional(),
 });
+
+const MIMES_CAPA = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const CAPA_MAX_BYTES = 2 * 1024 * 1024;
 
 const criarPromptSchema = z.object({
   versao: z.string().min(1),
@@ -57,6 +64,40 @@ export function rotasObras(db: BancoDados): Hono {
     const obra = reposObras.atualizar(db, Number(c.req.param('id')), corpo.data);
     if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     return c.json(obra);
+  });
+
+  // ── Capa (imagem enviada como corpo binário; servida direto do banco) ────
+
+  app.get('/obras/:id/capa', (c) => {
+    const capa = reposObras.obterCapa(db, Number(c.req.param('id')));
+    if (!capa) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra sem capa.' } }, 404);
+    return c.body(new Uint8Array(capa.capa), 200, {
+      'Content-Type': capa.mime,
+      'Cache-Control': 'no-cache',
+    });
+  });
+
+  app.put('/obras/:id/capa', async (c) => {
+    const mime = c.req.header('content-type') ?? '';
+    if (!MIMES_CAPA.has(mime)) {
+      return c.json(
+        { erro: { codigo: 'formato-invalido', mensagem: 'Envie uma imagem JPEG, PNG, WebP ou GIF.' } },
+        415,
+      );
+    }
+    const corpo = Buffer.from(await c.req.arrayBuffer());
+    if (corpo.length === 0 || corpo.length > CAPA_MAX_BYTES) {
+      return c.json({ erro: { codigo: 'tamanho-invalido', mensagem: 'A capa deve ter entre 1 byte e 2 MB.' } }, 413);
+    }
+    const ok = reposObras.definirCapa(db, Number(c.req.param('id')), corpo, mime);
+    if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.delete('/obras/:id/capa', (c) => {
+    const ok = reposObras.definirCapa(db, Number(c.req.param('id')), null, null);
+    if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    return c.json({ ok: true });
   });
 
   app.delete('/obras/:id', (c) => {

@@ -91,28 +91,45 @@ export function ListaObras() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         {obras?.map((obra) => (
-          <div key={obra.id} className="rounded-lg border border-stone-300 bg-white p-4">
-            <div className="flex items-start justify-between">
-              <Link to={`/obras/${obra.id}`} className="hover:underline">
-                <h2 className="text-lg font-semibold">{obra.titulo}</h2>
-                {obra.titulo_original && <p className="texto-zh text-sm text-stone-500">{obra.titulo_original}</p>}
+          <div key={obra.id} className="flex gap-3 rounded-lg border border-stone-300 bg-white p-4">
+            {obra.tem_capa && (
+              <Link to={`/obras/${obra.id}`} className="shrink-0">
+                <img
+                  src={`/api/obras/${obra.id}/capa`}
+                  alt={`Capa de ${obra.titulo}`}
+                  className="h-28 w-20 rounded object-cover shadow-sm"
+                />
               </Link>
-              <div className="flex shrink-0 gap-2">
-                <a href={`/api/obras/${obra.id}/exportar`} download title="Backup completo (capítulos, glossário, prompts e banco de testes) — reimportável">
-                  <Botao variante="secundario">Exportar</Botao>
-                </a>
-                <Botao variante="perigo" onClick={() => excluir.mutate(obra)}>
-                  Excluir
-                </Botao>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between">
+                <Link to={`/obras/${obra.id}`} className="hover:underline">
+                  <h2 className="text-lg font-semibold">{obra.titulo}</h2>
+                  {obra.titulo_original && <p className="texto-zh text-sm text-stone-500">{obra.titulo_original}</p>}
+                </Link>
+                <div className="flex shrink-0 gap-2">
+                  <a href={`/api/obras/${obra.id}/exportar`} download title="Backup completo (capítulos, glossário, prompts e banco de testes) — reimportável">
+                    <Botao variante="secundario">Exportar</Botao>
+                  </a>
+                  <Botao variante="perigo" onClick={() => excluir.mutate(obra)}>
+                    Excluir
+                  </Botao>
+                </div>
               </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Etiqueta>{obra.capitulos_total} capítulos</Etiqueta>
-              <Etiqueta>{obra.glossario_total} termos</Etiqueta>
-              {obra.testes_pendentes > 0 && <Etiqueta cor="amber">{obra.testes_pendentes} casos pendentes</Etiqueta>}
-              {obra.termos_sugeridos_pendentes > 0 && (
-                <Etiqueta cor="blue">{obra.termos_sugeridos_pendentes} termos sugeridos</Etiqueta>
-              )}
+              {obra.sinopse && <p className="mt-1 line-clamp-2 text-sm text-stone-600">{obra.sinopse}</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {obra.tags.map((tag) => (
+                  <Etiqueta key={tag} cor="blue">
+                    {tag}
+                  </Etiqueta>
+                ))}
+                <Etiqueta>{obra.capitulos_total} capítulos</Etiqueta>
+                <Etiqueta>{obra.glossario_total} termos</Etiqueta>
+                {obra.testes_pendentes > 0 && <Etiqueta cor="amber">{obra.testes_pendentes} casos pendentes</Etiqueta>}
+                {obra.termos_sugeridos_pendentes > 0 && (
+                  <Etiqueta cor="blue">{obra.termos_sugeridos_pendentes} termos sugeridos</Etiqueta>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -130,6 +147,8 @@ function FormularioNovaObra({
 }) {
   const [titulo, setTitulo] = useState('');
   const [tituloOriginal, setTituloOriginal] = useState('');
+  const [sinopse, setSinopse] = useState('');
+  const [tags, setTags] = useState('');
   const [prompt, setPrompt] = useState('');
   const [glossarioCsv, setGlossarioCsv] = useState('');
 
@@ -137,6 +156,9 @@ function FormularioNovaObra({
     e.preventDefault();
     const payload: CriarObraPayload = { titulo: titulo.trim() };
     if (tituloOriginal.trim()) payload.titulo_original = tituloOriginal.trim();
+    if (sinopse.trim()) payload.sinopse = sinopse.trim();
+    const listaTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
+    if (listaTags.length > 0) payload.tags = listaTags;
     if (prompt.trim()) payload.prompt_inicial = { versao: '1.0', conteudo: prompt };
     if (glossarioCsv.trim()) {
       payload.glossario_inicial = glossarioCsv
@@ -177,6 +199,25 @@ function FormularioNovaObra({
           />
         </label>
       </div>
+      <label className="block text-sm">
+        Sinopse (opcional)
+        <textarea
+          value={sinopse}
+          onChange={(e) => setSinopse(e.target.value)}
+          rows={3}
+          className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          placeholder="Resumo curto da obra, para o cartão na lista…"
+        />
+      </label>
+      <label className="block text-sm">
+        Tags (opcional — separadas por vírgula)
+        <input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          placeholder="xianxia, suspense, sistema"
+        />
+      </label>
       <label className="block text-sm">
         Prompt mãe inicial (versão 1.0 — pode colar o .md inteiro; opcional, mas necessário antes de traduzir)
         <textarea

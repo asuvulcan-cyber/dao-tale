@@ -26,29 +26,45 @@ function paraFrase(l: any): Frase {
 
 // ── Obras ──────────────────────────────────────────────────────────────────
 
+// Colunas sem o BLOB da capa (pesado e sem lugar em JSON); tem_capa o resume.
+const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.sinopse, o.tags, o.provedor_padrao,
+  o.modelo_padrao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
+
+function paraObra<T extends { tags: unknown; tem_capa: unknown }>(linha: T): T & { tags: string[]; tem_capa: boolean } {
+  return { ...linha, tags: JSON.parse((linha.tags as string) || '[]'), tem_capa: !!linha.tem_capa };
+}
+
 export const reposObras = {
   listar(db: BancoDados): ObraComContadores[] {
-    return db
-      .prepare(
-        `SELECT o.*,
+    return (
+      db
+        .prepare(
+          `SELECT ${COLUNAS_OBRA},
            (SELECT COUNT(*) FROM capitulos c WHERE c.obra_id = o.id) AS capitulos_total,
            (SELECT COUNT(*) FROM glossario g WHERE g.obra_id = o.id) AS glossario_total,
            (SELECT COUNT(*) FROM banco_testes t WHERE t.obra_id = o.id AND t.status = 'pendente') AS testes_pendentes,
            (SELECT COUNT(*) FROM termos_sugeridos s WHERE s.obra_id = o.id AND s.status = 'pendente') AS termos_sugeridos_pendentes
          FROM obras o ORDER BY o.criado_em DESC`,
-      )
-      .all() as ObraComContadores[];
+        )
+        .all() as any[]
+    ).map(paraObra) as ObraComContadores[];
   },
 
   obter(db: BancoDados, id: number): Obra | undefined {
-    return db.prepare('SELECT * FROM obras WHERE id = ?').get(id) as Obra | undefined;
+    const linha = db.prepare(`SELECT ${COLUNAS_OBRA} FROM obras o WHERE o.id = ?`).get(id) as any;
+    return linha ? (paraObra(linha) as Obra) : undefined;
   },
 
   criar(db: BancoDados, payload: CriarObraPayload): Obra {
     return db.transaction(() => {
       const info = db
-        .prepare('INSERT INTO obras (titulo, titulo_original) VALUES (?, ?)')
-        .run(payload.titulo, payload.titulo_original ?? null);
+        .prepare('INSERT INTO obras (titulo, titulo_original, sinopse, tags) VALUES (?, ?, ?, ?)')
+        .run(
+          payload.titulo,
+          payload.titulo_original ?? null,
+          payload.sinopse ?? null,
+          JSON.stringify(payload.tags ?? []),
+        );
       const obraId = Number(info.lastInsertRowid);
       if (payload.prompt_inicial) {
         db.prepare(
@@ -69,21 +85,41 @@ export const reposObras = {
   atualizar(
     db: BancoDados,
     id: number,
-    campos: Partial<Pick<Obra, 'titulo' | 'titulo_original' | 'provedor_padrao' | 'modelo_padrao'>>,
+    campos: Partial<Pick<Obra, 'titulo' | 'titulo_original' | 'sinopse' | 'tags' | 'provedor_padrao' | 'modelo_padrao'>>,
   ): Obra | undefined {
     const atual = this.obter(db, id);
     if (!atual) return undefined;
     db.prepare(
-      `UPDATE obras SET titulo = ?, titulo_original = ?, provedor_padrao = ?, modelo_padrao = ?,
+      `UPDATE obras SET titulo = ?, titulo_original = ?, sinopse = ?, tags = ?, provedor_padrao = ?, modelo_padrao = ?,
         atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
     ).run(
       campos.titulo ?? atual.titulo,
       campos.titulo_original !== undefined ? campos.titulo_original : atual.titulo_original,
+      campos.sinopse !== undefined ? campos.sinopse : atual.sinopse,
+      JSON.stringify(campos.tags !== undefined ? campos.tags : atual.tags),
       campos.provedor_padrao !== undefined ? campos.provedor_padrao : atual.provedor_padrao,
       campos.modelo_padrao !== undefined ? campos.modelo_padrao : atual.modelo_padrao,
       id,
     );
     return this.obter(db, id);
+  },
+
+  obterCapa(db: BancoDados, id: number): { capa: Buffer; mime: string } | undefined {
+    const linha = db.prepare('SELECT capa, capa_mime FROM obras WHERE id = ?').get(id) as
+      | { capa: Buffer | null; capa_mime: string | null }
+      | undefined;
+    if (!linha?.capa || !linha.capa_mime) return undefined;
+    return { capa: linha.capa, mime: linha.capa_mime };
+  },
+
+  definirCapa(db: BancoDados, id: number, capa: Buffer | null, mime: string | null): boolean {
+    return (
+      db
+        .prepare(
+          `UPDATE obras SET capa = ?, capa_mime = ?, atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+        )
+        .run(capa, mime, id).changes > 0
+    );
   },
 
   /** Contagem do que cai em cascata — usada na confirmação de exclusão. */
@@ -673,6 +709,8 @@ export const reposConfig = {
       vizinhas_revisao: mapa.vizinhas_revisao ? Number(mapa.vizinhas_revisao) : CONFIG_PADRAO.vizinhas_revisao,
       cauda_contexto: mapa.cauda_contexto ? Number(mapa.cauda_contexto) : CONFIG_PADRAO.cauda_contexto,
       parar_no_limite: mapa.parar_no_limite ? mapa.parar_no_limite === 'true' : CONFIG_PADRAO.parar_no_limite,
+      cota_diaria_gemini: mapa.cota_diaria_gemini ? Number(mapa.cota_diaria_gemini) : CONFIG_PADRAO.cota_diaria_gemini,
+      cota_diaria_claude: mapa.cota_diaria_claude ? Number(mapa.cota_diaria_claude) : CONFIG_PADRAO.cota_diaria_claude,
     };
   },
 
@@ -686,5 +724,27 @@ export const reposConfig = {
       }
     })();
     return this.obterTodas(db);
+  },
+};
+
+// ── Uso de IA (indicador de cota gratuita) ─────────────────────────────────
+
+/** Data local YYYY-MM-DD — cotas diárias dos provedores renovam por dia-calendário. */
+function dataLocalHoje(): string {
+  return new Date().toLocaleDateString('sv');
+}
+
+export const reposUso = {
+  registrar(db: BancoDados, provedor: string, modelo: string): void {
+    db.prepare(
+      `INSERT INTO uso_ia (data, provedor, modelo, requisicoes) VALUES (?, ?, ?, 1)
+       ON CONFLICT (data, provedor, modelo) DO UPDATE SET requisicoes = requisicoes + 1`,
+    ).run(dataLocalHoje(), provedor, modelo);
+  },
+
+  hoje(db: BancoDados): { provedor: string; modelo: string; requisicoes: number }[] {
+    return db
+      .prepare('SELECT provedor, modelo, requisicoes FROM uso_ia WHERE data = ? ORDER BY requisicoes DESC')
+      .all(dataLocalHoje()) as { provedor: string; modelo: string; requisicoes: number }[];
   },
 };

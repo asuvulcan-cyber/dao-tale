@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { EstadoConfiguracoes, ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposConfig } from '../db/repos.js';
+import { reposConfig, reposUso } from '../db/repos.js';
 import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '../credenciais/index.js';
 import { listarProvedores, obterProvedor } from '../ia/fabrica.js';
 import { diretorioDados } from '../config.js';
@@ -14,6 +14,8 @@ const configSchema = z.object({
   vizinhas_revisao: z.number().int().min(0).max(10).optional(),
   cauda_contexto: z.number().int().min(0).max(10).optional(),
   parar_no_limite: z.boolean().optional(),
+  cota_diaria_gemini: z.number().int().min(0).max(1000000).optional(),
+  cota_diaria_claude: z.number().int().min(0).max(1000000).optional(),
 });
 
 export function rotasSistema(db: BancoDados): Hono {
@@ -43,6 +45,9 @@ export function rotasSistema(db: BancoDados): Hono {
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     return c.json(reposConfig.definir(db, corpo.data));
   });
+
+  // Requisições de hoje por provedor/modelo — alimenta o indicador de cota gratuita.
+  app.get('/uso/hoje', (c) => c.json(reposUso.hoje(db)));
 
   app.get('/provedores', (c) =>
     c.json(

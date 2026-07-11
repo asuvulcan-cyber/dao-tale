@@ -16,6 +16,11 @@ const exportSchema = z.object({
   obra: z.object({
     titulo: z.string().min(1),
     titulo_original: z.string().nullable(),
+    // defaults: compatibilidade com exports anteriores à migração 003.
+    sinopse: z.string().nullable().default(null),
+    tags: z.array(z.string()).default([]),
+    capa_base64: z.string().nullable().default(null),
+    capa_mime: z.string().nullable().default(null),
     provedor_padrao: z.string().nullable(),
     modelo_padrao: z.string().nullable(),
   }),
@@ -98,6 +103,7 @@ export type ExportObra = z.infer<typeof exportSchema>;
 export function exportarObra(db: BancoDados, obraId: number): ExportObra | undefined {
   const obra = reposObras.obter(db, obraId);
   if (!obra) return undefined;
+  const capa = reposObras.obterCapa(db, obraId);
 
   const prompts = db.prepare('SELECT * FROM prompts WHERE obra_id = ? ORDER BY criado_em').all(obraId) as any[];
   const promptVersaoPorId = new Map(prompts.map((p) => [p.id, p.versao as string]));
@@ -118,6 +124,10 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
     obra: {
       titulo: obra.titulo,
       titulo_original: obra.titulo_original,
+      sinopse: obra.sinopse,
+      tags: obra.tags,
+      capa_base64: capa ? capa.capa.toString('base64') : null,
+      capa_mime: capa?.mime ?? null,
       provedor_padrao: obra.provedor_padrao,
       modelo_padrao: obra.modelo_padrao,
     },
@@ -204,8 +214,20 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
 
   return db.transaction((): Obra => {
     const infoObra = db
-      .prepare('INSERT INTO obras (titulo, titulo_original, provedor_padrao, modelo_padrao) VALUES (?, ?, ?, ?)')
-      .run(dados.obra.titulo, dados.obra.titulo_original, dados.obra.provedor_padrao, dados.obra.modelo_padrao);
+      .prepare(
+        `INSERT INTO obras (titulo, titulo_original, sinopse, tags, capa, capa_mime, provedor_padrao, modelo_padrao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        dados.obra.titulo,
+        dados.obra.titulo_original,
+        dados.obra.sinopse,
+        JSON.stringify(dados.obra.tags),
+        dados.obra.capa_base64 ? Buffer.from(dados.obra.capa_base64, 'base64') : null,
+        dados.obra.capa_mime,
+        dados.obra.provedor_padrao,
+        dados.obra.modelo_padrao,
+      );
     const obraId = Number(infoObra.lastInsertRowid);
 
     const promptIdPorVersao = new Map<string, number>();

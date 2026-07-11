@@ -22,11 +22,17 @@ CREATE TABLE obras (
   id               INTEGER PRIMARY KEY,
   titulo           TEXT NOT NULL,
   titulo_original  TEXT,                          -- nome em chinês, opcional
+  sinopse          TEXT,                          -- (+) resumo curto, exibido no cartão da obra
+  tags             TEXT NOT NULL DEFAULT '[]',    -- (+) JSON array de strings
+  capa             BLOB,                          -- (+) imagem de capa (app local, dispensa arquivos soltos)
+  capa_mime        TEXT,
   provedor_padrao  TEXT,                          -- (+) 'claude' | 'gemini' | 'mock'; NULL = padrão global
   modelo_padrao    TEXT,                          -- (+) id do modelo no provedor; NULL = padrão do provedor
   criado_em        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   atualizado_em    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+-- (+) uso_ia (migração 003): contagem local de requisições por dia/provedor/modelo,
+--     PRIMARY KEY (data, provedor, modelo) — alimenta o indicador de cota gratuita.
 -- (+) provedor/modelo padrão por obra: requisito 4.7 do briefing ("seleção do
 --     provedor/modelo padrão por obra ou por capítulo") precisava morar em algum lugar.
 

@@ -117,7 +117,142 @@ export function Capitulos() {
         })}
       </div>
 
+      <DetalhesObra />
       <PreferenciasObra />
+    </div>
+  );
+}
+
+function DetalhesObra() {
+  const { obraId } = useParams();
+  const clienteQuery = useQueryClient();
+  const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState('');
+  const inputCapa = useRef<HTMLInputElement>(null);
+
+  const { data: obra } = useQuery({
+    queryKey: ['obra', obraId],
+    queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
+  });
+
+  const [sinopse, setSinopse] = useState<string | null>(null);
+  const [tags, setTags] = useState<string | null>(null);
+  const sinopseAtual = sinopse ?? obra?.sinopse ?? '';
+  const tagsAtual = tags ?? obra?.tags.join(', ') ?? '';
+
+  const aoMudarObra = () => {
+    clienteQuery.invalidateQueries({ queryKey: ['obra', obraId] });
+    clienteQuery.invalidateQueries({ queryKey: ['obras'] });
+  };
+
+  const salvar = useMutation({
+    mutationFn: () =>
+      api('PUT', `/obras/${obraId}`, {
+        sinopse: sinopseAtual.trim() || null,
+        tags: tagsAtual.split(',').map((t) => t.trim()).filter(Boolean),
+      }),
+    onSuccess: () => {
+      aoMudarObra();
+      setErro('');
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 3000);
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
+
+  const enviarCapa = useMutation({
+    mutationFn: async (arquivo: File) => {
+      const resposta = await fetch(`/api/obras/${obraId}/capa`, {
+        method: 'PUT',
+        headers: { 'Content-Type': arquivo.type },
+        body: arquivo,
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json().catch(() => null);
+        throw new Error(dados?.erro?.mensagem ?? `Erro ${resposta.status}`);
+      }
+    },
+    onSuccess: () => {
+      aoMudarObra();
+      setErro('');
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
+
+  const removerCapa = useMutation({
+    mutationFn: () => api('DELETE', `/obras/${obraId}/capa`),
+    onSuccess: aoMudarObra,
+  });
+
+  if (!obra) return null;
+
+  return (
+    <div className="mt-6 rounded-lg border border-stone-300 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold">Detalhes da obra</h3>
+      {erro && <Aviso tipo="erro">{erro}</Aviso>}
+      <div className="flex flex-wrap gap-4">
+        <div className="shrink-0">
+          <input
+            ref={inputCapa}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo) enviarCapa.mutate(arquivo);
+              e.target.value = '';
+            }}
+          />
+          {obra.tem_capa ? (
+            <img
+              src={`/api/obras/${obraId}/capa?v=${obra.atualizado_em}`}
+              alt={`Capa de ${obra.titulo}`}
+              className="h-40 w-28 rounded object-cover shadow-sm"
+            />
+          ) : (
+            <div className="flex h-40 w-28 items-center justify-center rounded border border-dashed border-stone-300 text-center text-xs text-stone-400">
+              sem capa
+            </div>
+          )}
+          <div className="mt-2 flex flex-col gap-1">
+            <Botao variante="secundario" onClick={() => inputCapa.current?.click()} disabled={enviarCapa.isPending}>
+              {enviarCapa.isPending ? 'Enviando…' : obra.tem_capa ? 'Trocar capa' : 'Enviar capa'}
+            </Botao>
+            {obra.tem_capa && (
+              <Botao variante="secundario" onClick={() => removerCapa.mutate()}>
+                Remover capa
+              </Botao>
+            )}
+          </div>
+        </div>
+        <div className="min-w-64 flex-1 space-y-3">
+          <label className="block text-sm">
+            Sinopse
+            <textarea
+              value={sinopseAtual}
+              onChange={(e) => setSinopse(e.target.value)}
+              rows={4}
+              className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+              placeholder="Resumo curto da obra…"
+            />
+          </label>
+          <label className="block text-sm">
+            Tags (separadas por vírgula)
+            <input
+              value={tagsAtual}
+              onChange={(e) => setTags(e.target.value)}
+              className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+              placeholder="xianxia, suspense, sistema"
+            />
+          </label>
+          <div className="flex items-center gap-3">
+            <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+              Salvar detalhes
+            </Botao>
+            {salvo && <span className="text-sm text-green-700">Salvo.</span>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

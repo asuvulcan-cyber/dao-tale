@@ -426,6 +426,69 @@ describe('fluxo completo com provedor mock', () => {
     expect(cap.status).toBe('finalizado');
   });
 
+  it('detalhes da obra: sinopse, tags e capa, com roundtrip no export', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Obra',
+        sinopse: 'Um mundo que acaba em dez dias.',
+        tags: ['xianxia', 'suspense'],
+      }),
+    );
+    expect(obra.sinopse).toBe('Um mundo que acaba em dez dias.');
+    expect(obra.tags).toEqual(['xianxia', 'suspense']);
+    expect(obra.tem_capa).toBe(false);
+
+    // Capa: PNG mínimo enviado como corpo binário
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+    const envio = await app.request(`/api/obras/${obra.id}/capa`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/png' },
+      body: png,
+    });
+    expect(envio.status).toBe(200);
+
+    const capa = await app.request(`/api/obras/${obra.id}/capa`);
+    expect(capa.status).toBe(200);
+    expect(capa.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await capa.arrayBuffer())).toEqual(png);
+
+    // Tipo não permitido é rejeitado
+    const invalido = await app.request(`/api/obras/${obra.id}/capa`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: 'nada',
+    });
+    expect(invalido.status).toBe(415);
+
+    // Export → import preserva sinopse, tags e capa
+    const exportado = await json(await chamar('GET', `/api/obras/${obra.id}/exportar`));
+    const importada = await json(await chamar('POST', '/api/obras/importar', exportado));
+    expect(importada.sinopse).toBe(obra.sinopse);
+    expect(importada.tags).toEqual(obra.tags);
+    expect(importada.tem_capa).toBe(true);
+    const capa2 = await app.request(`/api/obras/${importada.id}/capa`);
+    expect(Buffer.from(await capa2.arrayBuffer())).toEqual(png);
+  });
+
+  it('uso de IA: requisições do dia são contadas por provedor/modelo', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'p' } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。' }),
+    );
+    await chamar('POST', `/api/capitulos/${criado.capitulo.id}/traduzir`, { provedor: 'mock' });
+    for (let i = 0; i < 100; i++) {
+      const det = await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`));
+      if (!det.progresso.em_execucao && det.frases[0].status_traducao === 'traduzida') break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const uso = await json(await chamar('GET', '/api/uso/hoje'));
+    const mock = uso.find((u: any) => u.provedor === 'mock');
+    expect(mock.requisicoes).toBeGreaterThanOrEqual(1);
+    expect(mock.modelo).toBe('mock-v1');
+  });
+
   it('versionamento do prompt: só um ativo por vez', async () => {
     const obra = await json(
       await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'v1' } }),

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Configuracoes as Config, EstadoConfiguracoes, ProvedorId } from '@dao-tale/shared';
+import type { Configuracoes as Config, EstadoConfiguracoes, ProvedorId, UsoIaDia } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
+import { IndicadorCota } from '../componentes/IndicadorCota';
 
 interface ProvedorInfo {
   id: ProvedorId;
@@ -59,6 +60,8 @@ export function Configuracoes() {
         aoSalvar={() => clienteQuery.invalidateQueries({ queryKey: ['configuracoes'] })}
       />
 
+      <UsoDeHoje />
+
       <section className="rounded-lg border border-stone-300 bg-white p-4 text-sm text-stone-600">
         <h2 className="mb-1 font-semibold text-stone-900">Dados</h2>
         <p>
@@ -67,6 +70,43 @@ export function Configuracoes() {
         <p className="mt-1">Para backup manual, copie esse diretório inteiro com o aplicativo fechado.</p>
       </section>
     </div>
+  );
+}
+
+function UsoDeHoje() {
+  const { data: uso } = useQuery({
+    queryKey: ['uso-hoje'],
+    queryFn: () => api<UsoIaDia[]>('GET', '/uso/hoje'),
+    refetchInterval: 60_000,
+  });
+
+  return (
+    <section className="rounded-lg border border-stone-300 bg-white p-4">
+      <h2 className="mb-1 font-semibold">Uso de hoje</h2>
+      <p className="mb-3 text-sm text-stone-600">
+        Requisições de tradução e revisão contadas neste computador — os provedores não informam o consumo pela API,
+        então a contagem zera à meia-noite local e não enxerga uso feito fora do aplicativo.
+      </p>
+      <IndicadorCota />
+      {uso && uso.filter((u) => u.provedor !== 'mock').length > 0 ? (
+        <table className="mt-3 text-sm">
+          <tbody>
+            {uso
+              .filter((u) => u.provedor !== 'mock')
+              .map((u) => (
+                <tr key={`${u.provedor}/${u.modelo}`}>
+                  <td className="pr-4 text-stone-600">
+                    {u.provedor} · {u.modelo}
+                  </td>
+                  <td className="tabular-nums">{u.requisicoes} requisições</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="mt-2 text-sm text-stone-400">Nenhuma requisição a provedores reais hoje.</p>
+      )}
+    </section>
   );
 }
 
@@ -216,6 +256,28 @@ function FormularioPadroes({
             max={10}
             value={valores.cauda_contexto}
             onChange={(e) => setValores({ ...valores, cauda_contexto: Number(e.target.value) })}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          Cota diária do Gemini (requisições/dia; 0 = não mostrar indicador)
+          <input
+            type="number"
+            min={0}
+            value={valores.cota_diaria_gemini}
+            onChange={(e) => setValores({ ...valores, cota_diaria_gemini: Number(e.target.value) })}
+            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          />
+        </label>
+        <label className="block text-sm">
+          Cota diária do Claude (0 = não mostrar)
+          <input
+            type="number"
+            min={0}
+            value={valores.cota_diaria_claude}
+            onChange={(e) => setValores({ ...valores, cota_diaria_claude: Number(e.target.value) })}
             className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
           />
         </label>

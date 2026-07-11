@@ -12,6 +12,7 @@ import type {
 } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO, STATUS_CASO_ROTULO } from '../App';
+import { IndicadorCota } from '../componentes/IndicadorCota';
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -58,6 +59,7 @@ export function EditorCapitulo() {
       setProgressoVivo(JSON.parse(e.data));
       // As frases do bloco recém-concluído aparecem no editor sem esperar o job acabar.
       clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+      clienteQuery.invalidateQueries({ queryKey: ['uso-hoje'] });
     });
     fonte.addEventListener('termos_sugeridos', () => {
       clienteQuery.invalidateQueries({ queryKey: ['termos-sugeridos', obraId, 'pendente'] });
@@ -188,6 +190,7 @@ export function EditorCapitulo() {
           </Etiqueta>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <IndicadorCota compacto />
           {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
             <>
               <a href={`/api/capitulos/${capitulo.id}/baixar?formato=md`} download title="Markdown: preserva itálico/negrito que a tradução usar, com título do capítulo">

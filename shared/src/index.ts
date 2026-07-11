@@ -21,10 +21,21 @@ export interface Obra {
   id: number;
   titulo: string;
   titulo_original: string | null;
+  sinopse: string | null;
+  tags: string[];
+  /** true quando a obra tem imagem de capa (o binário é servido em GET /obras/:id/capa). */
+  tem_capa: boolean;
   provedor_padrao: ProvedorId | null;
   modelo_padrao: string | null;
   criado_em: string;
   atualizado_em: string;
+}
+
+/** Requisições feitas hoje a um provedor/modelo (indicador de cota gratuita). */
+export interface UsoIaDia {
+  provedor: ProvedorId;
+  modelo: string;
+  requisicoes: number;
 }
 
 export interface ObraComContadores extends Obra {
@@ -128,6 +139,9 @@ export interface Configuracoes {
   /** Se true, a tradução para (em vez de insistir) ao receber 429 do provedor —
    * útil para quem quer ficar só na cota gratuita. */
   parar_no_limite: boolean;
+  /** Limite diário de requisições para o indicador de cota (0 = não mostrar). */
+  cota_diaria_gemini: number;
+  cota_diaria_claude: number;
 }
 
 export const CONFIG_PADRAO: Configuracoes = {
@@ -137,6 +151,9 @@ export const CONFIG_PADRAO: Configuracoes = {
   vizinhas_revisao: 3,
   cauda_contexto: 2,
   parar_no_limite: false,
+  // 250 = requisições/dia do Gemini Flash na cota gratuita (jul/2026) — ajustável.
+  cota_diaria_gemini: 250,
+  cota_diaria_claude: 0,
 };
 
 export interface EstadoConfiguracoes {
@@ -178,6 +195,8 @@ export type EventoTraducao =
 export interface CriarObraPayload {
   titulo: string;
   titulo_original?: string;
+  sinopse?: string;
+  tags?: string[];
   prompt_inicial?: { versao: string; conteudo: string };
   glossario_inicial?: { termo_zh: string; termo_pt: string; categoria?: CategoriaGlossario; nota?: string }[];
 }

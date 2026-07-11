@@ -14,6 +14,7 @@ API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (
 | `PUT /credenciais/:provedor` | Grava a chave de API no keyring/fallback. A chave só trafega nesta chamada, de localhost para localhost |
 | `DELETE /credenciais/:provedor` | Remove a chave |
 | `POST /credenciais/:provedor/testar` | Faz uma chamada mínima ao provedor para validar a chave; retorna ok/erro e modelos disponíveis |
+| `GET /uso/hoje` | Requisições de IA feitas hoje por provedor/modelo (contagem local — alimenta o indicador de cota gratuita) |
 
 ### Obras
 
@@ -21,8 +22,9 @@ API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (
 |---|---|
 | `GET /obras` | Lista com contadores (capítulos por status, termos, casos pendentes) |
 | `POST /obras` | `{ titulo, titulo_original?, prompt_inicial?: { versao, conteudo }, glossario_inicial?: [...] }` — cobre o fluxo "Nova obra" da tela 4.1 numa chamada |
-| `GET /obras/:id` · `PUT /obras/:id` · `DELETE /obras/:id` | Delete retorna antes a contagem do que cai em cascata quando chamado com `?simular=1` |
-| `GET /obras/:id/exportar?formato=json` | Download do export completo (`dao-tale-export-v1`) |
+| `GET /obras/:id` · `PUT /obras/:id` · `DELETE /obras/:id` | Delete retorna antes a contagem do que cai em cascata quando chamado com `?simular=1`; PUT também aceita `sinopse` e `tags` |
+| `GET /obras/:id/capa` · `PUT /obras/:id/capa` · `DELETE /obras/:id/capa` | Capa da obra: PUT recebe a imagem como corpo binário (JPEG/PNG/WebP/GIF, até 2 MB); GET serve com o mime original |
+| `GET /obras/:id/exportar?formato=json` | Download do export completo (`dao-tale-export-v1`, inclui capa em base64) |
 
 ### Prompt mãe (versionamento)
 
