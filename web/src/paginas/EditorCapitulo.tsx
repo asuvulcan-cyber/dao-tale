@@ -170,9 +170,17 @@ export function EditorCapitulo() {
         )}
         <div className="ml-auto flex items-center gap-2">
           {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
-            <Botao variante="secundario" onClick={() => setMostrarConsistencia(true)}>
-              Consistência
-            </Botao>
+            <>
+              <a href={`/api/capitulos/${capitulo.id}/baixar`} download title="Baixa o capítulo traduzido em texto corrido, com os parágrafos originais">
+                <Botao variante="secundario">Baixar .txt</Botao>
+              </a>
+              <a href={`/api/capitulos/${capitulo.id}/baixar?formato=bilingue`} download title="Versão com pares chinês/português por parágrafo, para revisão externa">
+                <Botao variante="secundario">Bilíngue</Botao>
+              </a>
+              <Botao variante="secundario" onClick={() => setMostrarConsistencia(true)}>
+                Consistência
+              </Botao>
+            </>
           )}
           {emExecucao ? (
             <>

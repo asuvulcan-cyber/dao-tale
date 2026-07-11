@@ -285,6 +285,33 @@ describe('fluxo completo com provedor mock', () => {
     expect(futuro.total).toBe(0);
   });
 
+  it('baixa o capítulo traduzido reconstruindo os parágrafos', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'P.' } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, {
+        numero: 7,
+        texto_origem: '甲说。乙说。\n丙说。',
+      }),
+    );
+    const capId = criado.capitulo.id;
+    const frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+    // Traduz manualmente para controlar o texto esperado
+    await chamar('PATCH', `/api/frases/${frases[0].id}`, { texto_pt: 'A falou.' });
+    await chamar('PATCH', `/api/frases/${frases[1].id}`, { texto_pt: 'B falou.' });
+    await chamar('PATCH', `/api/frases/${frases[2].id}`, { texto_pt: 'C falou.' });
+
+    const resposta = await chamar('GET', `/api/capitulos/${capId}/baixar`);
+    expect(resposta.headers.get('content-disposition')).toContain('capitulo-7.txt');
+    const texto = await resposta.text();
+    // Frases do mesmo parágrafo unidas por espaço; parágrafos separados por linha em branco
+    expect(texto).toBe('A falou. B falou.\n\nC falou.');
+
+    const bilingue = await (await chamar('GET', `/api/capitulos/${capId}/baixar?formato=bilingue`)).text();
+    expect(bilingue).toBe('甲说。乙说。\nA falou. B falou.\n\n丙说。\nC falou.');
+  });
+
   it('varredura de consistência do glossário aponta termos fora do cânone', async () => {
     const obra = await json(
       await chamar('POST', '/api/obras', {

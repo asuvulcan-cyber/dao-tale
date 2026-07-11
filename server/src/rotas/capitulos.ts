@@ -95,6 +95,48 @@ export function rotasCapitulos(db: BancoDados): Hono {
     return c.json({ ok: true });
   });
 
+  // ── Download do capítulo traduzido (produto final do fluxo) ──────────────
+  // Reconstrói o texto com as quebras de parágrafo originais (frases.paragrafo).
+  // formato=txt: só a tradução; formato=bilingue: pares chinês/português.
+
+  app.get('/capitulos/:id/baixar', (c) => {
+    const id = Number(c.req.param('id'));
+    const capitulo = reposCapitulos.obter(db, id);
+    if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
+    const formato = c.req.query('formato') === 'bilingue' ? 'bilingue' : 'txt';
+
+    const frases = reposFrases.listarPorCapitulo(db, id);
+    const porParagrafo = new Map<number, typeof frases>();
+    for (const f of frases) {
+      const lista = porParagrafo.get(f.paragrafo) ?? [];
+      lista.push(f);
+      porParagrafo.set(f.paragrafo, lista);
+    }
+    const paragrafos = [...porParagrafo.entries()].sort(([a], [b]) => a - b).map(([, fs]) => fs);
+
+    let conteudo: string;
+    if (formato === 'bilingue') {
+      conteudo = paragrafos
+        .map((fs) => {
+          const zh = fs.map((f) => f.texto_zh).join('');
+          const pt = fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' ');
+          return `${zh}\n${pt || '(pendente de tradução)'}`;
+        })
+        .join('\n\n');
+    } else {
+      conteudo = paragrafos
+        .map((fs) => fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' '))
+        .filter(Boolean)
+        .join('\n\n');
+    }
+
+    const sufixo = formato === 'bilingue' ? '-bilingue' : '';
+    return c.body(conteudo, 200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Disposition': `attachment; filename="capitulo-${capitulo.numero}${sufixo}.txt"`,
+    });
+  });
+
   // ── Varredura reversa de consistência do glossário (doc 05 §4.2) ────────
   // Heurística: para cada termo do glossário presente no chinês de uma frase
   // traduzida, a tradução PT deve conter o termo canônico (comparação sem
