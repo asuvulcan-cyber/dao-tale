@@ -18,5 +18,12 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.1": true,
+    "protobufjs@7.6.5": true,
+    "@google/genai@2.11.0": true,
+    "esbuild@0.25.12": true
   }
 }
