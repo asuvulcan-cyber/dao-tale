@@ -73,7 +73,7 @@ export function PromptMae() {
               <div className="flex items-center justify-between">
                 <span className="font-semibold">v{v.versao}</span>
                 {v.ativo ? (
-                  <Etiqueta cor="green">ativa</Etiqueta>
+                  <Etiqueta cor="jade">ativa</Etiqueta>
                 ) : (
                   <button
                     onClick={(e) => {
@@ -107,7 +107,7 @@ export function PromptMae() {
             <div className="rounded-lg border border-stone-300 bg-white p-4">
               <div className="mb-2 flex items-center gap-2">
                 <h3 className="font-semibold">Versão {exibido.versao}</h3>
-                {exibido.ativo && <Etiqueta cor="green">ativa</Etiqueta>}
+                {exibido.ativo && <Etiqueta cor="jade">ativa</Etiqueta>}
                 <span className="text-xs text-stone-400">
                   versões são imutáveis — para alterar, crie uma nova versão
                 </span>

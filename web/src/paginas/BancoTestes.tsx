@@ -154,7 +154,7 @@ export function BancoTestes() {
             <div key={caso.id} className="rounded-lg border border-stone-300 bg-white p-4 text-sm">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Etiqueta cor={rotulo.cor}>{rotulo.texto}</Etiqueta>
-                <Etiqueta cor={caso.veredito === 'correto' ? 'green' : 'red'}>{caso.veredito}</Etiqueta>
+                <Etiqueta cor={caso.veredito === 'correto' ? 'jade' : 'selo'}>{caso.veredito}</Etiqueta>
                 {caso.secao_regra && <Etiqueta>{caso.secao_regra}</Etiqueta>}
                 <span className="text-xs text-stone-400">
                   #{caso.id} · {caso.provedor}/{caso.modelo} · {new Date(caso.criado_em).toLocaleString('pt-BR')}

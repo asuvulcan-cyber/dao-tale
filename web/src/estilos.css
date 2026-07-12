@@ -1,7 +1,238 @@
 @import 'tailwindcss';
 
+/* ============================================================================
+   DAO TALE · Sistema de tokens "Tinta & Jade"
+   Convenção completa em docs/tokens-css.md. Regra de ouro: componentes usam
+   tokens semânticos, nunca hex. Só a camada de pigmento carrega valor literal
+   e é a única que o modo escuro redefine.
+   ============================================================================ */
+
+:root {
+  /* — Pigmento (tema claro) — única camada com hex — */
+  --cor-papel:       #e9eae0;
+  --cor-papel-alto:  #f4f3ec;
+  --cor-papel-fundo: #deded3;
+  --cor-tinta:       #20241e;
+  --cor-tinta-2:     #565b4f;
+  --cor-linha:       #cfcfc0;
+
+  --cor-jade:        #2e7a63;  --cor-jade-forte:   #235f4d;  --cor-jade-tint:   #dbe6de;
+  --cor-selo:        #be3f2b;  --cor-selo-forte:   #9c331f;  --cor-selo-tint:   #f0dbd3;
+  --cor-ocre:        #a9812a;  --cor-ocre-forte:   #85661f;  --cor-ocre-tint:   #ede2c8;
+  --cor-indigo:      #3a5a7a;  --cor-indigo-forte: #2c4661;  --cor-indigo-tint: #d7dfe8;
+
+  /* — Semântico (aliases; é isto que os componentes consomem) — */
+  --cor-marca:      var(--cor-jade);
+  --cor-acao:       var(--cor-selo);
+  --cor-acao-forte: var(--cor-selo-forte);
+  --cor-ok:         var(--cor-jade);
+  --cor-aviso:      var(--cor-ocre);
+  --cor-erro:       var(--cor-selo);
+  --cor-info:       var(--cor-indigo);
+  --cor-gloss:      var(--cor-ocre);
+
+  /* — Tipografia — */
+  --fonte-display: 'Iowan Old Style', 'Palatino Linotype', 'Palatino', 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  --fonte-corpo:   'Iowan Old Style', 'Palatino Linotype', 'Palatino', Georgia, 'Times New Roman', serif;
+  --fonte-zh:      'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --fonte-ui:      ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fonte-mono:    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', 'Roboto Mono', Menlo, monospace;
+
+  --txt-cap: .72rem; --txt-sm: .84rem; --txt-base: 1rem; --txt-lead: 1.18rem;
+  --txt-h3: 1.35rem; --txt-h2: 2rem;   --txt-h1: 3rem;
+
+  /* — Espaçamento e raio — */
+  --esp-1:.25rem; --esp-2:.5rem; --esp-3:.75rem; --esp-4:1rem;
+  --esp-5:1.5rem; --esp-6:2.5rem; --esp-7:4rem; --esp-8:6rem;
+  --raio-1:3px; --raio-2:6px; --raio-selo:9px; --raio-pill:999px;
+
+  color-scheme: light;
+}
+
+/* — Pigmento (tema escuro) — segue o SO, a menos que forçado p/ claro — */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --cor-papel:       #17150f;
+    --cor-papel-alto:  #201d16;
+    --cor-papel-fundo: #100e09;
+    --cor-tinta:       #e9e4d5;
+    --cor-tinta-2:     #a09a89;
+    --cor-linha:       #37332a;
+
+    --cor-jade:   #5fb49c;  --cor-jade-forte:   #7ec8b1;  --cor-jade-tint:   #1c2a25;
+    --cor-selo:   #d66b52;  --cor-selo-forte:   #e58369;  --cor-selo-tint:   #2c1c16;
+    --cor-ocre:   #c99c46;  --cor-ocre-forte:   #dab060;  --cor-ocre-tint:   #29230f;
+    --cor-indigo: #7f9ec2;  --cor-indigo-forte: #9ab4d3;  --cor-indigo-tint: #16222f;
+
+    color-scheme: dark;
+  }
+}
+
+/* — Override manual pelo toggle (vence a media query nos dois sentidos) — */
+:root[data-theme='dark'] {
+  --cor-papel:#17150f; --cor-papel-alto:#201d16; --cor-papel-fundo:#100e09;
+  --cor-tinta:#e9e4d5; --cor-tinta-2:#a09a89; --cor-linha:#37332a;
+  --cor-jade:#5fb49c; --cor-jade-forte:#7ec8b1; --cor-jade-tint:#1c2a25;
+  --cor-selo:#d66b52; --cor-selo-forte:#e58369; --cor-selo-tint:#2c1c16;
+  --cor-ocre:#c99c46; --cor-ocre-forte:#dab060; --cor-ocre-tint:#29230f;
+  --cor-indigo:#7f9ec2; --cor-indigo-forte:#9ab4d3; --cor-indigo-tint:#16222f;
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  --cor-papel:#e9eae0; --cor-papel-alto:#f4f3ec; --cor-papel-fundo:#deded3;
+  --cor-tinta:#20241e; --cor-tinta-2:#565b4f; --cor-linha:#cfcfc0;
+  --cor-jade:#2e7a63; --cor-jade-forte:#235f4d; --cor-jade-tint:#dbe6de;
+  --cor-selo:#be3f2b; --cor-selo-forte:#9c331f; --cor-selo-tint:#f0dbd3;
+  --cor-ocre:#a9812a; --cor-ocre-forte:#85661f; --cor-ocre-tint:#ede2c8;
+  --cor-indigo:#3a5a7a; --cor-indigo-forte:#2c4661; --cor-indigo-tint:#d7dfe8;
+  color-scheme: light;
+}
+
+/* ============================================================================
+   Ponte Tailwind v4 — cada token vira utilitário; nome do utilitário = token.
+   `inline` faz o utilitário emitir a var() em runtime → responde ao tema.
+   ============================================================================ */
+@theme inline {
+  /* Superfícies e neutros semânticos */
+  --color-papel:       var(--cor-papel);
+  --color-papel-alto:  var(--cor-papel-alto);
+  --color-papel-fundo: var(--cor-papel-fundo);
+  --color-tinta:       var(--cor-tinta);
+  --color-tinta-2:     var(--cor-tinta-2);
+  --color-linha:       var(--cor-linha);
+
+  /* Pigmentos */
+  --color-jade:        var(--cor-jade);
+  --color-jade-forte:  var(--cor-jade-forte);
+  --color-jade-tint:   var(--cor-jade-tint);
+  --color-selo:        var(--cor-selo);
+  --color-selo-forte:  var(--cor-selo-forte);
+  --color-selo-tint:   var(--cor-selo-tint);
+  --color-ocre:        var(--cor-ocre);
+  --color-ocre-forte:  var(--cor-ocre-forte);
+  --color-ocre-tint:   var(--cor-ocre-tint);
+  --color-indigo:      var(--cor-indigo);
+  --color-indigo-forte:var(--cor-indigo-forte);
+  --color-indigo-tint: var(--cor-indigo-tint);
+
+  /* Semânticos */
+  --color-marca:       var(--cor-marca);
+  --color-acao:        var(--cor-acao);
+  --color-acao-forte:  var(--cor-acao-forte);
+  --color-ok:          var(--cor-ok);
+  --color-aviso:       var(--cor-aviso);
+  --color-erro:        var(--cor-erro);
+  --color-info:        var(--cor-info);
+  --color-gloss:       var(--cor-gloss);
+
+  /* Fontes e raio */
+  --font-display: var(--fonte-display);
+  --font-corpo:   var(--fonte-corpo);
+  --font-zh:      var(--fonte-zh);
+  --font-ui:      var(--fonte-ui);
+  --font-mono:    var(--fonte-mono);
+  --radius-selo:  var(--raio-selo);
+
+  /* ── Retematização das classes legadas ──────────────────────────────────
+     Enquanto as páginas ainda usam stone/red/green/amber/blue/teal, mapeamos
+     cada tom para a paleta de pigmentos, para que retematizem e ganhem dark
+     mode automaticamente. Migração p/ utilitários semânticos é gradual. */
+
+  /* neutros → papel/tinta */
+  --color-stone-50:  var(--cor-papel-alto);
+  --color-stone-100: var(--cor-papel);
+  --color-stone-200: var(--cor-papel-fundo);
+  --color-stone-300: var(--cor-linha);
+  --color-stone-400: var(--cor-tinta-2);
+  --color-stone-500: var(--cor-tinta-2);
+  --color-stone-600: var(--cor-tinta-2);
+  --color-stone-700: var(--cor-tinta);
+  --color-stone-800: var(--cor-tinta);
+  --color-stone-900: var(--cor-tinta);
+  --color-white:     var(--cor-papel-alto);
+
+  /* vermelho → selo (cinábrio) */
+  --color-red-50:  var(--cor-selo-tint);
+  --color-red-100: var(--cor-selo-tint);
+  --color-red-200: var(--cor-selo-tint);
+  --color-red-300: var(--cor-selo);
+  --color-red-500: var(--cor-selo);
+  --color-red-600: var(--cor-selo-forte);
+  --color-red-700: var(--cor-selo-forte);
+  --color-red-800: var(--cor-selo-forte);
+
+  /* verde → jade */
+  --color-green-50:  var(--cor-jade-tint);
+  --color-green-100: var(--cor-jade-tint);
+  --color-green-300: var(--cor-jade);
+  --color-green-500: var(--cor-jade);
+  --color-green-700: var(--cor-jade-forte);
+  --color-green-800: var(--cor-jade-forte);
+  --color-green-900: var(--cor-jade-forte);
+
+  /* âmbar → ocre */
+  --color-amber-50:  var(--cor-ocre-tint);
+  --color-amber-100: var(--cor-ocre-tint);
+  --color-amber-200: var(--cor-ocre);
+  --color-amber-300: var(--cor-ocre);
+  --color-amber-500: var(--cor-ocre);
+  --color-amber-800: var(--cor-ocre-forte);
+
+  /* azul → índigo */
+  --color-blue-100: var(--cor-indigo-tint);
+  --color-blue-400: var(--cor-indigo);
+  --color-blue-500: var(--cor-indigo);
+  --color-blue-600: var(--cor-indigo-forte);
+  --color-blue-700: var(--cor-indigo-forte);
+  --color-blue-800: var(--cor-indigo-forte);
+
+  /* teal → jade (status "traduzido") */
+  --color-teal-100: var(--cor-jade-tint);
+  --color-teal-800: var(--cor-jade-forte);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  background: var(--cor-papel);
+  color: var(--cor-tinta);
+  font-family: var(--fonte-ui);
+}
+
+::selection { background: color-mix(in srgb, var(--cor-marca) 30%, transparent); }
+
+:focus-visible { outline: 2px solid var(--cor-marca); outline-offset: 2px; }
+
 /* Tipografia dedicada para o texto chinês no editor bilíngue */
 .texto-zh {
-  font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
+  font-family: var(--fonte-zh);
   line-height: 1.9;
+}
+
+/* ── Selo-ponto: estado da frase na margem (item 7 do backlog) ──────────────
+   Mesma gramática visual do selo 印章: um ponto de pigmento com leve auréola.
+   A cor vem de --ponto-cor (semântica); "vazio" = sem estado que mereça tinta. */
+.selo-ponto {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--ponto-cor, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ponto-cor, transparent) 18%, transparent);
+}
+.selo-ponto--vazio { box-shadow: inset 0 0 0 1.5px var(--cor-linha); }
+.selo-ponto--jade { --ponto-cor: var(--cor-ok); }
+.selo-ponto--indigo { --ponto-cor: var(--cor-info); }
+.selo-ponto--ocre { --ponto-cor: var(--cor-aviso); }
+.selo-ponto--selo { --ponto-cor: var(--cor-erro); }
+
+/* ── Termo do glossário no texto (item 13 do backlog) ───────────────────────
+   Sublinhado ocre suave; o title do elemento carrega a glosa canônica. */
+.termo-gloss {
+  background: linear-gradient(
+      color-mix(in srgb, var(--cor-gloss) 16%, transparent),
+      color-mix(in srgb, var(--cor-gloss) 16%, transparent)
+    )
+    no-repeat 0 88% / 100% 0.28em;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--cor-gloss) 60%, transparent);
+  cursor: help;
 }

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Capitulo,
   CasoTeste,
+  EntradaGlossario,
   Frase,
   ProgressoTraducao,
   ProvedorId,
@@ -29,6 +30,102 @@ interface ViolacaoConsistencia {
   texto_pt: string;
 }
 
+// ── Modos de visualização do capítulo (item 9 do backlog) ───────────────────
+const MODOS_EDITOR = [
+  { id: 'segmentado', rotulo: 'Segmentado' },
+  { id: 'bilingue', rotulo: 'Bilíngue' },
+  { id: 'leitura', rotulo: 'Leitura' },
+] as const;
+type ModoEditor = (typeof MODOS_EDITOR)[number]['id'];
+const CHAVE_MODO = 'dao-tale-modo-editor';
+const CHAVE_TERMOS = 'dao-tale-marcar-termos';
+
+// ── Estado da frase → selo-ponto (item 7 do backlog) ────────────────────────
+// Prioridade: problemas primeiro (erro/regra), depois atenção (pergunta),
+// depois intervenção humana (editada), depois selo de qualidade (confirmada).
+type EstadoFrase = 'erro' | 'regra' | 'pergunta' | 'editada' | 'confirmada' | 'original' | 'pendente';
+
+const ESTADO_FRASE_INFO: Record<EstadoFrase, { classe: string; rotulo: string }> = {
+  erro: { classe: 'selo-ponto--selo', rotulo: 'Erro na tradução' },
+  regra: { classe: 'selo-ponto--selo', rotulo: 'Revisão pediu regra nova' },
+  pergunta: { classe: 'selo-ponto--ocre', rotulo: 'Pergunta de revisão pendente' },
+  editada: { classe: 'selo-ponto--indigo', rotulo: 'Editada à mão' },
+  confirmada: { classe: 'selo-ponto--jade', rotulo: 'Confirmada na revisão' },
+  original: { classe: 'selo-ponto--vazio', rotulo: 'Tradução da IA, sem revisão' },
+  pendente: { classe: 'selo-ponto--vazio opacity-40', rotulo: 'Pendente de tradução' },
+};
+
+function estadoDaFrase(frase: Frase, casos: CasoTeste[] | undefined): EstadoFrase {
+  if (frase.status_traducao === 'erro') return 'erro';
+  if (frase.status_traducao === 'pendente') return 'pendente';
+  if (casos?.some((c) => c.status === 'regra-nova-necessaria')) return 'regra';
+  if (casos?.some((c) => c.status === 'pendente')) return 'pergunta';
+  if (frase.editado_manualmente) return 'editada';
+  if (casos?.some((c) => c.status === 'confirmado' || c.status === 'corrigido')) return 'confirmada';
+  return 'original';
+}
+
+function SeloPonto({ estado, className = '' }: { estado: EstadoFrase; className?: string }) {
+  const info = ESTADO_FRASE_INFO[estado];
+  return <span className={`selo-ponto ${info.classe} ${className}`} title={info.rotulo} aria-label={info.rotulo} />;
+}
+
+// ── Marcação de termos do glossário no texto (item 13 do backlog) ───────────
+interface MarcadorGlossario {
+  regexZh: RegExp | null;
+  regexPt: RegExp | null;
+  glosaZh: Map<string, string>;
+  glosaPt: Map<string, string>;
+}
+
+function montarMarcadorGlossario(entradas: EntradaGlossario[] | undefined): MarcadorGlossario | null {
+  if (!entradas || entradas.length === 0) return null;
+  const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Termos maiores primeiro, para o composto vencer o termo contido (人级 antes de 人).
+  const zh = entradas
+    .filter((e) => e.termo_zh.trim().length >= 2) // 1 caractere é ambíguo demais (mesma regra da consistência)
+    .sort((a, b) => b.termo_zh.length - a.termo_zh.length);
+  const pt = entradas
+    .filter((e) => e.termo_pt.trim().length >= 3)
+    .sort((a, b) => b.termo_pt.length - a.termo_pt.length);
+  return {
+    regexZh: zh.length ? new RegExp(`(${zh.map((e) => escapar(e.termo_zh)).join('|')})`, 'gu') : null,
+    regexPt: pt.length
+      ? new RegExp(`(?<![\\p{L}\\p{M}])(${pt.map((e) => escapar(e.termo_pt)).join('|')})(?![\\p{L}\\p{M}])`, 'giu')
+      : null,
+    glosaZh: new Map(zh.map((e) => [e.termo_zh, `${e.termo_zh} → ${e.termo_pt}`])),
+    glosaPt: new Map(pt.map((e) => [e.termo_pt.toLowerCase(), `${e.termo_zh} → ${e.termo_pt}`])),
+  };
+}
+
+// Divide o texto pelo regex (grupo de captura) e envolve os termos com a marca ocre.
+function TextoMarcado({
+  texto,
+  regex,
+  glosa,
+}: {
+  texto: string;
+  regex: RegExp | null | undefined;
+  glosa: (trecho: string) => string | undefined;
+}) {
+  if (!regex || !texto) return <>{texto}</>;
+  const partes = texto.split(regex);
+  if (partes.length === 1) return <>{texto}</>;
+  return (
+    <>
+      {partes.map((parte, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className="termo-gloss" title={glosa(parte)}>
+            {parte}
+          </span>
+        ) : (
+          parte
+        ),
+      )}
+    </>
+  );
+}
+
 export function EditorCapitulo() {
   const { obraId, capituloId } = useParams();
   const clienteQuery = useQueryClient();
@@ -37,7 +134,15 @@ export function EditorCapitulo() {
   const [erroJob, setErroJob] = useState('');
   const [provedorEscolhido, setProvedorEscolhido] = useState('');
   const [mostrarConsistencia, setMostrarConsistencia] = useState(false);
+  const [modo, setModo] = useState<ModoEditor>(() => {
+    const salvo = localStorage.getItem(CHAVE_MODO);
+    return MODOS_EDITOR.some((m) => m.id === salvo) ? (salvo as ModoEditor) : 'segmentado';
+  });
+  const [marcarTermos, setMarcarTermos] = useState(() => localStorage.getItem(CHAVE_TERMOS) !== 'nao');
   const fonteEventos = useRef<EventSource | null>(null);
+
+  useEffect(() => localStorage.setItem(CHAVE_MODO, modo), [modo]);
+  useEffect(() => localStorage.setItem(CHAVE_TERMOS, marcarTermos ? 'sim' : 'nao'), [marcarTermos]);
 
   const { data: provedores } = useQuery({
     queryKey: ['provedores'],
@@ -48,6 +153,32 @@ export function EditorCapitulo() {
     queryKey: ['capitulo', capituloId],
     queryFn: () => api<DetalheCapitulo>('GET', `/capitulos/${capituloId}`),
   });
+
+  // Glossário da obra → marcação ocre dos termos no texto (item 13).
+  const { data: glossario } = useQuery({
+    queryKey: ['glossario', obraId],
+    queryFn: () => api<EntradaGlossario[]>('GET', `/obras/${obraId}/glossario`),
+  });
+  const marcador = useMemo(
+    () => (marcarTermos ? montarMarcadorGlossario(glossario) : null),
+    [glossario, marcarTermos],
+  );
+
+  // Casos de teste do capítulo → selo-ponto de pergunta/regra/confirmação (item 7).
+  const { data: casosDoCapitulo } = useQuery({
+    queryKey: ['testes-capitulo', capituloId],
+    queryFn: () =>
+      api<{ casos: CasoTeste[] }>('GET', `/obras/${obraId}/testes?capitulo=${capituloId}&limite=200`),
+  });
+  const casosPorFrase = useMemo(() => {
+    const mapa = new Map<number, CasoTeste[]>();
+    for (const caso of casosDoCapitulo?.casos ?? []) {
+      const lista = mapa.get(caso.frase_id) ?? [];
+      lista.push(caso);
+      mapa.set(caso.frase_id, lista);
+    }
+    return mapa;
+  }, [casosDoCapitulo]);
 
   // Conecta ao SSE de progresso; usado tanto ao iniciar tradução quanto ao abrir
   // a página com um job já em andamento (retomada após fechar o navegador).
@@ -175,15 +306,45 @@ export function EditorCapitulo() {
             </option>
           ))}
         </select>
-        <span className="text-sm text-stone-500">
+        <span className="text-sm text-tinta-2">
           {frases.length - pendentes - comErro}/{frases.length} traduzidas
-          {comErro > 0 && <span className="text-red-600"> · {comErro} com erro</span>}
+          {comErro > 0 && <span className="text-erro"> · {comErro} com erro</span>}
           {palavrasPt > 0 && (
             <span title={`${caracteresZh.toLocaleString('pt-BR')} caracteres no original chinês`}>
               {' '}· {palavrasPt.toLocaleString('pt-BR')} palavras
             </span>
           )}
         </span>
+        <div className="flex items-center gap-1" role="group" aria-label="Modo de visualização">
+          {MODOS_EDITOR.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setModo(m.id)}
+              aria-pressed={modo === m.id}
+              className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                modo === m.id
+                  ? 'border-transparent bg-marca text-papel-alto'
+                  : 'border-linha bg-papel-alto text-tinta-2 hover:border-jade hover:text-jade-forte'
+              }`}
+            >
+              {m.rotulo}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMarcarTermos((v) => !v)}
+            aria-pressed={marcarTermos}
+            title="Marcar termos do glossário no texto"
+            className={`ml-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              marcarTermos
+                ? 'border-transparent bg-ocre-tint text-ocre-forte'
+                : 'border-linha bg-papel-alto text-tinta-2 hover:border-ocre hover:text-ocre-forte'
+            }`}
+          >
+            Termos
+          </button>
+        </div>
         {capitulo.provedor && (
           <Etiqueta>
             {capitulo.provedor} · {capitulo.modelo}
@@ -270,25 +431,73 @@ export function EditorCapitulo() {
 
       <div className="flex gap-4">
         {/* Editor bilíngue */}
-        <div className="min-w-0 flex-1 space-y-4">
-          {paragrafos.map(([idx, frasesDoParagrafo]) => (
-            // content-visibility: parágrafos fora da tela não são renderizados —
-            // mantém capítulos muito longos (600+ frases) fluidos sem virtualização.
-            <div
-              key={idx}
-              className="overflow-hidden rounded-lg border border-stone-300 bg-white [contain-intrinsic-size:auto_120px] [content-visibility:auto]"
-            >
-              {frasesDoParagrafo.map((frase) => (
-                <LinhaFrase
-                  key={frase.id}
-                  frase={frase}
-                  selecionada={frase.id === fraseSelecionada}
-                  aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
-                  capituloId={capituloId!}
-                />
+        <div className="min-w-0 flex-1">
+          {modo === 'segmentado' ? (
+            <div className="space-y-4">
+              {paragrafos.map(([idx, frasesDoParagrafo]) => (
+                // content-visibility: parágrafos fora da tela não são renderizados —
+                // mantém capítulos muito longos (600+ frases) fluidos sem virtualização.
+                <div
+                  key={idx}
+                  className="overflow-hidden rounded-lg border border-linha bg-papel-alto [contain-intrinsic-size:auto_120px] [content-visibility:auto]"
+                >
+                  {frasesDoParagrafo.map((frase) => (
+                    <LinhaFrase
+                      key={frase.id}
+                      frase={frase}
+                      estado={estadoDaFrase(frase, casosPorFrase.get(frase.id))}
+                      marcador={marcador}
+                      selecionada={frase.id === fraseSelecionada}
+                      aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
+                      capituloId={capituloId!}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
+          ) : (
+            /* Modos de leitura (item 9): a segmentação some visualmente; clicar
+               numa frase continua abrindo o Protocolo de Revisão. */
+            <div className="rounded-lg border border-linha bg-papel-alto px-5 py-6 md:px-10 md:py-8">
+              <div className="mx-auto max-w-[70ch] space-y-5 font-corpo text-[1.06rem] leading-[1.75]">
+                {(capitulo.titulo_pt || capitulo.titulo) && (
+                  <h3 className="font-display text-xl font-semibold">
+                    {capitulo.titulo_pt ?? capitulo.titulo}
+                  </h3>
+                )}
+                {paragrafos.map(([idx, frasesDoParagrafo]) => (
+                  <div key={idx} className="[contain-intrinsic-size:auto_80px] [content-visibility:auto]">
+                    {modo === 'bilingue' && (
+                      <p className="texto-zh mb-1.5 text-[0.95em] text-tinta-2">
+                        {frasesDoParagrafo.map((frase) => (
+                          <FraseSpan
+                            key={frase.id}
+                            frase={frase}
+                            lado="zh"
+                            marcador={marcador}
+                            selecionada={frase.id === fraseSelecionada}
+                            aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
+                          />
+                        ))}
+                      </p>
+                    )}
+                    <p>
+                      {frasesDoParagrafo.map((frase) => (
+                        <FraseSpan
+                          key={frase.id}
+                          frase={frase}
+                          lado="pt"
+                          marcador={marcador}
+                          selecionada={frase.id === fraseSelecionada}
+                          aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
+                        />
+                      ))}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Painel de revisão */}
@@ -321,11 +530,15 @@ export function EditorCapitulo() {
 
 function LinhaFrase({
   frase,
+  estado,
+  marcador,
   selecionada,
   aoSelecionar,
   capituloId,
 }: {
   frase: Frase;
+  estado: EstadoFrase;
+  marcador: MarcadorGlossario | null;
   selecionada: boolean;
   aoSelecionar: () => void;
   capituloId: string;
@@ -341,24 +554,22 @@ function LinhaFrase({
     onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] }),
   });
 
-  const corStatus =
-    frase.status_traducao === 'erro'
-      ? 'border-l-red-500'
-      : frase.status_traducao === 'pendente'
-        ? 'border-l-stone-300'
-        : frase.editado_manualmente
-          ? 'border-l-amber-400'
-          : 'border-l-green-400';
-
   return (
     <div
       id={`frase-${frase.id}`}
-      className={`grid grid-cols-2 border-b border-l-4 border-stone-200 last:border-b-0 ${corStatus} ${
-        selecionada ? 'bg-amber-50' : ''
+      className={`grid grid-cols-[1.4rem_1fr_1fr] border-b border-linha/60 last:border-b-0 ${
+        selecionada ? 'bg-jade-tint/60' : ''
       }`}
     >
-      <div className="texto-zh cursor-pointer select-text border-r border-stone-200 px-3 py-2" onClick={aoSelecionar}>
-        {frase.texto_zh}
+      <div className="flex cursor-pointer justify-center pt-3.5" onClick={aoSelecionar}>
+        <SeloPonto estado={estado} />
+      </div>
+      <div className="texto-zh cursor-pointer select-text border-r border-linha/60 py-2 pr-3" onClick={aoSelecionar}>
+        {marcador ? (
+          <TextoMarcado texto={frase.texto_zh} regex={marcador.regexZh} glosa={(t) => marcador.glosaZh.get(t)} />
+        ) : (
+          frase.texto_zh
+        )}
       </div>
       <div className="px-2 py-1.5">
         <textarea
@@ -369,10 +580,46 @@ function LinhaFrase({
             if (texto !== frase.texto_pt) salvar.mutate(texto);
           }}
           rows={Math.max(1, Math.ceil(texto.length / 60))}
-          className="w-full resize-none rounded border border-transparent px-1 py-0.5 text-sm leading-relaxed hover:border-stone-200 focus:border-stone-400 focus:outline-none"
+          className="w-full resize-none rounded border border-transparent px-1 py-0.5 text-sm leading-relaxed hover:border-linha focus:border-jade focus:outline-none"
         />
       </div>
     </div>
+  );
+}
+
+// Frase nos modos de leitura: um span clicável, sem borda — a segmentação
+// desaparece visualmente mas a seleção (e o painel de revisão) continua.
+function FraseSpan({
+  frase,
+  lado,
+  marcador,
+  selecionada,
+  aoSelecionar,
+}: {
+  frase: Frase;
+  lado: 'zh' | 'pt';
+  marcador: MarcadorGlossario | null;
+  selecionada: boolean;
+  aoSelecionar: () => void;
+}) {
+  const texto = lado === 'zh' ? frase.texto_zh : frase.texto_pt;
+  const regex = lado === 'zh' ? marcador?.regexZh : marcador?.regexPt;
+  const glosa = (t: string) => (lado === 'zh' ? marcador?.glosaZh.get(t) : marcador?.glosaPt.get(t.toLowerCase()));
+  const pendente = lado === 'pt' && !texto.trim();
+  return (
+    <>
+      <span
+        id={lado === 'pt' ? `frase-${frase.id}` : undefined}
+        onClick={aoSelecionar}
+        title="Clique para revisar esta frase"
+        className={`cursor-pointer rounded-xs decoration-linha underline-offset-4 hover:underline ${
+          selecionada ? 'bg-jade-tint' : ''
+        } ${pendente ? 'text-tinta-2 italic' : ''}`}
+      >
+        {pendente ? '[…]' : marcador ? <TextoMarcado texto={texto} regex={regex} glosa={glosa} /> : texto}
+      </span>
+      {lado === 'pt' ? ' ' : ''}
+    </>
   );
 }
 
@@ -392,6 +639,7 @@ function PainelRevisao({
   const [resultado, setResultado] = useState<{ revisao: RespostaRevisao; caso: CasoTeste } | null>(null);
   const [erro, setErro] = useState('');
   const [dividindo, setDividindo] = useState(false);
+  const [textoPt, setTextoPt] = useState(frase.texto_pt);
 
   // Limpa o painel ao trocar de frase.
   useEffect(() => {
@@ -400,6 +648,15 @@ function PainelRevisao({
     setErro('');
     setDividindo(false);
   }, [frase.id]);
+
+  // Edição direta da tradução pelo painel — é assim que se edita nos modos de
+  // leitura, onde as frases não têm textarea próprio (item 9 do backlog).
+  useEffect(() => setTextoPt(frase.texto_pt), [frase.texto_pt, frase.id]);
+  const salvarPt = useMutation({
+    mutationFn: (texto_pt: string) => api<Frase>('PATCH', `/frases/${frase.id}`, { texto_pt }),
+    onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] }),
+    onError: (e) => setErro((e as Error).message),
+  });
 
   const mesclar = useMutation({
     mutationFn: () => api('POST', '/frases/mesclar', { frase_ids: [frase.id, proxima!.id] }),
@@ -423,6 +680,7 @@ function PainelRevisao({
       setResultado(dados);
       setErro('');
       clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
+      clienteQuery.invalidateQueries({ queryKey: ['testes-capitulo', capituloId] });
     },
     onError: (e) => setErro((e as Error).message),
   });
@@ -432,6 +690,7 @@ function PainelRevisao({
     onSuccess: () => {
       clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
       clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
+      clienteQuery.invalidateQueries({ queryKey: ['testes-capitulo', capituloId] });
       setResultado((r) => (r ? { ...r, caso: { ...r.caso, status: 'corrigido' } } : r));
     },
     onError: (e) => setErro((e as Error).message),
@@ -452,10 +711,20 @@ function PainelRevisao({
           </button>
         </div>
 
-        <p className="texto-zh rounded bg-stone-50 px-2 py-1.5 text-sm">{frase.texto_zh}</p>
-        <p className="rounded bg-stone-50 px-2 py-1.5 text-sm">{frase.texto_pt || '(sem tradução)'}</p>
+        <p className="texto-zh rounded bg-papel-fundo/60 px-2 py-1.5 text-sm">{frase.texto_zh}</p>
+        <textarea
+          value={textoPt}
+          onChange={(e) => setTextoPt(e.target.value)}
+          onBlur={() => {
+            if (textoPt !== frase.texto_pt) salvarPt.mutate(textoPt);
+          }}
+          rows={Math.max(2, Math.ceil(textoPt.length / 44))}
+          placeholder="(sem tradução — escreva aqui)"
+          title="A tradução desta frase; alterações são salvas ao sair do campo"
+          className="w-full resize-none rounded border border-transparent bg-papel-fundo/60 px-2 py-1.5 text-sm leading-relaxed hover:border-linha focus:border-jade focus:outline-none"
+        />
         {frase.editado_manualmente && frase.texto_pt_original_ia && (
-          <button onClick={() => reverter.mutate()} className="text-xs text-stone-500 underline hover:text-stone-800">
+          <button onClick={() => reverter.mutate()} className="text-xs text-tinta-2 underline hover:text-tinta">
             Reverter para a tradução original da IA
           </button>
         )}
@@ -476,7 +745,7 @@ function PainelRevisao({
         {resultado && (
           <div className="space-y-2 border-t border-stone-200 pt-3 text-sm">
             <div>
-              <Etiqueta cor={resultado.revisao.veredito === 'correto' ? 'green' : 'red'}>
+              <Etiqueta cor={resultado.revisao.veredito === 'correto' ? 'jade' : 'selo'}>
                 {resultado.revisao.veredito === 'correto' ? 'Correto' : 'Incorreto'}
               </Etiqueta>
               <span className="ml-2 text-xs text-stone-500">regra: {resultado.revisao.secao_regra}</span>
@@ -491,7 +760,7 @@ function PainelRevisao({
                     Aplicar correção
                   </Botao>
                 ) : (
-                  <Etiqueta cor="blue">Correção aplicada</Etiqueta>
+                  <Etiqueta cor="indigo">Correção aplicada</Etiqueta>
                 )}
               </div>
             )}
@@ -509,7 +778,7 @@ function PainelRevisao({
               {historico.map((caso) => (
                 <div key={caso.id} className="rounded border border-stone-200 bg-stone-50 p-2 text-xs">
                   <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                    <Etiqueta cor={caso.veredito === 'correto' ? 'green' : 'red'}>
+                    <Etiqueta cor={caso.veredito === 'correto' ? 'jade' : 'selo'}>
                       {caso.veredito === 'correto' ? 'Correto' : 'Incorreto'}
                     </Etiqueta>
                     {STATUS_CASO_ROTULO[caso.status] && (

@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dao Tale</title>
+    <script>
+      // Anti-flash: aplica o tema salvo antes da primeira pintura.
+      (function () {
+        try {
+          var t = localStorage.getItem('dao-tale-tema');
+          if (t === 'claro' || t === 'escuro') {
+            document.documentElement.setAttribute('data-theme', t === 'escuro' ? 'dark' : 'light');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="raiz"></div>

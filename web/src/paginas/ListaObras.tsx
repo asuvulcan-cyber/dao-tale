@@ -119,15 +119,15 @@ export function ListaObras() {
               {obra.sinopse && <p className="mt-1 line-clamp-2 text-sm text-stone-600">{obra.sinopse}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {obra.tags.map((tag) => (
-                  <Etiqueta key={tag} cor="blue">
+                  <Etiqueta key={tag} cor="indigo">
                     {tag}
                   </Etiqueta>
                 ))}
                 <Etiqueta>{obra.capitulos_total} capítulos</Etiqueta>
                 <Etiqueta>{obra.glossario_total} termos</Etiqueta>
-                {obra.testes_pendentes > 0 && <Etiqueta cor="amber">{obra.testes_pendentes} casos pendentes</Etiqueta>}
+                {obra.testes_pendentes > 0 && <Etiqueta cor="ocre">{obra.testes_pendentes} casos pendentes</Etiqueta>}
                 {obra.termos_sugeridos_pendentes > 0 && (
-                  <Etiqueta cor="blue">{obra.termos_sugeridos_pendentes} termos sugeridos</Etiqueta>
+                  <Etiqueta cor="indigo">{obra.termos_sugeridos_pendentes} termos sugeridos</Etiqueta>
                 )}
               </div>
             </div>

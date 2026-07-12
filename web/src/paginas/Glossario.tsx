@@ -194,7 +194,7 @@ function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: 
         <td className="px-3 py-2">{entrada.termo_pt}</td>
         <td className="px-3 py-2">
           <Etiqueta>{entrada.categoria}</Etiqueta>
-          {entrada.origem === 'sugerido-ia' && <Etiqueta cor="blue">IA</Etiqueta>}
+          {entrada.origem === 'sugerido-ia' && <Etiqueta cor="indigo">IA</Etiqueta>}
         </td>
         <td className="px-3 py-2 text-stone-500">{entrada.nota}</td>
         <td className="px-3 py-2 text-right whitespace-nowrap">

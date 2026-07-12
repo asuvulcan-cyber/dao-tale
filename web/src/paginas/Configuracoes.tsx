@@ -149,7 +149,7 @@ function CartaoCredencial({
     <div className="rounded border border-stone-200 p-3">
       <div className="mb-2 flex items-center gap-2">
         <span className="font-medium">{provedor.nome}</span>
-        {configurada ? <Etiqueta cor="green">chave configurada</Etiqueta> : <Etiqueta>sem chave</Etiqueta>}
+        {configurada ? <Etiqueta cor="jade">chave configurada</Etiqueta> : <Etiqueta>sem chave</Etiqueta>}
       </div>
       <div className="flex flex-wrap gap-2">
         <input
