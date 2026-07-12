@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CapituloResumo, CasoTeste, StatusCasoTeste } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, Etiqueta, STATUS_CASO_ROTULO } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CASO_ROTULO } from '../App';
 
 const POR_PAGINA = 25;
 
@@ -73,6 +73,15 @@ export function BancoTestes() {
 
   return (
     <div>
+      <CabecalhoPagina
+        titulo="Banco de testes"
+        descricao="Toda revisão vira um caso — o registro de auditoria da qualidade."
+      >
+        <a href={`/api/obras/${obraId}/testes/exportar`} download>
+          <Botao variante="secundario">Exportar CSV</Botao>
+        </a>
+      </CabecalhoPagina>
+
       {recorrencias && recorrencias.length > 0 && (
         <Aviso tipo="info">
           <strong>Padrões recorrentes:</strong> há 2+ casos não confirmados nas regras{' '}
@@ -86,7 +95,7 @@ export function BancoTestes() {
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <select value={status} onChange={(e) => mudarFiltro(setStatus)(e.target.value)} className="rounded border border-stone-300 px-2 py-1.5 text-sm">
+        <select value={status} onChange={(e) => mudarFiltro(setStatus)(e.target.value)} className="entrada text-sm">
           <option value="">Todos os status</option>
           {Object.entries(STATUS_CASO_ROTULO).map(([valor, r]) => (
             <option key={valor} value={valor}>
@@ -94,12 +103,12 @@ export function BancoTestes() {
             </option>
           ))}
         </select>
-        <select value={veredito} onChange={(e) => mudarFiltro(setVeredito)(e.target.value)} className="rounded border border-stone-300 px-2 py-1.5 text-sm">
+        <select value={veredito} onChange={(e) => mudarFiltro(setVeredito)(e.target.value)} className="entrada text-sm">
           <option value="">Todos os vereditos</option>
           <option value="correto">Correto</option>
           <option value="incorreto">Incorreto</option>
         </select>
-        <select value={capitulo} onChange={(e) => mudarFiltro(setCapitulo)(e.target.value)} className="rounded border border-stone-300 px-2 py-1.5 text-sm">
+        <select value={capitulo} onChange={(e) => mudarFiltro(setCapitulo)(e.target.value)} className="entrada text-sm">
           <option value="">Todos os capítulos</option>
           {capitulos?.map((c) => (
             <option key={c.id} value={c.id}>
@@ -111,38 +120,35 @@ export function BancoTestes() {
           value={secao}
           onChange={(e) => mudarFiltro(setSecao)(e.target.value)}
           placeholder="Filtrar por seção/regra…"
-          className="rounded border border-stone-300 px-2 py-1.5 text-sm"
+          className="entrada text-sm"
         />
-        <label className="flex items-center gap-1 text-xs text-stone-500">
+        <label className="flex items-center gap-1 text-xs text-tinta-2">
           de
-          <input type="date" value={de} onChange={(e) => mudarFiltro(setDe)(e.target.value)} className="rounded border border-stone-300 px-2 py-1 text-sm" />
+          <input type="date" value={de} onChange={(e) => mudarFiltro(setDe)(e.target.value)} className="entrada" />
         </label>
-        <label className="flex items-center gap-1 text-xs text-stone-500">
+        <label className="flex items-center gap-1 text-xs text-tinta-2">
           até
-          <input type="date" value={ate} onChange={(e) => mudarFiltro(setAte)(e.target.value)} className="rounded border border-stone-300 px-2 py-1 text-sm" />
+          <input type="date" value={ate} onChange={(e) => mudarFiltro(setAte)(e.target.value)} className="entrada" />
         </label>
         {(status || veredito || secao || capitulo || de || ate) && (
           <button
             onClick={() => { setStatus(''); setVeredito(''); setSecao(''); setCapitulo(''); setDe(''); setAte(''); setPagina(1); }}
-            className="text-xs text-stone-500 underline"
+            className="text-xs text-tinta-2 underline"
           >
             limpar filtros
           </button>
         )}
-        <a className="ml-auto" href={`/api/obras/${obraId}/testes/exportar`} download>
-          <Botao variante="secundario">Exportar CSV</Botao>
-        </a>
       </div>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {casos?.length === 0 && (
-        <p className="text-stone-500">
+        <p className="text-tinta-2">
           Nenhum caso encontrado. Os casos são criados automaticamente quando você pergunta sobre uma frase no
           editor.
         </p>
       )}
       {data && data.total > 0 && (
-        <p className="mb-2 text-xs text-stone-500">
+        <p className="mb-2 text-xs text-tinta-2">
           {data.total} caso{data.total === 1 ? '' : 's'} · página {pagina} de {totalPaginas}
         </p>
       )}
@@ -151,24 +157,24 @@ export function BancoTestes() {
         {casos?.map((caso) => {
           const rotulo = STATUS_CASO_ROTULO[caso.status];
           return (
-            <div key={caso.id} className="rounded-lg border border-stone-300 bg-white p-4 text-sm">
+            <div key={caso.id} className="cartao p-4 text-sm">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Etiqueta cor={rotulo.cor}>{rotulo.texto}</Etiqueta>
                 <Etiqueta cor={caso.veredito === 'correto' ? 'jade' : 'selo'}>{caso.veredito}</Etiqueta>
                 {caso.secao_regra && <Etiqueta>{caso.secao_regra}</Etiqueta>}
-                <span className="text-xs text-stone-400">
+                <span className="font-mono text-xs text-tinta-2">
                   #{caso.id} · {caso.provedor}/{caso.modelo} · {new Date(caso.criado_em).toLocaleString('pt-BR')}
                 </span>
               </div>
-              <p className="texto-zh mb-1 rounded bg-stone-50 px-2 py-1">{caso.trecho_zh}</p>
+              <p className="texto-zh mb-1 rounded bg-papel-fundo/60 px-2 py-1">{caso.trecho_zh}</p>
               <p className="mb-1">
                 <span className="font-medium">Pergunta:</span> {caso.pergunta}
               </p>
-              <p className="mb-1 text-stone-700">
+              <p className="mb-1 text-tinta">
                 <span className="font-medium">Justificativa:</span> {caso.justificativa}
               </p>
               {caso.correcao_proposta && (
-                <p className="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1">
+                <p className="mb-2 rounded border border-ocre/40 bg-ocre-tint px-2 py-1">
                   <span className="font-medium">Correção proposta:</span> {caso.correcao_proposta}
                 </p>
               )}
@@ -205,7 +211,7 @@ export function BancoTestes() {
           <Botao variante="secundario" disabled={pagina <= 1} onClick={() => setPagina((p) => p - 1)}>
             ← Anterior
           </Botao>
-          <span className="text-sm text-stone-600">
+          <span className="text-sm text-tinta-2">
             {pagina} / {totalPaginas}
           </span>
           <Botao variante="secundario" disabled={pagina >= totalPaginas} onClick={() => setPagina((p) => p + 1)}>

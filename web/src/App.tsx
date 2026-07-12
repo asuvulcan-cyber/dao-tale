@@ -81,6 +81,27 @@ export function Casca() {
 
 // ── Componentes utilitários compartilhados pelas páginas ────────────────────
 
+/** Cabeçalho padrão de página: título em serifa, descrição curta e ações à direita. */
+export function CabecalhoPagina({
+  titulo,
+  descricao,
+  children,
+}: {
+  titulo: string;
+  descricao?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="font-display text-lg font-semibold">{titulo}</h2>
+        {descricao && <p className="mt-0.5 max-w-[62ch] text-sm text-tinta-2">{descricao}</p>}
+      </div>
+      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
 export function Botao(props: React.ButtonHTMLAttributes<HTMLButtonElement> & { variante?: 'primario' | 'secundario' | 'perigo' }) {
   const { variante = 'primario', className = '', ...resto } = props;
   const base = 'rounded px-3 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed';

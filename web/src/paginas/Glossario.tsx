@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, EntradaGlossario } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, Etiqueta } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
 
 export function Glossario() {
   const { obraId } = useParams();
@@ -51,18 +51,19 @@ export function Glossario() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <CabecalhoPagina
+        titulo="Glossário"
+        descricao={
+          entradas ? `${entradas.length} termo${entradas.length === 1 ? '' : 's'} — a fonte da consistência.` : undefined
+        }
+      >
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar termo…"
-          className="rounded border border-stone-300 px-2 py-1.5 text-sm"
+          className="entrada text-sm"
         />
-        <select
-          value={categoria}
-          onChange={(e) => setCategoria(e.target.value)}
-          className="rounded border border-stone-300 px-2 py-1.5 text-sm"
-        >
+        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="entrada text-sm">
           <option value="">Todas as categorias</option>
           {CATEGORIAS_GLOSSARIO.map((c) => (
             <option key={c} value={c}>
@@ -70,29 +71,45 @@ export function Glossario() {
             </option>
           ))}
         </select>
-        <div className="ml-auto flex gap-2">
-          <Botao variante="secundario" onClick={() => setMostrarImportar((v) => !v)}>
-            Importar CSV
-          </Botao>
-          <a href={`/api/obras/${obraId}/glossario/exportar`} download>
-            <Botao variante="secundario">Exportar CSV</Botao>
-          </a>
-        </div>
-      </div>
+        <details className="relative">
+          <summary
+            className="grid size-8 cursor-pointer list-none place-items-center rounded-md border border-linha text-tinta-2 hover:border-jade hover:text-jade-forte [&::-webkit-details-marker]:hidden"
+            title="Importar / exportar CSV"
+          >
+            ⋯
+          </summary>
+          <div className="cartao absolute right-0 z-10 mt-1 flex w-44 flex-col gap-1 p-2 shadow-lg">
+            <button
+              type="button"
+              onClick={() => setMostrarImportar((v) => !v)}
+              className="rounded px-2 py-1.5 text-left text-sm text-tinta hover:bg-papel-fundo"
+            >
+              Importar CSV…
+            </button>
+            <a
+              href={`/api/obras/${obraId}/glossario/exportar`}
+              download
+              className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+            >
+              Exportar CSV
+            </a>
+          </div>
+        </details>
+      </CabecalhoPagina>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {relatorio && <Aviso tipo="ok">{relatorio}</Aviso>}
 
       {mostrarImportar && (
-        <div className="mb-4 space-y-2 rounded-lg border border-stone-300 bg-white p-4">
-          <p className="text-sm text-stone-600">
+        <div className="mb-4 space-y-2 cartao p-4">
+          <p className="text-sm text-tinta-2">
             Cole o CSV: <code>termo_zh,termo_pt,categoria,nota</code> (categoria e nota opcionais).
           </p>
           <textarea
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
             rows={6}
-            className="w-full rounded border border-stone-300 px-2 py-1.5 font-mono text-xs"
+            className="entrada w-full font-mono text-xs"
           />
           <Botao onClick={() => importar.mutate()} disabled={!csv.trim() || importar.isPending}>
             Importar
@@ -102,21 +119,21 @@ export function Glossario() {
 
       <FormularioNovoTermo enviando={criar.isPending} aoEnviar={(d) => criar.mutate(d)} />
 
-      <table className="w-full border-collapse overflow-hidden rounded-lg border border-stone-300 bg-white text-sm">
+      <table className="w-full border-collapse overflow-hidden cartao text-sm">
         <thead>
-          <tr className="bg-stone-50 text-left">
-            <th className="border-b border-stone-300 px-3 py-2">Termo (ZH)</th>
-            <th className="border-b border-stone-300 px-3 py-2">Tradução (PT-BR)</th>
-            <th className="border-b border-stone-300 px-3 py-2">Categoria</th>
-            <th className="border-b border-stone-300 px-3 py-2">Nota</th>
-            <th className="border-b border-stone-300 px-3 py-2"></th>
+          <tr className="bg-papel-fundo/60 text-left">
+            <th className="olho border-b border-linha px-3 py-2">Termo 中文</th>
+            <th className="olho border-b border-linha px-3 py-2">Tradução PT-BR</th>
+            <th className="olho border-b border-linha px-3 py-2">Categoria</th>
+            <th className="olho border-b border-linha px-3 py-2">Nota</th>
+            <th className="border-b border-linha px-3 py-2"></th>
           </tr>
         </thead>
         <tbody>
           {entradas?.map((e) => <LinhaTermo key={e.id} entrada={e} aoMudar={invalidar} />)}
           {entradas?.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-3 py-4 text-center text-stone-500">
+              <td colSpan={5} className="px-3 py-4 text-center text-tinta-2">
                 Nenhum termo encontrado.
               </td>
             </tr>
@@ -148,18 +165,18 @@ function FormularioNovoTermo({
         setPt('');
         setNota('');
       }}
-      className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-stone-300 bg-white p-3"
+      className="mb-4 flex flex-wrap items-end gap-2 cartao p-3"
     >
-      <input required value={zh} onChange={(e) => setZh(e.target.value)} placeholder="termo chinês" className="texto-zh w-36 rounded border border-stone-300 px-2 py-1.5 text-sm" />
-      <input required value={pt} onChange={(e) => setPt(e.target.value)} placeholder="tradução PT-BR" className="w-48 rounded border border-stone-300 px-2 py-1.5 text-sm" />
-      <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="rounded border border-stone-300 px-2 py-1.5 text-sm">
+      <input required value={zh} onChange={(e) => setZh(e.target.value)} placeholder="termo chinês" className="texto-zh w-36 entrada text-sm" />
+      <input required value={pt} onChange={(e) => setPt(e.target.value)} placeholder="tradução PT-BR" className="w-48 entrada text-sm" />
+      <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="entrada text-sm">
         {CATEGORIAS_GLOSSARIO.map((c) => (
           <option key={c} value={c}>
             {c}
           </option>
         ))}
       </select>
-      <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="nota (opcional)" className="flex-1 rounded border border-stone-300 px-2 py-1.5 text-sm" />
+      <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="nota (opcional)" className="flex-1 entrada text-sm" />
       <Botao type="submit" disabled={enviando}>
         Adicionar
       </Botao>
@@ -189,37 +206,39 @@ function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: 
 
   if (!editando) {
     return (
-      <tr className="border-b border-stone-200 last:border-b-0">
+      <tr className="group border-b border-linha/60 last:border-b-0 hover:bg-papel-fundo/40">
         <td className="texto-zh px-3 py-2">{entrada.termo_zh}</td>
         <td className="px-3 py-2">{entrada.termo_pt}</td>
         <td className="px-3 py-2">
           <Etiqueta>{entrada.categoria}</Etiqueta>
           {entrada.origem === 'sugerido-ia' && <Etiqueta cor="indigo">IA</Etiqueta>}
         </td>
-        <td className="px-3 py-2 text-stone-500">{entrada.nota}</td>
+        <td className="px-3 py-2 text-tinta-2">{entrada.nota}</td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
-          <button onClick={() => setEditando(true)} className="text-xs text-stone-500 underline hover:text-stone-800">
-            editar
-          </button>
-          <button
-            onClick={() => window.confirm(`Excluir "${entrada.termo_zh}"?`) && excluir.mutate()}
-            className="ml-2 text-xs text-red-500 underline hover:text-red-700"
-          >
-            excluir
-          </button>
+          <span className="invisible group-hover:visible">
+            <button onClick={() => setEditando(true)} className="text-xs text-tinta-2 underline hover:text-tinta">
+              editar
+            </button>
+            <button
+              onClick={() => window.confirm(`Excluir "${entrada.termo_zh}"?`) && excluir.mutate()}
+              className="ml-2 text-xs text-erro underline hover:text-selo-forte"
+            >
+              excluir
+            </button>
+          </span>
         </td>
       </tr>
     );
   }
 
   return (
-    <tr className="border-b border-stone-200 bg-amber-50 last:border-b-0">
+    <tr className="border-b border-linha/60 bg-ocre-tint last:border-b-0">
       <td className="texto-zh px-3 py-2">{entrada.termo_zh}</td>
       <td className="px-3 py-1">
-        <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-full rounded border border-stone-300 px-2 py-1 text-sm" />
+        <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-full entrada" />
       </td>
       <td className="px-3 py-1">
-        <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="rounded border border-stone-300 px-2 py-1 text-sm">
+        <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="entrada">
           {CATEGORIAS_GLOSSARIO.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -228,13 +247,13 @@ function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: 
         </select>
       </td>
       <td className="px-3 py-1">
-        <input value={nota} onChange={(e) => setNota(e.target.value)} className="w-full rounded border border-stone-300 px-2 py-1 text-sm" />
+        <input value={nota} onChange={(e) => setNota(e.target.value)} className="w-full entrada" />
       </td>
       <td className="px-3 py-1 text-right whitespace-nowrap">
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar
         </Botao>
-        <button onClick={() => setEditando(false)} className="ml-2 text-xs text-stone-500 underline">
+        <button onClick={() => setEditando(false)} className="ml-2 text-xs text-tinta-2 underline">
           cancelar
         </button>
       </td>

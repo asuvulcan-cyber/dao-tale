@@ -26,15 +26,15 @@ export function Configuracoes() {
     queryFn: () => api<ProvedorInfo[]>('GET', '/provedores'),
   });
 
-  if (!estado || !provedores) return <p className="text-stone-500">Carregando…</p>;
+  if (!estado || !provedores) return <p className="text-tinta-2">Carregando…</p>;
 
   return (
     <div className="max-w-3xl space-y-6">
-      <h1 className="text-2xl font-bold">Configurações</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">Configurações</h1>
 
-      <section className="rounded-lg border border-stone-300 bg-white p-4">
-        <h2 className="mb-1 font-semibold">Chaves de API</h2>
-        <p className="mb-3 text-sm text-stone-600">
+      <section className="cartao p-4">
+        <h2 className="olho mb-1">Chaves de API</h2>
+        <p className="mb-3 text-sm text-tinta-2">
           Guardadas {estado.modo_guarda_chaves === 'keyring' ? 'no cofre de credenciais do sistema operacional' : (
             <>em arquivo local com permissão restrita (<code>credenciais.json</code> no diretório de dados) — o
             cofre do sistema não está disponível nesta máquina</>
@@ -62,10 +62,10 @@ export function Configuracoes() {
 
       <UsoDeHoje />
 
-      <section className="rounded-lg border border-stone-300 bg-white p-4 text-sm text-stone-600">
-        <h2 className="mb-1 font-semibold text-stone-900">Dados</h2>
+      <section className="cartao p-4 text-sm text-tinta-2">
+        <h2 className="olho mb-1">Dados</h2>
         <p>
-          Banco de dados e arquivos do aplicativo: <code className="rounded bg-stone-100 px-1">{estado.caminho_dados}</code>
+          Banco de dados e arquivos do aplicativo: <code className="rounded bg-papel px-1">{estado.caminho_dados}</code>
         </p>
         <p className="mt-1">Para backup manual, copie esse diretório inteiro com o aplicativo fechado.</p>
       </section>
@@ -81,9 +81,9 @@ function UsoDeHoje() {
   });
 
   return (
-    <section className="rounded-lg border border-stone-300 bg-white p-4">
-      <h2 className="mb-1 font-semibold">Uso de hoje</h2>
-      <p className="mb-3 text-sm text-stone-600">
+    <section className="cartao p-4">
+      <h2 className="olho mb-1">Uso de hoje</h2>
+      <p className="mb-3 text-sm text-tinta-2">
         Requisições de tradução e revisão contadas neste computador — os provedores não informam o consumo pela API,
         então a contagem zera à meia-noite local e não enxerga uso feito fora do aplicativo.
       </p>
@@ -95,7 +95,7 @@ function UsoDeHoje() {
               .filter((u) => u.provedor !== 'mock')
               .map((u) => (
                 <tr key={`${u.provedor}/${u.modelo}`}>
-                  <td className="pr-4 text-stone-600">
+                  <td className="pr-4 text-tinta-2">
                     {u.provedor} · {u.modelo}
                   </td>
                   <td className="tabular-nums">{u.requisicoes} requisições</td>
@@ -104,7 +104,7 @@ function UsoDeHoje() {
           </tbody>
         </table>
       ) : (
-        <p className="mt-2 text-sm text-stone-400">Nenhuma requisição a provedores reais hoje.</p>
+        <p className="mt-2 text-sm text-tinta-2">Nenhuma requisição a provedores reais hoje.</p>
       )}
     </section>
   );
@@ -146,7 +146,7 @@ function CartaoCredencial({
   });
 
   return (
-    <div className="rounded border border-stone-200 p-3">
+    <div className="rounded border border-linha/60 p-3">
       <div className="mb-2 flex items-center gap-2">
         <span className="font-medium">{provedor.nome}</span>
         {configurada ? <Etiqueta cor="jade">chave configurada</Etiqueta> : <Etiqueta>sem chave</Etiqueta>}
@@ -157,7 +157,7 @@ function CartaoCredencial({
           value={chave}
           onChange={(e) => setChave(e.target.value)}
           placeholder={configurada ? 'Substituir chave…' : 'Colar chave de API…'}
-          className="flex-1 rounded border border-stone-300 px-2 py-1.5 text-sm"
+          className="flex-1 entrada text-sm"
         />
         <Botao onClick={() => salvar.mutate()} disabled={!chave.trim() || salvar.isPending}>
           Salvar
@@ -200,15 +200,15 @@ function FormularioPadroes({
   });
 
   return (
-    <section className="rounded-lg border border-stone-300 bg-white p-4">
-      <h2 className="mb-3 font-semibold">Padrões globais</h2>
+    <section className="cartao p-4">
+      <h2 className="olho mb-3">Padrões globais</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           Provedor padrão
           <select
             value={valores.provedor_padrao}
             onChange={(e) => setValores({ ...valores, provedor_padrao: e.target.value as ProvedorId })}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           >
             {provedores.map((p) => (
               <option key={p.id} value={p.id}>
@@ -234,7 +234,7 @@ function FormularioPadroes({
             max={100}
             value={valores.tamanho_bloco}
             onChange={(e) => setValores({ ...valores, tamanho_bloco: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
         <label className="block text-sm">
@@ -245,7 +245,7 @@ function FormularioPadroes({
             max={10}
             value={valores.vizinhas_revisao}
             onChange={(e) => setValores({ ...valores, vizinhas_revisao: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
         <label className="block text-sm">
@@ -256,7 +256,7 @@ function FormularioPadroes({
             max={10}
             value={valores.cauda_contexto}
             onChange={(e) => setValores({ ...valores, cauda_contexto: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
       </div>
@@ -268,7 +268,7 @@ function FormularioPadroes({
             min={0}
             value={valores.cota_diaria_gemini}
             onChange={(e) => setValores({ ...valores, cota_diaria_gemini: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
         <label className="block text-sm">
@@ -278,7 +278,7 @@ function FormularioPadroes({
             min={0}
             value={valores.cota_diaria_claude}
             onChange={(e) => setValores({ ...valores, cota_diaria_claude: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
       </div>
@@ -299,7 +299,7 @@ function FormularioPadroes({
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar padrões
         </Botao>
-        {salvo && <span className="text-sm text-green-700">Salvo.</span>}
+        {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
       </div>
     </section>
   );

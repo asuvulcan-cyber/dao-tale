@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, CriarObraPayload, Obra, ObraComContadores } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, Etiqueta } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
 
 export function ListaObras() {
   const clienteQuery = useQueryClient();
@@ -58,66 +58,61 @@ export function ListaObras() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Obras</h1>
-        <div className="flex gap-2">
-          <input
-            ref={inputImportar}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={(e) => {
-              const arquivo = e.target.files?.[0];
-              if (arquivo) importar.mutate(arquivo);
-              e.target.value = '';
-            }}
-          />
-          <Botao variante="secundario" onClick={() => inputImportar.current?.click()} disabled={importar.isPending}>
-            {importar.isPending ? 'Importando…' : 'Importar obra (.json)'}
-          </Botao>
-          <Botao onClick={() => setMostrarFormulario((v) => !v)}>
-            {mostrarFormulario ? 'Cancelar' : 'Nova obra'}
-          </Botao>
-        </div>
-      </div>
+      <CabecalhoPagina titulo="Obras" descricao="Sua estante de traduções.">
+        <input
+          ref={inputImportar}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => {
+            const arquivo = e.target.files?.[0];
+            if (arquivo) importar.mutate(arquivo);
+            e.target.value = '';
+          }}
+        />
+        <Botao variante="secundario" onClick={() => inputImportar.current?.click()} disabled={importar.isPending}>
+          {importar.isPending ? 'Importando…' : 'Importar (.json)'}
+        </Botao>
+        <Botao onClick={() => setMostrarFormulario((v) => !v)}>
+          {mostrarFormulario ? 'Cancelar' : 'Nova obra'}
+        </Botao>
+      </CabecalhoPagina>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {mostrarFormulario && <FormularioNovaObra enviando={criar.isPending} aoEnviar={(p) => criar.mutate(p)} />}
 
-      {isLoading && <p className="text-stone-500">Carregando…</p>}
+      {isLoading && <p className="text-tinta-2">Carregando…</p>}
       {obras?.length === 0 && !mostrarFormulario && (
-        <p className="text-stone-500">Nenhuma obra ainda. Crie a primeira com “Nova obra”.</p>
+        <p className="text-tinta-2">Nenhuma obra ainda. Crie a primeira com “Nova obra”.</p>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      {/* Estante: a capa é a protagonista; ações raras no ⋯ (guia §五.1) */}
+      <div className="grid gap-4 sm:grid-cols-2">
         {obras?.map((obra) => (
-          <div key={obra.id} className="flex gap-3 rounded-lg border border-stone-300 bg-white p-4">
-            {obra.tem_capa && (
-              <Link to={`/obras/${obra.id}`} className="shrink-0">
+          <div key={obra.id} className="cartao group relative flex gap-4 p-4">
+            <Link to={`/obras/${obra.id}`} className="shrink-0" tabIndex={-1}>
+              {obra.tem_capa ? (
                 <img
                   src={`/api/obras/${obra.id}/capa`}
                   alt={`Capa de ${obra.titulo}`}
-                  className="h-28 w-20 rounded object-cover shadow-sm"
+                  className="h-32 w-22 rounded object-cover shadow-md shadow-tinta/20"
                 />
-              </Link>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between">
-                <Link to={`/obras/${obra.id}`} className="hover:underline">
-                  <h2 className="text-lg font-semibold">{obra.titulo}</h2>
-                  {obra.titulo_original && <p className="texto-zh text-sm text-stone-500">{obra.titulo_original}</p>}
-                </Link>
-                <div className="flex shrink-0 gap-2">
-                  <a href={`/api/obras/${obra.id}/exportar`} download title="Backup completo (capítulos, glossário, prompts e banco de testes) — reimportável">
-                    <Botao variante="secundario">Exportar</Botao>
-                  </a>
-                  <Botao variante="perigo" onClick={() => excluir.mutate(obra)}>
-                    Excluir
-                  </Botao>
+              ) : (
+                <div
+                  className="texto-zh grid h-32 w-22 place-items-center rounded bg-papel-fundo text-4xl text-tinta-2/50 shadow-md shadow-tinta/20"
+                  aria-hidden
+                >
+                  道
                 </div>
-              </div>
-              {obra.sinopse && <p className="mt-1 line-clamp-2 text-sm text-stone-600">{obra.sinopse}</p>}
-              <div className="mt-3 flex flex-wrap gap-2">
+              )}
+            </Link>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Link to={`/obras/${obra.id}`} className="pr-8 hover:underline">
+                <h2 className="font-display text-lg font-semibold leading-snug">{obra.titulo}</h2>
+                {obra.titulo_original && <p className="texto-zh text-sm text-tinta-2">{obra.titulo_original}</p>}
+              </Link>
+              {obra.sinopse && <p className="mt-1.5 line-clamp-2 text-sm text-tinta-2">{obra.sinopse}</p>}
+              <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
                 {obra.tags.map((tag) => (
                   <Etiqueta key={tag} cor="indigo">
                     {tag}
@@ -127,10 +122,35 @@ export function ListaObras() {
                 <Etiqueta>{obra.glossario_total} termos</Etiqueta>
                 {obra.testes_pendentes > 0 && <Etiqueta cor="ocre">{obra.testes_pendentes} casos pendentes</Etiqueta>}
                 {obra.termos_sugeridos_pendentes > 0 && (
-                  <Etiqueta cor="indigo">{obra.termos_sugeridos_pendentes} termos sugeridos</Etiqueta>
+                  <Etiqueta cor="indigo">{obra.termos_sugeridos_pendentes} sugeridos</Etiqueta>
                 )}
               </div>
             </div>
+            <details className="absolute top-3 right-3">
+              <summary
+                className="grid size-7 cursor-pointer list-none place-items-center rounded-md border border-transparent text-tinta-2 group-hover:border-linha hover:border-jade hover:text-jade-forte [&::-webkit-details-marker]:hidden"
+                title="Exportar ou excluir"
+              >
+                ⋯
+              </summary>
+              <div className="cartao absolute right-0 z-10 mt-1 flex w-44 flex-col gap-1 p-2 shadow-lg">
+                <a
+                  href={`/api/obras/${obra.id}/exportar`}
+                  download
+                  className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                  title="Backup completo (capítulos, glossário, prompts e banco de testes) — reimportável"
+                >
+                  Exportar backup
+                </a>
+                <button
+                  type="button"
+                  onClick={() => excluir.mutate(obra)}
+                  className="rounded px-2 py-1.5 text-left text-sm text-erro hover:bg-selo-tint"
+                >
+                  Excluir obra…
+                </button>
+              </div>
+            </details>
           </div>
         ))}
       </div>
@@ -177,7 +197,7 @@ function FormularioNovaObra({
   }
 
   return (
-    <form onSubmit={enviar} className="mb-6 space-y-3 rounded-lg border border-stone-300 bg-white p-4">
+    <form onSubmit={enviar} className="mb-6 space-y-3 cartao p-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           Título*
@@ -185,7 +205,7 @@ function FormularioNovaObra({
             required
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
             placeholder="Dez Dias Até o Fim"
           />
         </label>
@@ -194,7 +214,7 @@ function FormularioNovaObra({
           <input
             value={tituloOriginal}
             onChange={(e) => setTituloOriginal(e.target.value)}
-            className="texto-zh mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="texto-zh entrada mt-1 w-full"
             placeholder="十日终焉"
           />
         </label>
@@ -205,7 +225,7 @@ function FormularioNovaObra({
           value={sinopse}
           onChange={(e) => setSinopse(e.target.value)}
           rows={3}
-          className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          className="entrada mt-1 w-full"
           placeholder="Resumo curto da obra, para o cartão na lista…"
         />
       </label>
@@ -214,7 +234,7 @@ function FormularioNovaObra({
         <input
           value={tags}
           onChange={(e) => setTags(e.target.value)}
-          className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          className="entrada mt-1 w-full"
           placeholder="xianxia, suspense, sistema"
         />
       </label>
@@ -224,7 +244,7 @@ function FormularioNovaObra({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={6}
-          className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5 font-mono text-xs"
+          className="entrada mt-1 w-full font-mono text-xs"
         />
       </label>
       <label className="block text-sm">
@@ -233,7 +253,7 @@ function FormularioNovaObra({
           value={glossarioCsv}
           onChange={(e) => setGlossarioCsv(e.target.value)}
           rows={4}
-          className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5 font-mono text-xs"
+          className="entrada mt-1 w-full font-mono text-xs"
           placeholder="终焉,Fim Derradeiro,outro"
         />
       </label>

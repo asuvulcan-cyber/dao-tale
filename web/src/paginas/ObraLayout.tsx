@@ -27,11 +27,11 @@ export function ObraLayout() {
 
   return (
     <div>
-      <div className="mb-1 flex items-baseline gap-3">
-        <h1 className="text-2xl font-bold">{obra?.titulo ?? '…'}</h1>
-        {obra?.titulo_original && <span className="texto-zh text-stone-500">{obra.titulo_original}</span>}
+      <div className="mb-2 flex items-baseline gap-3">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">{obra?.titulo ?? '…'}</h1>
+        {obra?.titulo_original && <span className="texto-zh text-tinta-2">{obra.titulo_original}</span>}
       </div>
-      <nav className="mb-5 flex flex-wrap gap-1 border-b border-stone-300">
+      <nav className="mb-5 flex flex-wrap gap-1 border-b border-linha">
         {abas.map((aba) => (
           <NavLink
             key={aba.rota}
@@ -40,8 +40,8 @@ export function ObraLayout() {
             className={({ isActive }) =>
               `-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${
                 isActive
-                  ? 'border-stone-800 font-semibold text-stone-900'
-                  : 'border-transparent text-stone-500 hover:text-stone-900'
+                  ? 'border-jade font-semibold text-tinta'
+                  : 'border-transparent text-tinta-2 hover:text-tinta'
               }`
             }
           >

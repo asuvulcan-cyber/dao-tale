@@ -28,7 +28,7 @@ export function SeletorModelo({
     retry: false,
   });
 
-  const estiloCampo = 'mt-1 w-full rounded border border-stone-300 px-2 py-1.5';
+  const estiloCampo = 'entrada mt-1 w-full';
 
   if (isError || (!isLoading && !modelos?.length)) {
     return (
@@ -75,7 +75,7 @@ export function SeletorModelo({
           </optgroup>
         )}
       </select>
-      {selecionado && <p className="mt-1 text-xs text-stone-500">{selecionado.descricao}</p>}
+      {selecionado && <p className="mt-1 text-xs text-tinta-2">{selecionado.descricao}</p>}
     </>
   );
 }

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, TermoSugerido } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao } from '../App';
+import { Aviso, Botao, CabecalhoPagina } from '../App';
 
 export function TermosSugeridos() {
   const { obraId } = useParams();
@@ -23,17 +23,20 @@ export function TermosSugeridos() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-stone-600">
-        Termos que a IA encontrou durante as traduções e que ainda não estão no glossário. Aceitar move o termo
-        para o glossário da obra (ajuste a tradução ou a categoria antes, se necessário).
-      </p>
+      <CabecalhoPagina
+        titulo="Termos sugeridos"
+        descricao="A IA encontrou estes termos nas traduções; aceite para o cânone ou rejeite."
+      />
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
-      {sugestoes?.length === 0 && <p className="text-stone-500">Nenhuma sugestão pendente.</p>}
-      <div className="space-y-2">
-        {sugestoes?.map((s) => (
-          <CartaoSugestao key={s.id} sugestao={s} aoMudar={invalidar} aoErro={setErro} />
-        ))}
-      </div>
+      {sugestoes?.length === 0 && <p className="text-tinta-2">Nenhuma sugestão pendente.</p>}
+      {/* Fila de triagem (guia §五.5): uma linha = uma decisão */}
+      {sugestoes && sugestoes.length > 0 && (
+        <div className="cartao">
+          {sugestoes.map((s) => (
+            <CartaoSugestao key={s.id} sugestao={s} aoMudar={invalidar} aoErro={setErro} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -66,23 +69,26 @@ function CartaoSugestao({
   });
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-white px-4 py-3">
-      <span className="texto-zh text-lg">{sugestao.termo_zh}</span>
-      <span className="text-stone-400">→</span>
-      <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-52 rounded border border-stone-300 px-2 py-1.5 text-sm" />
-      <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="rounded border border-stone-300 px-2 py-1.5 text-sm">
-        {CATEGORIAS_GLOSSARIO.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
-      {sugestao.contexto && (
-        <span className="texto-zh max-w-md truncate text-xs text-stone-400" title={sugestao.contexto}>
-          {sugestao.contexto}
-        </span>
-      )}
-      <div className="ml-auto flex gap-2">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b border-linha/50 px-4 py-3 last:border-b-0">
+      <span className="texto-zh text-xl">{sugestao.termo_zh}</span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-52 entrada text-sm" />
+          <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="entrada text-sm">
+            {CATEGORIAS_GLOSSARIO.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        {sugestao.contexto && (
+          <p className="texto-zh mt-1 truncate text-xs text-tinta-2" title={sugestao.contexto}>
+            {sugestao.contexto}
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 gap-2">
         <Botao onClick={() => aceitar.mutate()} disabled={aceitar.isPending || !pt.trim()}>
           Aceitar
         </Botao>

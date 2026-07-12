@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Capitulo, CapituloResumo, Obra, ProvedorId } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
 
 export function Capitulos() {
@@ -57,12 +57,20 @@ export function Capitulos() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Capítulos</h2>
+      <FichaObra />
+
+      <CabecalhoPagina
+        titulo="Capítulos"
+        descricao={
+          capitulos && capitulos.length > 0
+            ? `${capitulos.length} capítulo${capitulos.length === 1 ? '' : 's'} — o sumário da tradução.`
+            : undefined
+        }
+      >
         <Botao onClick={() => setMostrarFormulario((v) => !v)}>
           {mostrarFormulario ? 'Cancelar' : 'Novo capítulo'}
         </Botao>
-      </div>
+      </CabecalhoPagina>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {avisosSegmentacao.length > 0 && (
@@ -84,41 +92,133 @@ export function Capitulos() {
         />
       )}
 
-      {isLoading && <p className="text-stone-500">Carregando…</p>}
+      {isLoading && <p className="text-tinta-2">Carregando…</p>}
       {capitulos?.length === 0 && !mostrarFormulario && (
-        <p className="text-stone-500">Nenhum capítulo ainda. Cole o texto chinês em “Novo capítulo”.</p>
+        <p className="text-tinta-2">Nenhum capítulo ainda. Cole o texto chinês em “Novo capítulo”.</p>
       )}
 
-      <div className="space-y-2">
-        {capitulos?.map((cap) => {
-          const rotulo = STATUS_CAPITULO_ROTULO[cap.status];
-          return (
-            <div key={cap.id} className="flex items-center justify-between rounded-lg border border-stone-300 bg-white px-4 py-3">
-              <Link to={`/obras/${obraId}/capitulos/${cap.id}`} className="flex-1 hover:underline">
-                <span className="font-semibold">Capítulo {cap.numero}</span>
-                {(cap.titulo_pt || cap.titulo) && (
-                  <span className="ml-2 text-stone-600" title={cap.titulo_pt && cap.titulo ? cap.titulo : undefined}>
-                    {cap.titulo_pt ?? cap.titulo}
-                  </span>
-                )}
-              </Link>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-stone-500">
-                  {cap.frases_traduzidas}/{cap.frases_total} frases
-                  {cap.frases_erro > 0 && <span className="text-red-600"> · {cap.frases_erro} com erro</span>}
+      {/* Índice como sumário de livro (guia §五.2): número serifado, progresso
+          em mono, excluir só aparece no hover da linha. */}
+      {capitulos && capitulos.length > 0 && (
+        <div className="cartao">
+          {capitulos.map((cap) => {
+            const rotulo = STATUS_CAPITULO_ROTULO[cap.status];
+            return (
+              <div
+                key={cap.id}
+                className="group grid grid-cols-[3.4rem_minmax(0,1fr)_auto_auto_1.6rem] items-baseline gap-4 border-b border-linha/50 px-4 py-2.5 last:border-b-0 hover:bg-papel-fundo/40"
+              >
+                <Link
+                  to={`/obras/${obraId}/capitulos/${cap.id}`}
+                  className="text-right font-display text-lg font-semibold hover:text-jade-forte"
+                >
+                  {cap.numero}
+                </Link>
+                <Link to={`/obras/${obraId}/capitulos/${cap.id}`} className="min-w-0 truncate hover:underline">
+                  {cap.titulo_pt ?? cap.titulo ?? <span className="text-tinta-2 italic">sem título</span>}
+                  {cap.titulo_pt && cap.titulo && cap.titulo !== cap.titulo_pt && (
+                    <span className="texto-zh ml-2 text-sm text-tinta-2">{cap.titulo}</span>
+                  )}
+                </Link>
+                <span className="font-mono text-xs text-tinta-2 tabular-nums">
+                  {cap.frases_traduzidas}/{cap.frases_total}
+                  {cap.frases_erro > 0 && <span className="text-erro"> · {cap.frases_erro} erro</span>}
                 </span>
                 <Etiqueta cor={rotulo.cor}>{rotulo.texto}</Etiqueta>
-                <Botao variante="perigo" onClick={() => excluir.mutate(cap)}>
-                  Excluir
-                </Botao>
+                <button
+                  type="button"
+                  onClick={() => excluir.mutate(cap)}
+                  title={`Excluir o capítulo ${cap.numero}`}
+                  className="invisible text-tinta-2 hover:text-erro group-hover:visible"
+                >
+                  ×
+                </button>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <DetalhesObra />
-      <PreferenciasObra />
+/** Ficha da obra (guia §五.2): capa, sinopse, tags e IA visíveis; edição no ✎. */
+function FichaObra() {
+  const { obraId } = useParams();
+  const [editando, setEditando] = useState(false);
+
+  const { data: obra } = useQuery({
+    queryKey: ['obra', obraId],
+    queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
+  });
+
+  if (!obra) return null;
+
+  return (
+    <div className="mb-6">
+      <div className="cartao flex gap-4 p-4">
+        {obra.tem_capa ? (
+          <img
+            src={`/api/obras/${obraId}/capa?v=${obra.atualizado_em}`}
+            alt={`Capa de ${obra.titulo}`}
+            className="h-40 w-28 shrink-0 rounded object-cover shadow-md shadow-tinta/20"
+          />
+        ) : (
+          <div
+            className="texto-zh grid h-40 w-28 shrink-0 place-items-center rounded bg-papel-fundo text-5xl text-tinta-2/50 shadow-md shadow-tinta/20"
+            aria-hidden
+          >
+            道
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="olho mb-1">Sinopse</p>
+              <p className="max-w-[62ch] text-sm">
+                {obra.sinopse ?? <span className="text-tinta-2 italic">sem sinopse — clique em ✎ para escrever</span>}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditando((v) => !v)}
+              aria-pressed={editando}
+              title="Editar ficha, capa e preferências de IA"
+              className={`grid size-8 shrink-0 place-items-center rounded-md border ${
+                editando
+                  ? 'border-transparent bg-jade text-papel-alto'
+                  : 'border-linha text-tinta-2 hover:border-jade hover:text-jade-forte'
+              }`}
+            >
+              ✎
+            </button>
+          </div>
+          {obra.tags.length > 0 && (
+            <>
+              <p className="olho mt-3 mb-1">Tags</p>
+              <div className="flex flex-wrap gap-1.5">
+                {obra.tags.map((tag) => (
+                  <Etiqueta key={tag} cor="indigo">
+                    {tag}
+                  </Etiqueta>
+                ))}
+              </div>
+            </>
+          )}
+          <p className="olho mt-3 mb-1">IA da obra</p>
+          <p className="text-sm text-tinta-2">
+            {obra.provedor_padrao
+              ? `${obra.provedor_padrao}${obra.modelo_padrao ? ` · ${obra.modelo_padrao}` : ''}`
+              : 'padrão global das Configurações'}
+          </p>
+        </div>
+      </div>
+      {editando && (
+        <>
+          <DetalhesObra />
+          <PreferenciasObra />
+        </>
+      )}
     </div>
   );
 }
@@ -187,7 +287,7 @@ function DetalhesObra() {
   if (!obra) return null;
 
   return (
-    <div className="mt-6 rounded-lg border border-stone-300 bg-white p-4">
+    <div className="mt-6 cartao p-4">
       <h3 className="mb-3 text-sm font-semibold">Detalhes da obra</h3>
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       <div className="flex flex-wrap gap-4">
@@ -210,7 +310,7 @@ function DetalhesObra() {
               className="h-40 w-28 rounded object-cover shadow-sm"
             />
           ) : (
-            <div className="flex h-40 w-28 items-center justify-center rounded border border-dashed border-stone-300 text-center text-xs text-stone-400">
+            <div className="flex h-40 w-28 items-center justify-center rounded border border-dashed border-linha text-center text-xs text-tinta-2">
               sem capa
             </div>
           )}
@@ -232,7 +332,7 @@ function DetalhesObra() {
               value={sinopseAtual}
               onChange={(e) => setSinopse(e.target.value)}
               rows={4}
-              className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+              className="entrada mt-1 w-full"
               placeholder="Resumo curto da obra…"
             />
           </label>
@@ -241,7 +341,7 @@ function DetalhesObra() {
             <input
               value={tagsAtual}
               onChange={(e) => setTags(e.target.value)}
-              className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+              className="entrada mt-1 w-full"
               placeholder="xianxia, suspense, sistema"
             />
           </label>
@@ -249,7 +349,7 @@ function DetalhesObra() {
             <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
               Salvar detalhes
             </Botao>
-            {salvo && <span className="text-sm text-green-700">Salvo.</span>}
+            {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
           </div>
         </div>
       </div>
@@ -292,9 +392,9 @@ function PreferenciasObra() {
   if (!obra || !provedores) return null;
 
   return (
-    <div className="mt-6 rounded-lg border border-stone-300 bg-white p-4">
+    <div className="mt-6 cartao p-4">
       <h3 className="mb-1 text-sm font-semibold">Preferências de IA desta obra</h3>
-      <p className="mb-3 text-xs text-stone-500">
+      <p className="mb-3 text-xs text-tinta-2">
         Usadas em toda tradução e revisão da obra; deixe em branco para herdar o padrão global das Configurações. Cada
         tradução ainda pode escolher outro provedor na hora (útil para comparar modelos no mesmo texto).
       </p>
@@ -304,7 +404,7 @@ function PreferenciasObra() {
           <select
             value={provedorAtual}
             onChange={(e) => setProvedor(e.target.value)}
-            className="mt-1 block rounded border border-stone-300 px-2 py-1.5"
+            className="mt-1 block entrada"
           >
             <option value="">Padrão global</option>
             {provedores.map((p) => (
@@ -326,7 +426,7 @@ function PreferenciasObra() {
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar
         </Botao>
-        {salvo && <span className="pb-2 text-sm text-green-700">Salvo.</span>}
+        {salvo && <span className="pb-2 text-sm text-jade-forte">Salvo.</span>}
       </div>
     </div>
   );
@@ -357,7 +457,7 @@ function FormularioNovoCapitulo({
         e.preventDefault();
         aoEnviar({ numero, titulo: titulo.trim() || undefined, texto_origem: texto });
       }}
-      className="mb-6 space-y-3 rounded-lg border border-stone-300 bg-white p-4"
+      className="mb-6 space-y-3 cartao p-4"
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
@@ -367,7 +467,7 @@ function FormularioNovoCapitulo({
             required
             value={numero}
             onChange={(e) => setNumero(Number(e.target.value))}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
         <label className="block text-sm">
@@ -375,7 +475,7 @@ function FormularioNovoCapitulo({
           <input
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
-            className="mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+            className="entrada mt-1 w-full"
           />
         </label>
       </div>
@@ -386,7 +486,7 @@ function FormularioNovoCapitulo({
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           rows={10}
-          className="texto-zh mt-1 w-full rounded border border-stone-300 px-2 py-1.5"
+          className="texto-zh entrada mt-1 w-full"
         />
       </label>
       <div className="flex items-center gap-3">

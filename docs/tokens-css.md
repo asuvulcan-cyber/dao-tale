@@ -88,9 +88,33 @@ Assim `bg-acao` / `text-tinta` / `border-linha` respondem ao tema em runtime
 - **Só a camada pigmento** (`--cor-*` base) é redefinida por tema. Semânticos,
   fontes, espaçamentos e raios nunca mudam entre temas.
 
+## O estilo Dao Tale — componentes padrão (§5)
+
+Além dos tokens, o site inteiro monta a interface com **estas peças** (classes
+em `estilos.css` + componentes em `App.tsx`). Nada de estilo ad hoc por página.
+
+| Peça | Classe/Componente | Uso |
+|------|-------------------|-----|
+| Cartão | `.cartao` | qualquer superfície de conteúdo sobre o papel |
+| Campo | `.entrada` | input, select, textarea — todos os formulários |
+| Botão primário | `<Botao>` (selo sólido) | UMA ação principal por tela |
+| Ferramenta | `.ferramenta` (pílula) | ações secundárias em barras |
+| Segmentado | `.seg` | grupos exclusivos (modos, filtros) |
+| Etiqueta | `<Etiqueta>` | status/metadado pequeno |
+| Aviso | `<Aviso>` | feedback ok/info/erro |
+| Estado da frase | `.frase-lava--*` + `.chip-estado` | opção B aprovada: lavagem de fundo esmaecendo + filete esquerdo + chip |
+| Termo do glossário | `.termo-gloss` | sublinhado pontilhado estilo link |
+
+Princípios de composição (a "cara" Dao Tale):
+- **Barra dupla** em telas de trabalho: barra 1 = *onde estou* (contexto, navegação ‹ ›, status); barra 2 = *como vejo / o que faço* (modos, ferramentas, UMA ação primária). Ações raras vão para o menu `⋯`.
+- **Folha contínua**: conteúdo textual em UMA superfície, parágrafos separados por respiro — não uma pilha de cartões com moldura.
+- **Texto de origem (zh) é apoio**: `--cor-tinta-2`; o português é o protagonista.
+- Título de página em `--fonte-display`; rótulos de UI em `--fonte-ui`; números em `--fonte-mono` com `tabular-nums`.
+
 ## Regras rápidas (checklist ao escrever componente)
 
 1. Precisa de cor? Use um **semântico** (`--cor-acao`), não um pigmento cru.
 2. Nunca escreva hex/rgb num componente. Se falta um token, crie na camada certa.
 3. Borda = `--cor-linha`. Texto suave = `--cor-tinta-2`. Superfície de cartão = `--cor-papel-alto`.
 4. Ao migrar páginas legadas (classes `stone-*`/`red-*`…), troque por utilitários semânticos.
+5. Formulário? `.entrada`. Superfície? `.cartao`. Barra de ferramentas? `.ferramenta`/`.seg`.

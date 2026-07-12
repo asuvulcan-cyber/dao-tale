@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Capitulo,
+  CapituloResumo,
   CasoTeste,
   EntradaGlossario,
   Frase,
@@ -14,6 +15,12 @@ import type {
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO, STATUS_CASO_ROTULO } from '../App';
 import { IndicadorCota } from '../componentes/IndicadorCota';
+import {
+  montarMarcadorGlossario,
+  TextoMarcadoZh,
+  TextoTraduzido,
+  type MarcadorGlossario,
+} from '../componentes/TextoRico';
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -40,19 +47,19 @@ type ModoEditor = (typeof MODOS_EDITOR)[number]['id'];
 const CHAVE_MODO = 'dao-tale-modo-editor';
 const CHAVE_TERMOS = 'dao-tale-marcar-termos';
 
-// ── Estado da frase → selo-ponto (item 7 do backlog) ────────────────────────
+// ── Estado da frase (item 7 do backlog, opção B aprovada) ───────────────────
+// Lavagem de fundo esmaecendo + filete de pigmento + chip com o nome do estado.
 // Prioridade: problemas primeiro (erro/regra), depois atenção (pergunta),
 // depois intervenção humana (editada), depois selo de qualidade (confirmada).
+// Frase "normal" (original da IA ou pendente) fica limpa.
 type EstadoFrase = 'erro' | 'regra' | 'pergunta' | 'editada' | 'confirmada' | 'original' | 'pendente';
 
-const ESTADO_FRASE_INFO: Record<EstadoFrase, { classe: string; rotulo: string }> = {
-  erro: { classe: 'selo-ponto--selo', rotulo: 'Erro na tradução' },
-  regra: { classe: 'selo-ponto--selo', rotulo: 'Revisão pediu regra nova' },
-  pergunta: { classe: 'selo-ponto--ocre', rotulo: 'Pergunta de revisão pendente' },
-  editada: { classe: 'selo-ponto--indigo', rotulo: 'Editada à mão' },
-  confirmada: { classe: 'selo-ponto--jade', rotulo: 'Confirmada na revisão' },
-  original: { classe: 'selo-ponto--vazio', rotulo: 'Tradução da IA, sem revisão' },
-  pendente: { classe: 'selo-ponto--vazio opacity-40', rotulo: 'Pendente de tradução' },
+const ESTADO_FRASE_INFO: Partial<Record<EstadoFrase, { lava: string; chip: string; texto: string; rotulo: string }>> = {
+  erro: { lava: 'frase-lava--erro', chip: 'bg-selo-tint text-selo-forte', texto: 'erro', rotulo: 'Erro na tradução' },
+  regra: { lava: 'frase-lava--regra', chip: 'bg-selo-tint text-selo-forte', texto: 'regra', rotulo: 'Revisão pediu regra nova' },
+  pergunta: { lava: 'frase-lava--pergunta', chip: 'bg-ocre-tint text-ocre-forte', texto: 'pergunta', rotulo: 'Pergunta de revisão pendente' },
+  editada: { lava: 'frase-lava--editada', chip: 'bg-indigo-tint text-indigo-forte', texto: 'editada', rotulo: 'Editada à mão' },
+  confirmada: { lava: 'frase-lava--confirmada', chip: 'bg-jade-tint text-jade-forte', texto: 'confirmada', rotulo: 'Confirmada na revisão' },
 };
 
 function estadoDaFrase(frase: Frase, casos: CasoTeste[] | undefined): EstadoFrase {
@@ -65,64 +72,13 @@ function estadoDaFrase(frase: Frase, casos: CasoTeste[] | undefined): EstadoFras
   return 'original';
 }
 
-function SeloPonto({ estado, className = '' }: { estado: EstadoFrase; className?: string }) {
+function ChipEstado({ estado }: { estado: EstadoFrase }) {
   const info = ESTADO_FRASE_INFO[estado];
-  return <span className={`selo-ponto ${info.classe} ${className}`} title={info.rotulo} aria-label={info.rotulo} />;
-}
-
-// ── Marcação de termos do glossário no texto (item 13 do backlog) ───────────
-interface MarcadorGlossario {
-  regexZh: RegExp | null;
-  regexPt: RegExp | null;
-  glosaZh: Map<string, string>;
-  glosaPt: Map<string, string>;
-}
-
-function montarMarcadorGlossario(entradas: EntradaGlossario[] | undefined): MarcadorGlossario | null {
-  if (!entradas || entradas.length === 0) return null;
-  const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Termos maiores primeiro, para o composto vencer o termo contido (人级 antes de 人).
-  const zh = entradas
-    .filter((e) => e.termo_zh.trim().length >= 2) // 1 caractere é ambíguo demais (mesma regra da consistência)
-    .sort((a, b) => b.termo_zh.length - a.termo_zh.length);
-  const pt = entradas
-    .filter((e) => e.termo_pt.trim().length >= 3)
-    .sort((a, b) => b.termo_pt.length - a.termo_pt.length);
-  return {
-    regexZh: zh.length ? new RegExp(`(${zh.map((e) => escapar(e.termo_zh)).join('|')})`, 'gu') : null,
-    regexPt: pt.length
-      ? new RegExp(`(?<![\\p{L}\\p{M}])(${pt.map((e) => escapar(e.termo_pt)).join('|')})(?![\\p{L}\\p{M}])`, 'giu')
-      : null,
-    glosaZh: new Map(zh.map((e) => [e.termo_zh, `${e.termo_zh} → ${e.termo_pt}`])),
-    glosaPt: new Map(pt.map((e) => [e.termo_pt.toLowerCase(), `${e.termo_zh} → ${e.termo_pt}`])),
-  };
-}
-
-// Divide o texto pelo regex (grupo de captura) e envolve os termos com a marca ocre.
-function TextoMarcado({
-  texto,
-  regex,
-  glosa,
-}: {
-  texto: string;
-  regex: RegExp | null | undefined;
-  glosa: (trecho: string) => string | undefined;
-}) {
-  if (!regex || !texto) return <>{texto}</>;
-  const partes = texto.split(regex);
-  if (partes.length === 1) return <>{texto}</>;
+  if (!info) return null;
   return (
-    <>
-      {partes.map((parte, i) =>
-        i % 2 === 1 ? (
-          <span key={i} className="termo-gloss" title={glosa(parte)}>
-            {parte}
-          </span>
-        ) : (
-          parte
-        ),
-      )}
-    </>
+    <span className={`chip-estado ${info.chip}`} title={info.rotulo}>
+      {info.texto}
+    </span>
   );
 }
 
@@ -179,6 +135,21 @@ export function EditorCapitulo() {
     }
     return mapa;
   }, [casosDoCapitulo]);
+
+  // Capítulos da obra → navegação ‹ anterior / próximo › sem voltar à lista.
+  const { data: capitulosDaObra } = useQuery({
+    queryKey: ['capitulos', obraId],
+    queryFn: () => api<CapituloResumo[]>('GET', `/obras/${obraId}/capitulos`),
+  });
+  const vizinhos = useMemo(() => {
+    if (!capitulosDaObra || !data) return { anterior: null, proximo: null };
+    const ordenados = [...capitulosDaObra].sort((a, b) => a.numero - b.numero);
+    const i = ordenados.findIndex((c) => c.id === data.capitulo.id);
+    return {
+      anterior: i > 0 ? ordenados[i - 1] : null,
+      proximo: i >= 0 && i < ordenados.length - 1 ? ordenados[i + 1] : null,
+    };
+  }, [capitulosDaObra, data]);
 
   // Conecta ao SSE de progresso; usado tanto ao iniciar tradução quanto ao abrir
   // a página com um job já em andamento (retomada após fechar o navegador).
@@ -268,7 +239,7 @@ export function EditorCapitulo() {
     return [...grupos.entries()].sort(([a], [b]) => a - b);
   }, [data]);
 
-  if (isLoading || !data) return <p className="text-stone-500">Carregando…</p>;
+  if (isLoading || !data) return <p className="text-tinta-2">Carregando…</p>;
 
   const progresso = progressoVivo ?? data.progresso;
   const { capitulo, frases } = data;
@@ -282,105 +253,102 @@ export function EditorCapitulo() {
 
   return (
     <div>
-      {/* Barra superior (tela 4.3 do briefing) */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-stone-300 bg-white px-4 py-2.5">
-        <h2 className="font-semibold">
+      {/* Barra 1 — onde estou: capítulo, navegação ‹ ›, contagem, status */}
+      <div className="cartao mb-0 flex flex-wrap items-center gap-3 rounded-b-none px-4 py-2">
+        <h2 className="min-w-0 font-display font-semibold">
           Capítulo {capitulo.numero}
           {(capitulo.titulo_pt || capitulo.titulo) && (
-            <span className="ml-2 font-normal text-stone-600">{capitulo.titulo_pt ?? capitulo.titulo}</span>
+            <span className="ml-2 font-normal text-tinta-2">{capitulo.titulo_pt ?? capitulo.titulo}</span>
           )}
           {capitulo.titulo_pt && capitulo.titulo && capitulo.titulo !== capitulo.titulo_pt && (
-            <span className="texto-zh ml-2 text-sm font-normal text-stone-400" title="Título original">
+            <span className="texto-zh ml-2 text-sm font-normal text-tinta-2" title="Título original">
               {capitulo.titulo}
             </span>
           )}
         </h2>
-        <select
-          value={capitulo.status}
-          onChange={(e) => mudarStatus.mutate(e.target.value as StatusCapitulo)}
-          className="rounded border border-stone-300 px-2 py-1 text-sm"
-        >
-          {Object.entries(STATUS_CAPITULO_ROTULO).map(([valor, r]) => (
-            <option key={valor} value={valor}>
-              {r.texto}
-            </option>
-          ))}
-        </select>
-        <span className="text-sm text-tinta-2">
-          {frases.length - pendentes - comErro}/{frases.length} traduzidas
-          {comErro > 0 && <span className="text-erro"> · {comErro} com erro</span>}
-          {palavrasPt > 0 && (
-            <span title={`${caracteresZh.toLocaleString('pt-BR')} caracteres no original chinês`}>
-              {' '}· {palavrasPt.toLocaleString('pt-BR')} palavras
-            </span>
+        <span className="flex gap-0.5">
+          {vizinhos.anterior ? (
+            <Link
+              to={`/obras/${obraId}/capitulos/${vizinhos.anterior.id}`}
+              title={`Capítulo ${vizinhos.anterior.numero}`}
+              className="grid size-7 place-items-center rounded-md border border-linha text-tinta-2 hover:border-jade hover:text-jade-forte"
+            >
+              ‹
+            </Link>
+          ) : (
+            <span className="grid size-7 place-items-center rounded-md border border-linha/50 text-linha">‹</span>
+          )}
+          {vizinhos.proximo ? (
+            <Link
+              to={`/obras/${obraId}/capitulos/${vizinhos.proximo.id}`}
+              title={`Capítulo ${vizinhos.proximo.numero}`}
+              className="grid size-7 place-items-center rounded-md border border-linha text-tinta-2 hover:border-jade hover:text-jade-forte"
+            >
+              ›
+            </Link>
+          ) : (
+            <span className="grid size-7 place-items-center rounded-md border border-linha/50 text-linha">›</span>
           )}
         </span>
-        <div className="flex items-center gap-1" role="group" aria-label="Modo de visualização">
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-sm text-tinta-2 tabular-nums">
+            {frases.length - pendentes - comErro}/{frases.length} frases
+            {comErro > 0 && <span className="text-erro"> · {comErro} com erro</span>}
+            {palavrasPt > 0 && (
+              <span title={`${caracteresZh.toLocaleString('pt-BR')} caracteres no original chinês`}>
+                {' '}· {palavrasPt.toLocaleString('pt-BR')} palavras
+              </span>
+            )}
+          </span>
+          <select
+            value={capitulo.status}
+            onChange={(e) => mudarStatus.mutate(e.target.value as StatusCapitulo)}
+            className="entrada"
+            title="Etapa do fluxo de trabalho deste capítulo"
+          >
+            {Object.entries(STATUS_CAPITULO_ROTULO).map(([valor, r]) => (
+              <option key={valor} value={valor}>
+                {r.texto}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Barra 2 — como vejo / o que faço: modos, ferramentas, UMA ação primária, menu ⋯ */}
+      <div className="cartao mb-4 flex flex-wrap items-center gap-2 rounded-t-none border-t-0 px-4 py-2">
+        <div className="seg" role="group" aria-label="Modo de visualização">
           {MODOS_EDITOR.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setModo(m.id)}
-              aria-pressed={modo === m.id}
-              className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                modo === m.id
-                  ? 'border-transparent bg-marca text-papel-alto'
-                  : 'border-linha bg-papel-alto text-tinta-2 hover:border-jade hover:text-jade-forte'
-              }`}
-            >
+            <button key={m.id} type="button" onClick={() => setModo(m.id)} aria-pressed={modo === m.id}>
               {m.rotulo}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setMarcarTermos((v) => !v)}
-            aria-pressed={marcarTermos}
-            title="Marcar termos do glossário no texto"
-            className={`ml-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-              marcarTermos
-                ? 'border-transparent bg-ocre-tint text-ocre-forte'
-                : 'border-linha bg-papel-alto text-tinta-2 hover:border-ocre hover:text-ocre-forte'
-            }`}
-          >
-            Termos
-          </button>
         </div>
-        {capitulo.provedor && (
-          <Etiqueta>
-            {capitulo.provedor} · {capitulo.modelo}
-          </Etiqueta>
+        <button
+          type="button"
+          className="ferramenta"
+          onClick={() => setMarcarTermos((v) => !v)}
+          aria-pressed={marcarTermos}
+          title="Marcar termos do glossário no texto"
+        >
+          Termos
+        </button>
+        {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
+          <button type="button" className="ferramenta" onClick={() => setMostrarConsistencia(true)}>
+            Consistência
+          </button>
         )}
         <div className="ml-auto flex items-center gap-2">
           <IndicadorCota compacto />
-          {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
-            <>
-              <a href={`/api/capitulos/${capitulo.id}/baixar?formato=md`} download title="Markdown: preserva itálico/negrito que a tradução usar, com título do capítulo">
-                <Botao variante="secundario">Baixar .md</Botao>
-              </a>
-              <a href={`/api/capitulos/${capitulo.id}/baixar`} download title="Texto puro corrido, com os parágrafos originais">
-                <Botao variante="secundario">.txt</Botao>
-              </a>
-              <a href={`/api/capitulos/${capitulo.id}/baixar?formato=bilingue`} download title="Versão com pares chinês/português por parágrafo, para revisão externa">
-                <Botao variante="secundario">Bilíngue</Botao>
-              </a>
-              <Botao variante="secundario" onClick={() => setMostrarConsistencia(true)}>
-                Consistência
-              </Botao>
-            </>
-          )}
           {emExecucao ? (
             <>
-              <span className="relative flex h-2.5 w-2.5" aria-hidden>
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
-              </span>
-              <div className="h-2 w-36 overflow-hidden rounded-full bg-stone-200" title={`${pct}% traduzido`}>
+              <div className="h-2 w-36 overflow-hidden rounded-full bg-papel-fundo" title={`${pct}% traduzido`}>
                 <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-700"
+                  className="h-full rounded-full bg-info transition-all duration-700"
                   style={{ width: `${Math.max(pct, 3)}%` }}
                 />
               </div>
-              <span className="text-sm tabular-nums text-blue-700">
+              <span className="text-sm tabular-nums text-info">
                 {progresso.frases_prontas}/{progresso.frases_total} · {pct}%
               </span>
               <Botao variante="secundario" onClick={() => cancelar.mutate()}>
@@ -389,19 +357,6 @@ export function EditorCapitulo() {
             </>
           ) : (
             <>
-              <select
-                value={provedorEscolhido}
-                onChange={(e) => setProvedorEscolhido(e.target.value)}
-                title="Provedor desta tradução (vazio = padrão da obra/global)"
-                className="rounded border border-stone-300 px-2 py-1 text-sm"
-              >
-                <option value="">Provedor padrão</option>
-                {provedores?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nome}
-                  </option>
-                ))}
-              </select>
               {(pendentes > 0 || comErro > 0) && (
                 <Botao onClick={() => traduzir.mutate({})} disabled={traduzir.isPending}>
                   {frases.some((f) => f.status_traducao === 'traduzida') ? 'Retomar tradução' : 'Traduzir'}
@@ -409,7 +364,6 @@ export function EditorCapitulo() {
               )}
               {pendentes === 0 && comErro === 0 && capitulo.titulo && !capitulo.titulo_pt && (
                 <Botao
-                  variante="secundario"
                   onClick={() => traduzir.mutate({})}
                   disabled={traduzir.isPending}
                   title="O capítulo já está traduzido — isto pede à IA apenas a tradução do título"
@@ -417,11 +371,74 @@ export function EditorCapitulo() {
                   Traduzir título
                 </Botao>
               )}
-              {frases.some((f) => f.status_traducao === 'traduzida') && (
-                <Botao variante="secundario" onClick={() => retraduzirTudo(frases)} disabled={traduzir.isPending}>
-                  Retraduzir tudo
-                </Botao>
-              )}
+              <details className="relative">
+                <summary
+                  className="grid size-8 cursor-pointer list-none place-items-center rounded-md border border-linha text-tinta-2 hover:border-jade hover:text-jade-forte [&::-webkit-details-marker]:hidden"
+                  title="Mais ações: downloads, retraduzir, provedor"
+                >
+                  ⋯
+                </summary>
+                <div className="cartao absolute right-0 z-30 mt-1 flex w-64 flex-col gap-1 p-2 shadow-lg">
+                  {frases.some((f) => f.status_traducao === 'traduzida') && (
+                    <>
+                      <a
+                        href={`/api/capitulos/${capitulo.id}/baixar?formato=md`}
+                        download
+                        className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                        title="Markdown: preserva itálico/negrito, com título do capítulo"
+                      >
+                        Baixar .md
+                      </a>
+                      <a
+                        href={`/api/capitulos/${capitulo.id}/baixar`}
+                        download
+                        className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                        title="Texto puro corrido, com os parágrafos originais"
+                      >
+                        Baixar .txt
+                      </a>
+                      <a
+                        href={`/api/capitulos/${capitulo.id}/baixar?formato=bilingue`}
+                        download
+                        className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                        title="Pares chinês/português por parágrafo, para revisão externa"
+                      >
+                        Baixar bilíngue
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => retraduzirTudo(frases)}
+                        disabled={traduzir.isPending}
+                        className="rounded px-2 py-1.5 text-left text-sm text-erro hover:bg-selo-tint"
+                      >
+                        Retraduzir tudo…
+                      </button>
+                      <div className="my-1 border-t border-linha" />
+                    </>
+                  )}
+                  <label className="flex flex-col gap-1 px-2 py-1 text-xs text-tinta-2">
+                    Provedor desta tradução
+                    <select
+                      value={provedorEscolhido}
+                      onChange={(e) => setProvedorEscolhido(e.target.value)}
+                      className="entrada"
+                      title="Vazio = padrão da obra/global"
+                    >
+                      <option value="">Provedor padrão</option>
+                      {provedores?.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {capitulo.provedor && (
+                    <p className="px-2 py-1 text-xs text-tinta-2">
+                      Última tradução: {capitulo.provedor} · {capitulo.modelo}
+                    </p>
+                  )}
+                </div>
+              </details>
             </>
           )}
         </div>
@@ -429,17 +446,19 @@ export function EditorCapitulo() {
 
       {erroJob && <Aviso tipo="erro">{erroJob}</Aviso>}
 
-      <div className="flex gap-4">
-        {/* Editor bilíngue */}
-        <div className="min-w-0 flex-1">
+      {/* O texto ocupa sempre a mesma largura; a gaveta de revisão flutua ao
+          lado (ou sobre, em telas estreitas) sem jamais espremer o grid. */}
+      <div>
           {modo === 'segmentado' ? (
-            <div className="space-y-4">
+            /* Folha contínua: uma única superfície; parágrafos separados por
+               respiro, não por molduras. */
+            <div className="cartao py-3">
               {paragrafos.map(([idx, frasesDoParagrafo]) => (
                 // content-visibility: parágrafos fora da tela não são renderizados —
                 // mantém capítulos muito longos (600+ frases) fluidos sem virtualização.
                 <div
                   key={idx}
-                  className="overflow-hidden rounded-lg border border-linha bg-papel-alto [contain-intrinsic-size:auto_120px] [content-visibility:auto]"
+                  className="mt-5 first:mt-0 [contain-intrinsic-size:auto_120px] [content-visibility:auto]"
                 >
                   {frasesDoParagrafo.map((frase) => (
                     <LinhaFrase
@@ -498,9 +517,35 @@ export function EditorCapitulo() {
               </div>
             </div>
           )}
-        </div>
 
-        {/* Painel de revisão */}
+        {/* Rodapé: continuar o trabalho sem voltar à lista */}
+        {(vizinhos.anterior || vizinhos.proximo) && (
+          <div className="mt-4 flex items-center justify-between text-sm">
+            {vizinhos.anterior ? (
+              <Link
+                to={`/obras/${obraId}/capitulos/${vizinhos.anterior.id}`}
+                className="text-jade-forte hover:underline"
+              >
+                ‹ Capítulo {vizinhos.anterior.numero}
+              </Link>
+            ) : (
+              <span />
+            )}
+            <span className="text-xs text-tinta-2">fim do capítulo {capitulo.numero}</span>
+            {vizinhos.proximo ? (
+              <Link
+                to={`/obras/${obraId}/capitulos/${vizinhos.proximo.id}`}
+                className="text-jade-forte hover:underline"
+              >
+                Capítulo {vizinhos.proximo.numero} ›
+              </Link>
+            ) : (
+              <span />
+            )}
+          </div>
+        )}
+
+        {/* Gaveta de revisão (flutuante) */}
         {selecionada && (
           <PainelRevisao
             frase={selecionada}
@@ -545,6 +590,7 @@ function LinhaFrase({
 }) {
   const clienteQuery = useQueryClient();
   const [texto, setTexto] = useState(frase.texto_pt);
+  const [editando, setEditando] = useState(false);
 
   // Sincroniza quando a tradução chega por fora (job em lote, correção aplicada).
   useEffect(() => setTexto(frase.texto_pt), [frase.texto_pt]);
@@ -554,34 +600,56 @@ function LinhaFrase({
     onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] }),
   });
 
+  const info = ESTADO_FRASE_INFO[estado];
+
   return (
     <div
       id={`frase-${frase.id}`}
-      className={`grid grid-cols-[1.4rem_1fr_1fr] border-b border-linha/60 last:border-b-0 ${
-        selecionada ? 'bg-jade-tint/60' : ''
+      className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-4 px-4 py-1 ${
+        selecionada ? 'bg-jade-tint/50' : 'hover:bg-papel-fundo/40'
       }`}
     >
-      <div className="flex cursor-pointer justify-center pt-3.5" onClick={aoSelecionar}>
-        <SeloPonto estado={estado} />
+      <div
+        className="texto-zh cursor-pointer select-text break-words border-r border-linha/50 py-1 pr-4 text-tinta-2"
+        onClick={aoSelecionar}
+        title="Clique para revisar esta frase"
+      >
+        <TextoMarcadoZh texto={frase.texto_zh} marcador={marcador} />
       </div>
-      <div className="texto-zh cursor-pointer select-text border-r border-linha/60 py-2 pr-3" onClick={aoSelecionar}>
-        {marcador ? (
-          <TextoMarcado texto={frase.texto_zh} regex={marcador.regexZh} glosa={(t) => marcador.glosaZh.get(t)} />
+      {/* Estado B aprovado: lavagem + filete na célula da tradução. */}
+      <div className={`frase-lava ${info?.lava ?? ''} rounded-r py-1`}>
+        {editando ? (
+          <textarea
+            value={texto}
+            autoFocus
+            placeholder={frase.status_traducao === 'pendente' ? '(pendente de tradução)' : ''}
+            onChange={(e) => setTexto(e.target.value)}
+            onBlur={() => {
+              setEditando(false);
+              if (texto !== frase.texto_pt) salvar.mutate(texto);
+            }}
+            rows={Math.max(2, Math.ceil(texto.length / 60))}
+            className="w-full resize-none rounded border border-jade bg-papel-alto px-1 py-0.5 text-sm leading-relaxed focus:outline-none"
+          />
         ) : (
-          frase.texto_zh
+          // Markdown renderizado (itálico/negrito visíveis); clique para editar o texto cru.
+          <div
+            onClick={() => setEditando(true)}
+            title="Clique para editar"
+            className="min-h-6 cursor-text break-words text-sm leading-relaxed"
+          >
+            {frase.texto_pt ? (
+              <>
+                <TextoTraduzido texto={frase.texto_pt} marcador={marcador} />
+                <ChipEstado estado={estado} />
+              </>
+            ) : (
+              <span className="italic text-tinta-2">
+                {frase.status_traducao === 'pendente' ? '(pendente de tradução)' : '(vazio)'}
+              </span>
+            )}
+          </div>
         )}
-      </div>
-      <div className="px-2 py-1.5">
-        <textarea
-          value={texto}
-          placeholder={frase.status_traducao === 'pendente' ? '(pendente de tradução)' : ''}
-          onChange={(e) => setTexto(e.target.value)}
-          onBlur={() => {
-            if (texto !== frase.texto_pt) salvar.mutate(texto);
-          }}
-          rows={Math.max(1, Math.ceil(texto.length / 60))}
-          className="w-full resize-none rounded border border-transparent px-1 py-0.5 text-sm leading-relaxed hover:border-linha focus:border-jade focus:outline-none"
-        />
       </div>
     </div>
   );
@@ -603,8 +671,6 @@ function FraseSpan({
   aoSelecionar: () => void;
 }) {
   const texto = lado === 'zh' ? frase.texto_zh : frase.texto_pt;
-  const regex = lado === 'zh' ? marcador?.regexZh : marcador?.regexPt;
-  const glosa = (t: string) => (lado === 'zh' ? marcador?.glosaZh.get(t) : marcador?.glosaPt.get(t.toLowerCase()));
   const pendente = lado === 'pt' && !texto.trim();
   return (
     <>
@@ -616,7 +682,13 @@ function FraseSpan({
           selecionada ? 'bg-jade-tint' : ''
         } ${pendente ? 'text-tinta-2 italic' : ''}`}
       >
-        {pendente ? '[…]' : marcador ? <TextoMarcado texto={texto} regex={regex} glosa={glosa} /> : texto}
+        {pendente ? (
+          '[…]'
+        ) : lado === 'zh' ? (
+          <TextoMarcadoZh texto={texto} marcador={marcador} />
+        ) : (
+          <TextoTraduzido texto={texto} marcador={marcador} />
+        )}
       </span>
       {lado === 'pt' ? ' ' : ''}
     </>
@@ -701,12 +773,61 @@ function PainelRevisao({
     onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] }),
   });
 
+  // ── Arrasto da gaveta ──────────────────────────────────────────────────
+  // Puxa pelo cabeçalho; a posição fica em localStorage para a próxima sessão.
+  const [posicao, setPosicao] = useState<{ x: number; y: number } | null>(() => {
+    try {
+      const salvo = localStorage.getItem('dao-tale-gaveta-pos');
+      return salvo ? (JSON.parse(salvo) as { x: number; y: number }) : null;
+    } catch {
+      return null;
+    }
+  });
+  const arrasto = useRef<{ dx: number; dy: number } | null>(null);
+  const ultimaPosicao = useRef(posicao);
+
+  function aoIniciarArrasto(e: React.PointerEvent<HTMLDivElement>) {
+    const alvo = e.currentTarget.closest('aside');
+    if (!alvo) return;
+    const r = alvo.getBoundingClientRect();
+    arrasto.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function aoMoverArrasto(e: React.PointerEvent<HTMLDivElement>) {
+    if (!arrasto.current) return;
+    const x = Math.min(Math.max(4, e.clientX - arrasto.current.dx), window.innerWidth - 80);
+    const y = Math.min(Math.max(4, e.clientY - arrasto.current.dy), window.innerHeight - 60);
+    ultimaPosicao.current = { x, y };
+    setPosicao(ultimaPosicao.current);
+  }
+  function aoSoltarArrasto() {
+    if (!arrasto.current) return;
+    arrasto.current = null;
+    if (ultimaPosicao.current) {
+      localStorage.setItem('dao-tale-gaveta-pos', JSON.stringify(ultimaPosicao.current));
+    }
+  }
+
   return (
-    <aside className="w-96 shrink-0">
-      <div className="sticky top-4 space-y-3 rounded-lg border border-stone-300 bg-white p-4">
-        <div className="flex items-start justify-between">
-          <h3 className="font-semibold">Protocolo de Revisão</h3>
-          <button onClick={aoFechar} className="text-stone-400 hover:text-stone-700">
+    // Gaveta flutuante: sobre o papel, nunca reflui o texto. Arrastável pelo cabeçalho.
+    <aside
+      className="fixed z-20 w-96 max-w-[calc(100vw-1.5rem)]"
+      style={
+        posicao
+          ? { left: posicao.x, top: posicao.y, maxHeight: `calc(100vh - ${posicao.y + 12}px)` }
+          : { top: '4rem', right: '0.75rem', maxHeight: 'calc(100vh - 5rem)' }
+      }
+    >
+      <div className="cartao max-h-[inherit] space-y-3 overflow-y-auto p-4 shadow-xl shadow-tinta/10">
+        <div
+          className="-m-4 mb-0 flex cursor-grab touch-none items-start justify-between rounded-t-[9px] border-b border-linha bg-papel-fundo/60 px-4 py-2.5 active:cursor-grabbing"
+          onPointerDown={aoIniciarArrasto}
+          onPointerMove={aoMoverArrasto}
+          onPointerUp={aoSoltarArrasto}
+          title="Arraste para mover a gaveta"
+        >
+          <h3 className="font-display font-semibold">Protocolo de Revisão</h3>
+          <button onClick={aoFechar} aria-label="Fechar revisão" className="text-tinta-2 hover:text-tinta">
             ✕
           </button>
         </div>
@@ -734,7 +855,7 @@ function PainelRevisao({
           onChange={(e) => setPergunta(e.target.value)}
           rows={3}
           placeholder="Pergunte sobre a escolha de tradução desta frase…"
-          className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm"
+          className="entrada w-full text-sm"
         />
         <Botao onClick={() => revisar.mutate()} disabled={!pergunta.trim() || revisar.isPending} className="w-full">
           {revisar.isPending ? 'Consultando a IA…' : 'Perguntar'}
@@ -743,17 +864,17 @@ function PainelRevisao({
         {erro && <Aviso tipo="erro">{erro}</Aviso>}
 
         {resultado && (
-          <div className="space-y-2 border-t border-stone-200 pt-3 text-sm">
+          <div className="space-y-2 border-t border-linha/60 pt-3 text-sm">
             <div>
               <Etiqueta cor={resultado.revisao.veredito === 'correto' ? 'jade' : 'selo'}>
                 {resultado.revisao.veredito === 'correto' ? 'Correto' : 'Incorreto'}
               </Etiqueta>
-              <span className="ml-2 text-xs text-stone-500">regra: {resultado.revisao.secao_regra}</span>
+              <span className="ml-2 text-xs text-tinta-2">regra: {resultado.revisao.secao_regra}</span>
             </div>
-            <p className="texto-zh rounded bg-stone-50 px-2 py-1 text-xs">{resultado.revisao.trecho_zh}</p>
+            <p className="texto-zh rounded bg-papel-fundo/60 px-2 py-1 text-xs">{resultado.revisao.trecho_zh}</p>
             <p>{resultado.revisao.justificativa}</p>
             {resultado.revisao.correcao_proposta && (
-              <div className="rounded border border-amber-300 bg-amber-50 p-2">
+              <div className="rounded border border-ocre/50 bg-ocre-tint p-2">
                 <p className="mb-2">{resultado.revisao.correcao_proposta}</p>
                 {resultado.caso.status !== 'corrigido' ? (
                   <Botao onClick={() => aplicarCorrecao.mutate()} disabled={aplicarCorrecao.isPending}>
@@ -764,19 +885,19 @@ function PainelRevisao({
                 )}
               </div>
             )}
-            <p className="text-xs text-stone-400">Caso #{resultado.caso.id} salvo no banco de testes.</p>
+            <p className="text-xs text-tinta-2">Caso #{resultado.caso.id} salvo no banco de testes.</p>
           </div>
         )}
 
         {/* Consultas anteriores desta frase */}
         {historico && historico.length > 0 && (
-          <details className="border-t border-stone-200 pt-3" open={historico.length <= 2 && !resultado}>
-            <summary className="cursor-pointer text-xs font-medium text-stone-500 hover:text-stone-800">
+          <details className="border-t border-linha/60 pt-3" open={historico.length <= 2 && !resultado}>
+            <summary className="cursor-pointer text-xs font-medium text-tinta-2 hover:text-tinta">
               Revisões anteriores desta frase ({historico.length})
             </summary>
             <div className="mt-2 space-y-2">
               {historico.map((caso) => (
-                <div key={caso.id} className="rounded border border-stone-200 bg-stone-50 p-2 text-xs">
+                <div key={caso.id} className="rounded border border-linha/60 bg-papel-fundo/60 p-2 text-xs">
                   <div className="mb-1 flex flex-wrap items-center gap-1.5">
                     <Etiqueta cor={caso.veredito === 'correto' ? 'jade' : 'selo'}>
                       {caso.veredito === 'correto' ? 'Correto' : 'Incorreto'}
@@ -786,14 +907,14 @@ function PainelRevisao({
                         {STATUS_CASO_ROTULO[caso.status].texto}
                       </Etiqueta>
                     )}
-                    <span className="text-stone-400">
+                    <span className="text-tinta-2">
                       {new Date(caso.criado_em).toLocaleDateString('pt-BR')} · caso #{caso.id}
                     </span>
                   </div>
-                  <p className="font-medium text-stone-700">{caso.pergunta}</p>
-                  <p className="mt-0.5 text-stone-600">{caso.justificativa}</p>
+                  <p className="font-medium text-tinta">{caso.pergunta}</p>
+                  <p className="mt-0.5 text-tinta-2">{caso.justificativa}</p>
                   {caso.correcao_proposta && (
-                    <p className="mt-0.5 text-stone-600">
+                    <p className="mt-0.5 text-tinta-2">
                       <span className="font-medium">Proposta:</span> {caso.correcao_proposta}
                     </p>
                   )}
@@ -804,8 +925,8 @@ function PainelRevisao({
         )}
 
         {/* Correção de segmentação */}
-        <div className="border-t border-stone-200 pt-3">
-          <p className="mb-2 text-xs font-medium text-stone-500">Segmentação errada?</p>
+        <div className="border-t border-linha/60 pt-3">
+          <p className="mb-2 text-xs font-medium text-tinta-2">Segmentação errada?</p>
           <div className="flex flex-wrap gap-2">
             {proxima && proxima.paragrafo === frase.paragrafo && (
               <Botao
@@ -861,40 +982,40 @@ function ModalConsistencia({
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
-      <div className="max-h-[80vh] w-[42rem] max-w-full space-y-3 overflow-auto rounded-lg bg-white p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[80vh] w-[42rem] max-w-full space-y-3 overflow-auto cartao p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <h3 className="font-semibold">Consistência do glossário</h3>
-          <button onClick={aoFechar} className="text-stone-400 hover:text-stone-700">
+          <button onClick={aoFechar} className="text-tinta-2 hover:text-tinta">
             ✕
           </button>
         </div>
-        {isLoading && <p className="text-sm text-stone-500">Verificando…</p>}
+        {isLoading && <p className="text-sm text-tinta-2">Verificando…</p>}
         {data && (
           <>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-tinta-2">
               {data.ocorrencias} ocorrência{data.ocorrencias === 1 ? '' : 's'} de termos do glossário neste capítulo ·{' '}
               {data.violacoes.length === 0 ? (
-                <span className="font-medium text-green-700">todas seguem o cânone.</span>
+                <span className="font-medium text-jade-forte">todas seguem o cânone.</span>
               ) : (
-                <span className="font-medium text-red-700">{data.violacoes.length} fora do cânone:</span>
+                <span className="font-medium text-selo-forte">{data.violacoes.length} fora do cânone:</span>
               )}
             </p>
             <div className="space-y-2">
               {data.violacoes.map((v, i) => (
-                <div key={i} className="rounded border border-red-200 bg-red-50 p-3 text-sm">
+                <div key={i} className="rounded border border-selo/40 bg-selo-tint p-3 text-sm">
                   <p className="mb-1">
                     <span className="texto-zh font-medium">{v.termo_zh}</span> deveria virar{' '}
                     <span className="font-medium">“{v.termo_pt}”</span> (frase {v.ordem + 1})
                   </p>
-                  <p className="texto-zh text-xs text-stone-600">{v.texto_zh}</p>
-                  <p className="mb-2 text-xs text-stone-600">{v.texto_pt}</p>
+                  <p className="texto-zh text-xs text-tinta-2">{v.texto_zh}</p>
+                  <p className="mb-2 text-xs text-tinta-2">{v.texto_pt}</p>
                   <Botao variante="secundario" onClick={() => aoIrParaFrase(v.frase_id)}>
                     Ir à frase
                   </Botao>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-tinta-2">
               Verificação heurística: compara sem maiúsculas/acentos e não entende flexões (plural, gênero) — trate
               como sinalização, não veredito.
               {data.termos_curtos_ignorados > 0 && (
@@ -947,16 +1068,16 @@ function ModalDividir({
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
-      <div className="w-[36rem] max-w-full space-y-3 rounded-lg bg-white p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="w-[36rem] max-w-full space-y-3 cartao p-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold">Dividir frase</h3>
-        <p className="text-sm text-stone-600">Clique no caractere onde a segunda frase deve começar:</p>
-        <p className="texto-zh rounded bg-stone-50 p-2 text-lg leading-loose">
+        <p className="text-sm text-tinta-2">Clique no caractere onde a segunda frase deve começar:</p>
+        <p className="texto-zh rounded bg-papel-fundo/60 p-2 text-lg leading-loose">
           {caracteres.map((ch, i) => (
             <span
               key={i}
               onClick={() => i > 0 && setCorte(i)}
-              className={`cursor-pointer ${i === corte ? 'border-l-2 border-red-500' : ''} ${
-                i >= corte ? 'bg-amber-100' : ''
+              className={`cursor-pointer ${i === corte ? 'border-l-2 border-selo' : ''} ${
+                i >= corte ? 'bg-ocre-tint' : ''
               }`}
             >
               {ch}
@@ -965,23 +1086,23 @@ function ModalDividir({
         </p>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="texto-zh mb-1 rounded bg-stone-50 px-2 py-1 text-xs">{caracteres.slice(0, corte).join('')}</p>
+            <p className="texto-zh mb-1 rounded bg-papel-fundo/60 px-2 py-1 text-xs">{caracteres.slice(0, corte).join('')}</p>
             <textarea
               value={pt1}
               onChange={(e) => setPt1(e.target.value)}
               rows={3}
               placeholder="Tradução da 1ª parte"
-              className="w-full rounded border border-stone-300 px-2 py-1.5"
+              className="entrada w-full"
             />
           </div>
           <div>
-            <p className="texto-zh mb-1 rounded bg-amber-50 px-2 py-1 text-xs">{caracteres.slice(corte).join('')}</p>
+            <p className="texto-zh mb-1 rounded bg-ocre-tint px-2 py-1 text-xs">{caracteres.slice(corte).join('')}</p>
             <textarea
               value={pt2}
               onChange={(e) => setPt2(e.target.value)}
               rows={3}
               placeholder="Tradução da 2ª parte (vazio = pendente)"
-              className="w-full rounded border border-stone-300 px-2 py-1.5"
+              className="entrada w-full"
             />
           </div>
         </div>

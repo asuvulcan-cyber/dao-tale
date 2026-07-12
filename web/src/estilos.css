@@ -133,62 +133,6 @@
   --font-mono:    var(--fonte-mono);
   --radius-selo:  var(--raio-selo);
 
-  /* ── Retematização das classes legadas ──────────────────────────────────
-     Enquanto as páginas ainda usam stone/red/green/amber/blue/teal, mapeamos
-     cada tom para a paleta de pigmentos, para que retematizem e ganhem dark
-     mode automaticamente. Migração p/ utilitários semânticos é gradual. */
-
-  /* neutros → papel/tinta */
-  --color-stone-50:  var(--cor-papel-alto);
-  --color-stone-100: var(--cor-papel);
-  --color-stone-200: var(--cor-papel-fundo);
-  --color-stone-300: var(--cor-linha);
-  --color-stone-400: var(--cor-tinta-2);
-  --color-stone-500: var(--cor-tinta-2);
-  --color-stone-600: var(--cor-tinta-2);
-  --color-stone-700: var(--cor-tinta);
-  --color-stone-800: var(--cor-tinta);
-  --color-stone-900: var(--cor-tinta);
-  --color-white:     var(--cor-papel-alto);
-
-  /* vermelho → selo (cinábrio) */
-  --color-red-50:  var(--cor-selo-tint);
-  --color-red-100: var(--cor-selo-tint);
-  --color-red-200: var(--cor-selo-tint);
-  --color-red-300: var(--cor-selo);
-  --color-red-500: var(--cor-selo);
-  --color-red-600: var(--cor-selo-forte);
-  --color-red-700: var(--cor-selo-forte);
-  --color-red-800: var(--cor-selo-forte);
-
-  /* verde → jade */
-  --color-green-50:  var(--cor-jade-tint);
-  --color-green-100: var(--cor-jade-tint);
-  --color-green-300: var(--cor-jade);
-  --color-green-500: var(--cor-jade);
-  --color-green-700: var(--cor-jade-forte);
-  --color-green-800: var(--cor-jade-forte);
-  --color-green-900: var(--cor-jade-forte);
-
-  /* âmbar → ocre */
-  --color-amber-50:  var(--cor-ocre-tint);
-  --color-amber-100: var(--cor-ocre-tint);
-  --color-amber-200: var(--cor-ocre);
-  --color-amber-300: var(--cor-ocre);
-  --color-amber-500: var(--cor-ocre);
-  --color-amber-800: var(--cor-ocre-forte);
-
-  /* azul → índigo */
-  --color-blue-100: var(--cor-indigo-tint);
-  --color-blue-400: var(--cor-indigo);
-  --color-blue-500: var(--cor-indigo);
-  --color-blue-600: var(--cor-indigo-forte);
-  --color-blue-700: var(--cor-indigo-forte);
-  --color-blue-800: var(--cor-indigo-forte);
-
-  /* teal → jade (status "traduzido") */
-  --color-teal-100: var(--cor-jade-tint);
-  --color-teal-800: var(--cor-jade-forte);
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
@@ -208,31 +152,129 @@ body {
   line-height: 1.9;
 }
 
-/* ── Selo-ponto: estado da frase na margem (item 7 do backlog) ──────────────
-   Mesma gramática visual do selo 印章: um ponto de pigmento com leve auréola.
-   A cor vem de --ponto-cor (semântica); "vazio" = sem estado que mereça tinta. */
-.selo-ponto {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  flex: none;
-  background: var(--ponto-cor, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ponto-cor, transparent) 18%, transparent);
-}
-.selo-ponto--vazio { box-shadow: inset 0 0 0 1.5px var(--cor-linha); }
-.selo-ponto--jade { --ponto-cor: var(--cor-ok); }
-.selo-ponto--indigo { --ponto-cor: var(--cor-info); }
-.selo-ponto--ocre { --ponto-cor: var(--cor-aviso); }
-.selo-ponto--selo { --ponto-cor: var(--cor-erro); }
-
 /* ── Termo do glossário no texto (item 13 do backlog) ───────────────────────
-   Sublinhado ocre suave; o title do elemento carrega a glosa canônica. */
+   Discreto como um link: sublinhado pontilhado fino, sem fundo.
+   O title do elemento carrega a glosa canônica (termo_zh → termo_pt). */
 .termo-gloss {
-  background: linear-gradient(
-      color-mix(in srgb, var(--cor-gloss) 16%, transparent),
-      color-mix(in srgb, var(--cor-gloss) 16%, transparent)
-    )
-    no-repeat 0 88% / 100% 0.28em;
-  border-bottom: 1.5px solid color-mix(in srgb, var(--cor-gloss) 60%, transparent);
+  text-decoration: underline dotted color-mix(in srgb, var(--cor-gloss) 70%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  cursor: help;
+}
+.termo-gloss:hover {
+  text-decoration-style: solid;
+  color: var(--cor-gloss);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   ESTILO DAO TALE — componentes padrão do site inteiro (docs/tokens-css.md §5)
+   Toda página monta a interface com estas peças; nada de estilos ad hoc.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Superfície de conteúdo: cartão sobre o papel. */
+.cartao {
+  background: var(--cor-papel-alto);
+  border: 1px solid var(--cor-linha);
+  border-radius: 10px;
+}
+
+/* Rótulo de seção ("olho"): caixa alta pequena com entreletra. */
+.olho {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cor-tinta-2);
+  font-weight: 600;
+}
+
+/* Campo de formulário (input, select, textarea). */
+.entrada {
+  background: var(--cor-papel-alto);
+  border: 1px solid var(--cor-linha);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.875rem;
+  color: var(--cor-tinta);
+}
+.entrada:focus {
+  border-color: var(--cor-jade);
+  outline: none;
+}
+.entrada::placeholder { color: var(--cor-tinta-2); opacity: 0.7; }
+
+/* Botão-ferramenta: ação secundária em pílula (barras de ferramentas). */
+.ferramenta {
+  border: 1px solid var(--cor-linha);
+  background: transparent;
+  color: var(--cor-tinta-2);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ferramenta:hover { border-color: var(--cor-jade); color: var(--cor-jade-forte); }
+.ferramenta[aria-pressed='true'] {
+  background: var(--cor-ocre-tint);
+  color: var(--cor-ocre-forte);
+  border-color: transparent;
+}
+
+/* Controle segmentado (grupo exclusivo: modos, filtros). */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--cor-linha);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.seg > button {
+  border: 0;
+  background: transparent;
+  color: var(--cor-tinta-2);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg > button[aria-pressed='true'] {
+  background: var(--cor-jade);
+  color: var(--cor-papel-alto);
+  font-weight: 600;
+}
+
+/* ── Estado da frase, opção B aprovada: lavagem de fundo + filete ──────────
+   A célula da tradução ganha um fundo tênue que esmaece para a direita e um
+   filete de pigmento na borda esquerda. Frase sem estado fica limpa. */
+.frase-lava {
+  border-left: 3px solid transparent;
+  padding-left: 0.75rem;
+}
+.frase-lava--editada {
+  border-left-color: var(--cor-info);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-indigo-tint) 60%, transparent), transparent 55%);
+}
+.frase-lava--pergunta {
+  border-left-color: var(--cor-aviso);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-ocre-tint) 60%, transparent), transparent 55%);
+}
+.frase-lava--confirmada {
+  border-left-color: var(--cor-ok);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-jade-tint) 60%, transparent), transparent 55%);
+}
+.frase-lava--regra,
+.frase-lava--erro {
+  border-left-color: var(--cor-erro);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-selo-tint) 60%, transparent), transparent 55%);
+}
+
+/* Etiqueta pequena do estado, no fim da frase. */
+.chip-estado {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.12em 0.55em;
+  border-radius: 999px;
+  margin-left: 0.45rem;
+  vertical-align: 0.08em;
+  white-space: nowrap;
   cursor: help;
 }
