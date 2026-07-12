@@ -199,6 +199,7 @@ async function executarJob(
         aoTentar: () => reposUso.registrar(db, ctx.provedorId, ctx.modelo),
       });
 
+
       if (resultado.tipo === 'fatal') {
         job.progresso.erro_fatal = resultado.mensagem;
         emitir(capituloId, { tipo: 'job_erro', dados: { mensagem: resultado.mensagem } });
@@ -223,7 +224,11 @@ async function executarJob(
       }
 
       // Título traduzido vem como ordem -1; se o modelo não devolver, tenta no próximo bloco.
-      const tituloTraduzido = resultado.resposta.traducoes.find((t) => t.ordem === -1)?.texto_pt.trim();
+      // Num job só de título (bloco vazio), qualquer tradução retornada só pode
+      // ser o título — alguns modelos ignoram a convenção do -1.
+      const tituloTraduzido =
+        resultado.resposta.traducoes.find((t) => t.ordem === -1)?.texto_pt.trim() ??
+        (bloco.length === 0 ? resultado.resposta.traducoes[0]?.texto_pt.trim() : undefined);
       if (tituloPendente && tituloTraduzido) {
         reposCapitulos.atualizar(db, capituloId, { titulo_pt: tituloTraduzido });
         tituloPendente = false;

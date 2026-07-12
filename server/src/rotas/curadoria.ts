@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { BancoDados } from '../db/index.js';
 import { reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
 
-const categoriaSchema = z.enum(['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro']);
+// Categoria é texto livre (o usuário cria as suas); limitada só em tamanho.
+const categoriaSchema = z.string().trim().min(1).max(30);
 
 const criarEntradaSchema = z.object({
   termo_zh: z.string().min(1),

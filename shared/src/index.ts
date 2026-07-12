@@ -6,13 +6,9 @@ export type ProvedorId = 'claude' | 'gemini' | 'mock';
 
 export type StatusCapitulo = 'rascunho' | 'traduzindo' | 'traduzido' | 'revisado' | 'finalizado';
 export type StatusTraducaoFrase = 'pendente' | 'traduzida' | 'erro';
-export type CategoriaGlossario =
-  | 'local'
-  | 'poder-habilidade'
-  | 'entidade'
-  | 'titulo-cargo'
-  | 'personagem'
-  | 'outro';
+// Categoria é texto livre: o usuário pode criar as suas; as padrão ficam em
+// CATEGORIAS_GLOSSARIO como sugestão. "Apagar" uma categoria = nenhum termo usá-la.
+export type CategoriaGlossario = string;
 export type Veredito = 'correto' | 'incorreto';
 export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-nova-necessaria';
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';

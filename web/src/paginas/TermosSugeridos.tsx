@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, TermoSugerido } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, CabecalhoPagina } from '../App';
+import { Aviso, Botao, CabecalhoPagina, SeletorCategoria } from '../App';
 
 export function TermosSugeridos() {
   const { obraId } = useParams();
@@ -74,13 +74,7 @@ function CartaoSugestao({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-52 entrada text-sm" />
-          <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="entrada text-sm">
-            {CATEGORIAS_GLOSSARIO.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <SeletorCategoria valor={cat} aoMudar={setCat} />
         </div>
         {sugestao.contexto && (
           <p className="texto-zh mt-1 truncate text-xs text-tinta-2" title={sugestao.contexto}>

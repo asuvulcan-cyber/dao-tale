@@ -398,7 +398,9 @@ function PreferenciasObra() {
         Usadas em toda tradução e revisão da obra; deixe em branco para herdar o padrão global das Configurações. Cada
         tradução ainda pode escolher outro provedor na hora (útil para comparar modelos no mesmo texto).
       </p>
-      <div className="flex flex-wrap items-end gap-3">
+      {/* items-start: a descrição do modelo cresce para baixo sem desalinhar
+          o provedor nem o botão (a descrição vem do SeletorModelo). */}
+      <div className="flex flex-wrap items-start gap-3">
         <label className="block text-sm">
           Provedor
           <select
@@ -423,13 +425,24 @@ function PreferenciasObra() {
             modeloPadraoProvedor={provedores.find((p) => p.id === provedorAtual)?.modelo_padrao ?? ''}
           />
         </label>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar
         </Botao>
-        {salvo && <span className="pb-2 text-sm text-jade-forte">Salvo.</span>}
+        {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
       </div>
     </div>
   );
+}
+
+// A primeira linha do texto colado é sempre o título do capítulo (e o job
+// traduz o título junto) — por isso não existe campo de título separado.
+function separarTitulo(texto: string): { titulo: string; corpo: string } {
+  const linhas = texto.split(/\r?\n/);
+  const i = linhas.findIndex((l) => l.trim().length > 0);
+  if (i === -1) return { titulo: '', corpo: '' };
+  return { titulo: linhas[i].trim(), corpo: linhas.slice(i + 1).join('\n').trim() };
 }
 
 function FormularioNovoCapitulo({
@@ -442,9 +455,9 @@ function FormularioNovoCapitulo({
   enviando: boolean;
 }) {
   const [numero, setNumero] = useState(numeroSugerido);
-  const [titulo, setTitulo] = useState('');
   const [texto, setTexto] = useState('');
   const inputArquivo = useRef<HTMLInputElement>(null);
+  const { titulo, corpo } = separarTitulo(texto);
 
   async function carregarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
@@ -455,32 +468,22 @@ function FormularioNovoCapitulo({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        aoEnviar({ numero, titulo: titulo.trim() || undefined, texto_origem: texto });
+        aoEnviar({ numero, titulo: titulo || undefined, texto_origem: corpo });
       }}
       className="mb-6 space-y-3 cartao p-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          Número*
-          <input
-            type="number"
-            required
-            value={numero}
-            onChange={(e) => setNumero(Number(e.target.value))}
-            className="entrada mt-1 w-full"
-          />
-        </label>
-        <label className="block text-sm">
-          Título (opcional)
-          <input
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-            className="entrada mt-1 w-full"
-          />
-        </label>
-      </div>
+      <label className="block w-40 text-sm">
+        Número*
+        <input
+          type="number"
+          required
+          value={numero}
+          onChange={(e) => setNumero(Number(e.target.value))}
+          className="entrada mt-1 w-full"
+        />
+      </label>
       <label className="block text-sm">
-        Texto chinês* (cole aqui ou carregue um .txt)
+        Texto chinês* (cole aqui ou carregue um arquivo — a primeira linha vira o título)
         <textarea
           required
           value={texto}
@@ -489,13 +492,19 @@ function FormularioNovoCapitulo({
           className="texto-zh entrada mt-1 w-full"
         />
       </label>
+      {titulo && (
+        <p className="text-xs text-tinta-2">
+          Título detectado: <span className="texto-zh text-tinta">{titulo}</span>
+          {!corpo && <span className="text-erro"> — falta o corpo do capítulo abaixo do título.</span>}
+        </p>
+      )}
       <div className="flex items-center gap-3">
-        <Botao type="submit" disabled={enviando || !texto.trim()}>
+        <Botao type="submit" disabled={enviando || !corpo}>
           {enviando ? 'Segmentando…' : 'Criar e segmentar'}
         </Botao>
-        <input ref={inputArquivo} type="file" accept=".txt" onChange={carregarArquivo} className="hidden" />
+        <input ref={inputArquivo} type="file" accept=".txt,.md" onChange={carregarArquivo} className="hidden" />
         <Botao type="button" variante="secundario" onClick={() => inputArquivo.current?.click()}>
-          Carregar .txt
+          Carregar .txt / .md
         </Botao>
       </div>
     </form>

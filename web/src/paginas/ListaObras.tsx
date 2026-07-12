@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, CriarObraPayload, Obra, ObraComContadores } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais } from '../App';
 
 export function ListaObras() {
   const clienteQuery = useQueryClient();
@@ -126,14 +126,8 @@ export function ListaObras() {
                 )}
               </div>
             </div>
-            <details className="absolute top-3 right-3">
-              <summary
-                className="grid size-7 cursor-pointer list-none place-items-center rounded-md border border-transparent text-tinta-2 group-hover:border-linha hover:border-jade hover:text-jade-forte [&::-webkit-details-marker]:hidden"
-                title="Exportar ou excluir"
-              >
-                ⋯
-              </summary>
-              <div className="cartao absolute right-0 z-10 mt-1 flex w-44 flex-col gap-1 p-2 shadow-lg">
+            <div className="absolute top-3 right-3">
+              <MenuMais titulo="Exportar ou excluir">
                 <a
                   href={`/api/obras/${obra.id}/exportar`}
                   download
@@ -149,8 +143,8 @@ export function ListaObras() {
                 >
                   Excluir obra…
                 </button>
-              </div>
-            </details>
+              </MenuMais>
+            </div>
           </div>
         ))}
       </div>

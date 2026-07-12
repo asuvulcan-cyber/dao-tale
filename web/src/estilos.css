@@ -201,6 +201,8 @@ body {
   outline: none;
 }
 .entrada::placeholder { color: var(--cor-tinta-2); opacity: 0.7; }
+/* Campo com fonte CJK: sem o line-height de leitura (1.9), que desalinha a altura. */
+.entrada.texto-zh { line-height: 1.5; }
 
 /* Botão-ferramenta: ação secundária em pílula (barras de ferramentas). */
 .ferramenta {
@@ -242,30 +244,18 @@ body {
   font-weight: 600;
 }
 
-/* ── Estado da frase, opção B aprovada: lavagem de fundo + filete ──────────
-   A célula da tradução ganha um fundo tênue que esmaece para a direita e um
-   filete de pigmento na borda esquerda. Frase sem estado fica limpa. */
+/* ── Estado da frase (opção B refinada em 2026-07-12): fita + chip ─────────
+   Só o filete de pigmento na borda esquerda e o chip no fim da frase — o
+   usuário pediu sem lavagem de fundo. Frase sem estado fica limpa. */
 .frase-lava {
   border-left: 3px solid transparent;
   padding-left: 0.75rem;
 }
-.frase-lava--editada {
-  border-left-color: var(--cor-info);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-indigo-tint) 60%, transparent), transparent 55%);
-}
-.frase-lava--pergunta {
-  border-left-color: var(--cor-aviso);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-ocre-tint) 60%, transparent), transparent 55%);
-}
-.frase-lava--confirmada {
-  border-left-color: var(--cor-ok);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-jade-tint) 60%, transparent), transparent 55%);
-}
+.frase-lava--editada { border-left-color: var(--cor-info); }
+.frase-lava--pergunta { border-left-color: var(--cor-aviso); }
+.frase-lava--confirmada { border-left-color: var(--cor-ok); }
 .frase-lava--regra,
-.frase-lava--erro {
-  border-left-color: var(--cor-erro);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cor-selo-tint) 60%, transparent), transparent 55%);
-}
+.frase-lava--erro { border-left-color: var(--cor-erro); }
 
 /* Etiqueta pequena do estado, no fim da frase. */
 .chip-estado {

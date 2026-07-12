@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
+import { CATEGORIAS_GLOSSARIO, type CategoriaGlossario } from '@dao-tale/shared';
 
 // ── Tema (claro/escuro) ─────────────────────────────────────────────────────
 // Persiste a escolha explícita; sem escolha, segue o SO (prefers-color-scheme).
@@ -80,6 +81,94 @@ export function Casca() {
 }
 
 // ── Componentes utilitários compartilhados pelas páginas ────────────────────
+
+/** Menu suspenso que fecha ao clicar fora ou ao acionar um item (link/botão).
+    Itens com o atributo `data-manter` não fecham o menu (controles A−/A+ etc.). */
+export function MenuMais({
+  titulo,
+  rotulo = '⋯',
+  children,
+}: {
+  titulo: string;
+  rotulo?: string;
+  children: React.ReactNode;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const aoClicarFora = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setAberto(false);
+    };
+    document.addEventListener('pointerdown', aoClicarFora);
+    return () => document.removeEventListener('pointerdown', aoClicarFora);
+  }, [aberto]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+        title={titulo}
+        className="grid h-8 min-w-8 cursor-pointer place-items-center rounded-md border border-linha px-1.5 text-sm text-tinta-2 hover:border-jade hover:text-jade-forte"
+      >
+        {rotulo}
+      </button>
+      {aberto && (
+        <div
+          className="cartao absolute right-0 z-30 mt-1 flex w-56 flex-col gap-1 p-2 shadow-lg"
+          onClick={(e) => {
+            // Acionar um link ou botão fecha o menu; select/label e controles
+            // marcados com data-manter (A−/A+, largura) não fecham.
+            const alvo = e.target as Element;
+            if (alvo.closest('[data-manter]')) return;
+            if (alvo.closest('a, button')) setAberto(false);
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Select de categoria do glossário: categorias padrão + as já usadas + criar nova. */
+export function SeletorCategoria({
+  valor,
+  aoMudar,
+  extras = [],
+  className = 'entrada text-sm',
+}: {
+  valor: CategoriaGlossario;
+  aoMudar: (c: CategoriaGlossario) => void;
+  extras?: CategoriaGlossario[];
+  className?: string;
+}) {
+  const opcoes = [...new Set([...CATEGORIAS_GLOSSARIO, ...extras, ...(valor ? [valor] : [])])].sort();
+  return (
+    <select
+      value={valor}
+      onChange={(e) => {
+        if (e.target.value === '__nova') {
+          const nova = window.prompt('Nome da nova categoria:')?.trim().toLowerCase();
+          if (nova) aoMudar(nova.slice(0, 30));
+        } else {
+          aoMudar(e.target.value);
+        }
+      }}
+      className={className}
+    >
+      {opcoes.map((c) => (
+        <option key={c} value={c}>
+          {c}
+        </option>
+      ))}
+      <option value="__nova">+ nova categoria…</option>
+    </select>
+  );
+}
 
 /** Cabeçalho padrão de página: título em serifa, descrição curta e ações à direita. */
 export function CabecalhoPagina({

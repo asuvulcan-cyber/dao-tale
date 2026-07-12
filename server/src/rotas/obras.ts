@@ -15,7 +15,7 @@ const criarObraSchema = z.object({
       z.object({
         termo_zh: z.string().min(1),
         termo_pt: z.string().min(1),
-        categoria: z.enum(['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro']).optional(),
+        categoria: z.string().trim().min(1).max(30).optional(),
         nota: z.string().optional(),
       }),
     )

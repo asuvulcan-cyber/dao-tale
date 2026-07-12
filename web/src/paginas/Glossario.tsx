@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, EntradaGlossario } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais, SeletorCategoria } from '../App';
 
 export function Glossario() {
   const { obraId } = useParams();
@@ -65,36 +65,28 @@ export function Glossario() {
         />
         <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="entrada text-sm">
           <option value="">Todas as categorias</option>
-          {CATEGORIAS_GLOSSARIO.map((c) => (
+          {[...new Set([...CATEGORIAS_GLOSSARIO, ...(entradas?.map((e) => e.categoria) ?? [])])].sort().map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
           ))}
         </select>
-        <details className="relative">
-          <summary
-            className="grid size-8 cursor-pointer list-none place-items-center rounded-md border border-linha text-tinta-2 hover:border-jade hover:text-jade-forte [&::-webkit-details-marker]:hidden"
-            title="Importar / exportar CSV"
+        <MenuMais titulo="Importar / exportar CSV">
+          <button
+            type="button"
+            onClick={() => setMostrarImportar((v) => !v)}
+            className="rounded px-2 py-1.5 text-left text-sm text-tinta hover:bg-papel-fundo"
           >
-            ⋯
-          </summary>
-          <div className="cartao absolute right-0 z-10 mt-1 flex w-44 flex-col gap-1 p-2 shadow-lg">
-            <button
-              type="button"
-              onClick={() => setMostrarImportar((v) => !v)}
-              className="rounded px-2 py-1.5 text-left text-sm text-tinta hover:bg-papel-fundo"
-            >
-              Importar CSV…
-            </button>
-            <a
-              href={`/api/obras/${obraId}/glossario/exportar`}
-              download
-              className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
-            >
-              Exportar CSV
-            </a>
-          </div>
-        </details>
+            Importar CSV…
+          </button>
+          <a
+            href={`/api/obras/${obraId}/glossario/exportar`}
+            download
+            className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+          >
+            Exportar CSV
+          </a>
+        </MenuMais>
       </CabecalhoPagina>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
@@ -167,15 +159,9 @@ function FormularioNovoTermo({
       }}
       className="mb-4 flex flex-wrap items-end gap-2 cartao p-3"
     >
-      <input required value={zh} onChange={(e) => setZh(e.target.value)} placeholder="termo chinês" className="texto-zh w-36 entrada text-sm" />
+      <input required value={zh} onChange={(e) => setZh(e.target.value)} placeholder="termo chinês" className="texto-zh w-48 entrada text-sm" />
       <input required value={pt} onChange={(e) => setPt(e.target.value)} placeholder="tradução PT-BR" className="w-48 entrada text-sm" />
-      <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="entrada text-sm">
-        {CATEGORIAS_GLOSSARIO.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
+      <SeletorCategoria valor={cat} aoMudar={setCat} />
       <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="nota (opcional)" className="flex-1 entrada text-sm" />
       <Botao type="submit" disabled={enviando}>
         Adicionar
@@ -210,8 +196,10 @@ function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: 
         <td className="texto-zh px-3 py-2">{entrada.termo_zh}</td>
         <td className="px-3 py-2">{entrada.termo_pt}</td>
         <td className="px-3 py-2">
-          <Etiqueta>{entrada.categoria}</Etiqueta>
-          {entrada.origem === 'sugerido-ia' && <Etiqueta cor="indigo">IA</Etiqueta>}
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Etiqueta>{entrada.categoria}</Etiqueta>
+            {entrada.origem === 'sugerido-ia' && <Etiqueta cor="indigo">IA</Etiqueta>}
+          </span>
         </td>
         <td className="px-3 py-2 text-tinta-2">{entrada.nota}</td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -238,13 +226,7 @@ function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: 
         <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-full entrada" />
       </td>
       <td className="px-3 py-1">
-        <select value={cat} onChange={(e) => setCat(e.target.value as CategoriaGlossario)} className="entrada">
-          {CATEGORIAS_GLOSSARIO.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <SeletorCategoria valor={cat} aoMudar={setCat} className="entrada" />
       </td>
       <td className="px-3 py-1">
         <input value={nota} onChange={(e) => setNota(e.target.value)} className="w-full entrada" />

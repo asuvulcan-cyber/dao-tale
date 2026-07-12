@@ -51,7 +51,14 @@ export function SeletorModelo({
 
   return (
     <>
-      <select value={valor} onChange={(e) => aoMudar(e.target.value)} className={estiloCampo} disabled={isLoading}>
+      {/* A descrição do modelo vive no title (hover) para não quebrar o layout. */}
+      <select
+        value={valor}
+        onChange={(e) => aoMudar(e.target.value)}
+        className={estiloCampo}
+        disabled={isLoading}
+        title={selecionado?.descricao ?? 'Passe o mouse após escolher para ver a descrição do modelo'}
+      >
         <option value="">
           {isLoading ? 'Carregando modelos…' : `Padrão do provedor${modeloPadraoProvedor ? ` (${modeloPadraoProvedor})` : ''}`}
         </option>
@@ -75,7 +82,6 @@ export function SeletorModelo({
           </optgroup>
         )}
       </select>
-      {selecionado && <p className="mt-1 text-xs text-tinta-2">{selecionado.descricao}</p>}
     </>
   );
 }

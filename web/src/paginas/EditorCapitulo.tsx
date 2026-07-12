@@ -13,7 +13,7 @@ import type {
   StatusCapitulo,
 } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, Etiqueta, STATUS_CAPITULO_ROTULO, STATUS_CASO_ROTULO } from '../App';
+import { Aviso, Botao, Etiqueta, MenuMais, STATUS_CAPITULO_ROTULO, STATUS_CASO_ROTULO } from '../App';
 import { IndicadorCota } from '../componentes/IndicadorCota';
 import {
   montarMarcadorGlossario,
@@ -46,6 +46,19 @@ const MODOS_EDITOR = [
 type ModoEditor = (typeof MODOS_EDITOR)[number]['id'];
 const CHAVE_MODO = 'dao-tale-modo-editor';
 const CHAVE_TERMOS = 'dao-tale-marcar-termos';
+
+// ── Formatação da leitura: tamanho da fonte e largura do PAPEL ──────────────
+// A largura é do papel (o cartão encolhe centrado; o texto preenche), em rem
+// fixos — se fosse em ch, o zoom A+ faria média e cheia colidirem no teto.
+const CHAVE_TAMANHO = 'dao-tale-leitura-tamanho';
+const CHAVE_LARGURA = 'dao-tale-leitura-largura';
+const TAMANHO_PADRAO = 1.06; // rem
+const LARGURAS = {
+  estreita: { rotulo: 'Estreita', css: '42rem' },
+  media: { rotulo: 'Média', css: '56rem' },
+  cheia: { rotulo: 'Cheia', css: '' },
+} as const;
+type LarguraLeitura = keyof typeof LARGURAS;
 
 // ── Estado da frase (item 7 do backlog, opção B aprovada) ───────────────────
 // Lavagem de fundo esmaecendo + filete de pigmento + chip com o nome do estado.
@@ -95,10 +108,20 @@ export function EditorCapitulo() {
     return MODOS_EDITOR.some((m) => m.id === salvo) ? (salvo as ModoEditor) : 'segmentado';
   });
   const [marcarTermos, setMarcarTermos] = useState(() => localStorage.getItem(CHAVE_TERMOS) !== 'nao');
+  const [tamanhoLeitura, setTamanhoLeitura] = useState(() => {
+    const salvo = Number(localStorage.getItem(CHAVE_TAMANHO));
+    return salvo >= 0.8 && salvo <= 1.6 ? salvo : TAMANHO_PADRAO;
+  });
+  const [larguraLeitura, setLarguraLeitura] = useState<LarguraLeitura>(() => {
+    const salvo = localStorage.getItem(CHAVE_LARGURA);
+    return salvo && salvo in LARGURAS ? (salvo as LarguraLeitura) : 'cheia';
+  });
   const fonteEventos = useRef<EventSource | null>(null);
 
   useEffect(() => localStorage.setItem(CHAVE_MODO, modo), [modo]);
   useEffect(() => localStorage.setItem(CHAVE_TERMOS, marcarTermos ? 'sim' : 'nao'), [marcarTermos]);
+  useEffect(() => localStorage.setItem(CHAVE_TAMANHO, String(tamanhoLeitura)), [tamanhoLeitura]);
+  useEffect(() => localStorage.setItem(CHAVE_LARGURA, larguraLeitura), [larguraLeitura]);
 
   const { data: provedores } = useQuery({
     queryKey: ['provedores'],
@@ -223,6 +246,15 @@ export function EditorCapitulo() {
     mutationFn: () => api('POST', `/capitulos/${capituloId}/traduzir/cancelar`),
   });
 
+  // O cancelamento só surte efeito quando o bloco em voo termina; enquanto
+  // isso o botão mostra "Cancelando…". Quando o job para, o estado é limpo
+  // para a próxima execução.
+  const emExecucaoAgora = (progressoVivo ?? data?.progresso)?.em_execucao ?? false;
+  useEffect(() => {
+    if (!emExecucaoAgora && (cancelar.isSuccess || cancelar.isPending)) cancelar.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emExecucaoAgora]);
+
   const mudarStatus = useMutation({
     mutationFn: (status: StatusCapitulo) => api('PUT', `/capitulos/${capituloId}`, { status }),
     onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] }),
@@ -253,17 +285,22 @@ export function EditorCapitulo() {
 
   return (
     <div>
-      {/* Barra 1 — onde estou: capítulo, navegação ‹ ›, contagem, status */}
-      <div className="cartao mb-0 flex flex-wrap items-center gap-3 rounded-b-none px-4 py-2">
-        <h2 className="min-w-0 font-display font-semibold">
-          Capítulo {capitulo.numero}
+      {/* Barra de contexto — onde estou e o que faço: capítulo, ‹ ›, contagem,
+          status, cota e a ação primária. A exibição vive na paleta lateral. */}
+      <div className="cartao mb-3 flex flex-wrap items-center gap-3 px-4 py-2">
+        {/* Título trunca numa linha só; o original chinês fica no hover —
+            nada de quebra de layout com títulos longos. */}
+        <h2
+          className="flex min-w-40 flex-1 items-baseline gap-2 font-display font-semibold"
+          title={
+            capitulo.titulo_pt && capitulo.titulo && capitulo.titulo !== capitulo.titulo_pt
+              ? `${capitulo.titulo_pt} · ${capitulo.titulo}`
+              : (capitulo.titulo_pt ?? capitulo.titulo ?? undefined)
+          }
+        >
+          <span className="shrink-0">Capítulo {capitulo.numero}</span>
           {(capitulo.titulo_pt || capitulo.titulo) && (
-            <span className="ml-2 font-normal text-tinta-2">{capitulo.titulo_pt ?? capitulo.titulo}</span>
-          )}
-          {capitulo.titulo_pt && capitulo.titulo && capitulo.titulo !== capitulo.titulo_pt && (
-            <span className="texto-zh ml-2 text-sm font-normal text-tinta-2" title="Título original">
-              {capitulo.titulo}
-            </span>
+            <span className="truncate font-normal text-tinta-2">{capitulo.titulo_pt ?? capitulo.titulo}</span>
           )}
         </h2>
         <span className="flex gap-0.5">
@@ -290,7 +327,7 @@ export function EditorCapitulo() {
             <span className="grid size-7 place-items-center rounded-md border border-linha/50 text-linha">›</span>
           )}
         </span>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <span className="text-sm text-tinta-2 tabular-nums">
             {frases.length - pendentes - comErro}/{frases.length} frases
             {comErro > 0 && <span className="text-erro"> · {comErro} com erro</span>}
@@ -312,37 +349,10 @@ export function EditorCapitulo() {
               </option>
             ))}
           </select>
-        </div>
-      </div>
-
-      {/* Barra 2 — como vejo / o que faço: modos, ferramentas, UMA ação primária, menu ⋯ */}
-      <div className="cartao mb-4 flex flex-wrap items-center gap-2 rounded-t-none border-t-0 px-4 py-2">
-        <div className="seg" role="group" aria-label="Modo de visualização">
-          {MODOS_EDITOR.map((m) => (
-            <button key={m.id} type="button" onClick={() => setModo(m.id)} aria-pressed={modo === m.id}>
-              {m.rotulo}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="ferramenta"
-          onClick={() => setMarcarTermos((v) => !v)}
-          aria-pressed={marcarTermos}
-          title="Marcar termos do glossário no texto"
-        >
-          Termos
-        </button>
-        {frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao && (
-          <button type="button" className="ferramenta" onClick={() => setMostrarConsistencia(true)}>
-            Consistência
-          </button>
-        )}
-        <div className="ml-auto flex items-center gap-2">
           <IndicadorCota compacto />
           {emExecucao ? (
             <>
-              <div className="h-2 w-36 overflow-hidden rounded-full bg-papel-fundo" title={`${pct}% traduzido`}>
+              <div className="h-2 w-32 overflow-hidden rounded-full bg-papel-fundo" title={`${pct}% traduzido`}>
                 <div
                   className="h-full rounded-full bg-info transition-all duration-700"
                   style={{ width: `${Math.max(pct, 3)}%` }}
@@ -351,8 +361,13 @@ export function EditorCapitulo() {
               <span className="text-sm tabular-nums text-info">
                 {progresso.frases_prontas}/{progresso.frases_total} · {pct}%
               </span>
-              <Botao variante="secundario" onClick={() => cancelar.mutate()}>
-                Cancelar
+              <Botao
+                variante="secundario"
+                onClick={() => cancelar.mutate()}
+                disabled={cancelar.isPending || cancelar.isSuccess}
+                title="Para ao fim do bloco em andamento — a chamada já em voo não pode ser abortada"
+              >
+                {cancelar.isPending || cancelar.isSuccess ? 'Cancelando…' : 'Cancelar'}
               </Botao>
             </>
           ) : (
@@ -371,74 +386,66 @@ export function EditorCapitulo() {
                   Traduzir título
                 </Botao>
               )}
-              <details className="relative">
-                <summary
-                  className="grid size-8 cursor-pointer list-none place-items-center rounded-md border border-linha text-tinta-2 hover:border-jade hover:text-jade-forte [&::-webkit-details-marker]:hidden"
-                  title="Mais ações: downloads, retraduzir, provedor"
-                >
-                  ⋯
-                </summary>
-                <div className="cartao absolute right-0 z-30 mt-1 flex w-64 flex-col gap-1 p-2 shadow-lg">
-                  {frases.some((f) => f.status_traducao === 'traduzida') && (
-                    <>
-                      <a
-                        href={`/api/capitulos/${capitulo.id}/baixar?formato=md`}
-                        download
-                        className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
-                        title="Markdown: preserva itálico/negrito, com título do capítulo"
-                      >
-                        Baixar .md
-                      </a>
-                      <a
-                        href={`/api/capitulos/${capitulo.id}/baixar`}
-                        download
-                        className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
-                        title="Texto puro corrido, com os parágrafos originais"
-                      >
-                        Baixar .txt
-                      </a>
-                      <a
-                        href={`/api/capitulos/${capitulo.id}/baixar?formato=bilingue`}
-                        download
-                        className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
-                        title="Pares chinês/português por parágrafo, para revisão externa"
-                      >
-                        Baixar bilíngue
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => retraduzirTudo(frases)}
-                        disabled={traduzir.isPending}
-                        className="rounded px-2 py-1.5 text-left text-sm text-erro hover:bg-selo-tint"
-                      >
-                        Retraduzir tudo…
-                      </button>
-                      <div className="my-1 border-t border-linha" />
-                    </>
-                  )}
-                  <label className="flex flex-col gap-1 px-2 py-1 text-xs text-tinta-2">
-                    Provedor desta tradução
-                    <select
-                      value={provedorEscolhido}
-                      onChange={(e) => setProvedorEscolhido(e.target.value)}
-                      className="entrada"
-                      title="Vazio = padrão da obra/global"
+              <MenuMais titulo="Mais ações: downloads, retraduzir, provedor">
+                {frases.some((f) => f.status_traducao === 'traduzida') && (
+                  <>
+                    <a
+                      href={`/api/capitulos/${capitulo.id}/baixar?formato=md`}
+                      download
+                      className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                      title="Markdown: preserva itálico/negrito, com título do capítulo"
                     >
-                      <option value="">Provedor padrão</option>
-                      {provedores?.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {capitulo.provedor && (
-                    <p className="px-2 py-1 text-xs text-tinta-2">
-                      Última tradução: {capitulo.provedor} · {capitulo.modelo}
-                    </p>
-                  )}
-                </div>
-              </details>
+                      Baixar .md
+                    </a>
+                    <a
+                      href={`/api/capitulos/${capitulo.id}/baixar`}
+                      download
+                      className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                      title="Texto puro corrido, com os parágrafos originais"
+                    >
+                      Baixar .txt
+                    </a>
+                    <a
+                      href={`/api/capitulos/${capitulo.id}/baixar?formato=bilingue`}
+                      download
+                      className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                      title="Pares chinês/português por parágrafo, para revisão externa"
+                    >
+                      Baixar bilíngue
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => retraduzirTudo(frases)}
+                      disabled={traduzir.isPending}
+                      className="rounded px-2 py-1.5 text-left text-sm text-erro hover:bg-selo-tint"
+                    >
+                      Retraduzir tudo…
+                    </button>
+                    <div className="my-1 border-t border-linha" />
+                  </>
+                )}
+                <label className="flex flex-col gap-1 px-2 py-1 text-xs text-tinta-2">
+                  Provedor desta tradução
+                  <select
+                    value={provedorEscolhido}
+                    onChange={(e) => setProvedorEscolhido(e.target.value)}
+                    className="entrada"
+                    title="Vazio = padrão da obra/global"
+                  >
+                    <option value="">Provedor padrão</option>
+                    {provedores?.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {capitulo.provedor && (
+                  <p className="px-2 py-1 text-xs text-tinta-2">
+                    Última tradução: {capitulo.provedor} · {capitulo.modelo}
+                  </p>
+                )}
+              </MenuMais>
             </>
           )}
         </div>
@@ -446,9 +453,24 @@ export function EditorCapitulo() {
 
       {erroJob && <Aviso tipo="erro">{erroJob}</Aviso>}
 
-      {/* O texto ocupa sempre a mesma largura; a gaveta de revisão flutua ao
-          lado (ou sobre, em telas estreitas) sem jamais espremer o grid. */}
+      {/* Trilho de ícones flutuante FORA do papel (xl+): Exibição / Ferramentas /
+          Texto, cada um abrindo um submenu de ícones com rótulo no hover. Em
+          telas menores vira uma barra horizontal simples acima do texto. */}
+      <PaletaEditor
+        modo={modo}
+        aoMudarModo={setModo}
+        marcarTermos={marcarTermos}
+        aoAlternarTermos={() => setMarcarTermos((v) => !v)}
+        consistenciaDisponivel={frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao}
+        aoAbrirConsistencia={() => setMostrarConsistencia(true)}
+        tamanho={tamanhoLeitura}
+        aoMudarTamanho={setTamanhoLeitura}
+        largura={larguraLeitura}
+        aoMudarLargura={setLarguraLeitura}
+      />
+
       <div>
+        <div>
           {modo === 'segmentado' ? (
             /* Folha contínua: uma única superfície; parágrafos separados por
                respiro, não por molduras. */
@@ -477,8 +499,17 @@ export function EditorCapitulo() {
           ) : (
             /* Modos de leitura (item 9): a segmentação some visualmente; clicar
                numa frase continua abrindo o Protocolo de Revisão. */
-            <div className="rounded-lg border border-linha bg-papel-alto px-5 py-6 md:px-10 md:py-8">
-              <div className="mx-auto max-w-[70ch] space-y-5 font-corpo text-[1.06rem] leading-[1.75]">
+            /* O papel é a moldura estável; a largura escolhida é da coluna de
+               texto dentro dele (margens generosas, como um livro). Em rem
+               fixos, o zoom A+ nunca faz média e cheia colidirem. */
+            <div className="cartao px-5 py-6 md:px-10 md:py-8">
+              <div
+                className={`space-y-5 font-corpo leading-[1.75] ${larguraLeitura !== 'cheia' ? 'mx-auto' : ''}`}
+                style={{
+                  fontSize: `${tamanhoLeitura}rem`,
+                  maxWidth: LARGURAS[larguraLeitura].css || undefined,
+                }}
+              >
                 {(capitulo.titulo_pt || capitulo.titulo) && (
                   <h3 className="font-display text-xl font-semibold">
                     {capitulo.titulo_pt ?? capitulo.titulo}
@@ -554,6 +585,7 @@ export function EditorCapitulo() {
             aoFechar={() => setFraseSelecionada(null)}
           />
         )}
+        </div>
       </div>
 
       {mostrarConsistencia && (
@@ -570,6 +602,230 @@ export function EditorCapitulo() {
         />
       )}
     </div>
+  );
+}
+
+// ── Paleta do editor: dois trilhos verticais rentes ao papel ────────────────
+// Sem submenus (decisão do usuário): botões diretos com rótulo no hover.
+// Esquerda: modos + ferramentas · Direita: zoom e largura (um botão cíclico).
+// A posição horizontal acompanha a borda do conteúdo (max-w-6xl centrado),
+// não a borda da tela. Em telas < xl vira barra horizontal.
+
+function RotuloHover({ lado, children }: { lado: 'direita' | 'esquerda'; children: React.ReactNode }) {
+  const posicao =
+    lado === 'direita'
+      ? 'left-full ml-2'
+      : 'right-full mr-2';
+  return (
+    <span
+      className={`pointer-events-none absolute top-1/2 z-30 hidden -translate-y-1/2 rounded-md border border-linha bg-papel-alto px-2 py-1 text-xs whitespace-nowrap text-tinta shadow-md group-hover:block ${posicao}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function BotaoTrilho({
+  rotulo,
+  ladoRotulo = 'direita',
+  ativo = false,
+  corAtiva = 'bg-marca text-papel-alto',
+  onClick,
+  children,
+}: {
+  rotulo: string;
+  ladoRotulo?: 'direita' | 'esquerda';
+  ativo?: boolean;
+  corAtiva?: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      aria-label={rotulo}
+      className={`group relative grid size-9 place-items-center rounded-lg border ${
+        ativo ? `border-transparent ${corAtiva}` : 'border-transparent text-tinta-2 hover:border-linha hover:text-tinta'
+      }`}
+    >
+      {children}
+      <RotuloHover lado={ladoRotulo}>{rotulo}</RotuloHover>
+    </button>
+  );
+}
+
+const ICONE_MODO: Record<ModoEditor, React.ReactNode> = {
+  segmentado: (
+    // Tela dividida
+    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+      <line x1="8" y1="2.5" x2="8" y2="13.5" />
+    </svg>
+  ),
+  bilingue: (
+    // Tradução
+    <span className="texto-zh text-[11px] leading-none">文A</span>
+  ),
+  leitura: (
+    // Olho
+    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" />
+      <circle cx="8" cy="8" r="2" />
+    </svg>
+  ),
+};
+
+// Ícone de largura: barras horizontais de extensão crescente (0=estreita…2=cheia).
+function IconeLargura({ nivel }: { nivel: number }) {
+  const meia = 4 + nivel * 2.2;
+  return (
+    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <line x1={8 - meia} y1="8" x2={8 + meia} y2="8" />
+      <line x1={8 - meia} y1="5.5" x2={8 - meia} y2="10.5" />
+      <line x1={8 + meia} y1="5.5" x2={8 + meia} y2="10.5" />
+    </svg>
+  );
+}
+
+// Trilhos rentes à borda do papel: o conteúdo é max-w-6xl (72rem) centrado com
+// px-4; 50vw - 38.5rem posiciona o trilho logo fora dessa borda.
+const POSICAO_TRILHO_ESQ = 'left-[max(0.25rem,calc(50vw-38.5rem))]';
+const POSICAO_TRILHO_DIR = 'right-[max(0.25rem,calc(50vw-38.5rem))]';
+
+function PaletaEditor({
+  modo,
+  aoMudarModo,
+  marcarTermos,
+  aoAlternarTermos,
+  consistenciaDisponivel,
+  aoAbrirConsistencia,
+  tamanho,
+  aoMudarTamanho,
+  largura,
+  aoMudarLargura,
+}: {
+  modo: ModoEditor;
+  aoMudarModo: (m: ModoEditor) => void;
+  marcarTermos: boolean;
+  aoAlternarTermos: () => void;
+  consistenciaDisponivel: boolean;
+  aoAbrirConsistencia: () => void;
+  tamanho: number;
+  aoMudarTamanho: React.Dispatch<React.SetStateAction<number>>;
+  largura: LarguraLeitura;
+  aoMudarLargura: (l: LarguraLeitura) => void;
+}) {
+  const diminuir = () => aoMudarTamanho((t) => Math.max(0.8, Number((t - 0.08).toFixed(2))));
+  const aumentar = () => aoMudarTamanho((t) => Math.min(1.6, Number((t + 0.08).toFixed(2))));
+  const pctTexto = `${Math.round((tamanho / TAMANHO_PADRAO) * 100)}%`;
+  const mostrarTexto = modo !== 'segmentado';
+
+  // Um botão só alterna entre as três larguras, em ciclo.
+  const ordemLarguras = Object.keys(LARGURAS) as LarguraLeitura[];
+  const nivelLargura = ordemLarguras.indexOf(largura);
+  const proximaLargura = ordemLarguras[(nivelLargura + 1) % ordemLarguras.length];
+
+  return (
+    <>
+      {/* Trilho esquerdo (xl+): modos e ferramentas */}
+      <div className={`fixed top-1/2 z-20 hidden -translate-y-1/2 xl:block ${POSICAO_TRILHO_ESQ}`}>
+        <div className="cartao flex flex-col items-center gap-1 p-1.5 shadow-lg shadow-tinta/10">
+          {MODOS_EDITOR.map((m) => (
+            <BotaoTrilho key={m.id} rotulo={m.rotulo} ativo={modo === m.id} onClick={() => aoMudarModo(m.id)}>
+              {ICONE_MODO[m.id]}
+            </BotaoTrilho>
+          ))}
+          <div className="my-0.5 w-6 border-t border-linha/60" />
+          <BotaoTrilho
+            rotulo={marcarTermos ? 'Termos do glossário: marcados' : 'Termos do glossário: ocultos'}
+            ativo={marcarTermos}
+            corAtiva="bg-ocre-tint text-ocre-forte"
+            onClick={aoAlternarTermos}
+          >
+            <span className="termo-gloss text-sm leading-none">T</span>
+          </BotaoTrilho>
+          {consistenciaDisponivel && (
+            <BotaoTrilho rotulo="Consistência do glossário" onClick={aoAbrirConsistencia}>
+              <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <circle cx="8" cy="8" r="6.2" />
+                <path d="m5.2 8.2 2 2 3.6-4" />
+              </svg>
+            </BotaoTrilho>
+          )}
+        </div>
+      </div>
+
+      {/* Trilho direito (xl+): zoom e largura — só nos modos de leitura */}
+      {mostrarTexto && (
+        <div className={`fixed top-1/2 z-20 hidden -translate-y-1/2 xl:block ${POSICAO_TRILHO_DIR}`}>
+          <div className="cartao flex flex-col items-center gap-1 p-1.5 shadow-lg shadow-tinta/10">
+            <BotaoTrilho rotulo="Aumentar texto" ladoRotulo="esquerda" onClick={aumentar}>
+              <span className="text-xs font-semibold">A+</span>
+            </BotaoTrilho>
+            <span className="font-mono text-[10px] text-tinta-2 tabular-nums" title="Tamanho do texto">
+              {pctTexto}
+            </span>
+            <BotaoTrilho rotulo="Diminuir texto" ladoRotulo="esquerda" onClick={diminuir}>
+              <span className="text-xs font-semibold">A−</span>
+            </BotaoTrilho>
+            <div className="my-0.5 w-6 border-t border-linha/60" />
+            <BotaoTrilho
+              rotulo={`Largura: ${LARGURAS[largura].rotulo.toLowerCase()} — clique para alternar`}
+              ladoRotulo="esquerda"
+              onClick={() => aoMudarLargura(proximaLargura)}
+            >
+              <IconeLargura nivel={nivelLargura} />
+            </BotaoTrilho>
+          </div>
+        </div>
+      )}
+
+      {/* Barra horizontal (telas < xl) */}
+      <div className="cartao mb-4 flex flex-wrap items-center gap-2 px-3 py-2 xl:hidden">
+        <div className="seg" role="group" aria-label="Modo de visualização">
+          {MODOS_EDITOR.map((m) => (
+            <button key={m.id} type="button" onClick={() => aoMudarModo(m.id)} aria-pressed={modo === m.id}>
+              {m.rotulo}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="ferramenta"
+          onClick={aoAlternarTermos}
+          aria-pressed={marcarTermos}
+          title="Marcar termos do glossário no texto"
+        >
+          Termos
+        </button>
+        {consistenciaDisponivel && (
+          <button type="button" className="ferramenta" onClick={aoAbrirConsistencia}>
+            Consistência
+          </button>
+        )}
+        {mostrarTexto && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <button type="button" className="ferramenta" onClick={diminuir} aria-label="Diminuir texto">
+              A−
+            </button>
+            <span className="font-mono text-[11px] text-tinta-2 tabular-nums">{pctTexto}</span>
+            <button type="button" className="ferramenta" onClick={aumentar} aria-label="Aumentar texto">
+              A+
+            </button>
+            <button
+              type="button"
+              className="ferramenta"
+              onClick={() => aoMudarLargura(proximaLargura)}
+              title="Alternar largura do texto"
+            >
+              Largura: {LARGURAS[largura].rotulo}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -787,6 +1043,9 @@ function PainelRevisao({
   const ultimaPosicao = useRef(posicao);
 
   function aoIniciarArrasto(e: React.PointerEvent<HTMLDivElement>) {
+    // O ✕ (e qualquer botão no cabeçalho) não inicia arrasto — a captura de
+    // ponteiro engoliria o clique e o botão nunca dispararia.
+    if ((e.target as Element).closest('button')) return;
     const alvo = e.currentTarget.closest('aside');
     if (!alvo) return;
     const r = alvo.getBoundingClientRect();
