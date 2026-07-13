@@ -709,8 +709,10 @@ export const reposConfig = {
       vizinhas_revisao: mapa.vizinhas_revisao ? Number(mapa.vizinhas_revisao) : CONFIG_PADRAO.vizinhas_revisao,
       cauda_contexto: mapa.cauda_contexto ? Number(mapa.cauda_contexto) : CONFIG_PADRAO.cauda_contexto,
       parar_no_limite: mapa.parar_no_limite ? mapa.parar_no_limite === 'true' : CONFIG_PADRAO.parar_no_limite,
-      cota_diaria_gemini: mapa.cota_diaria_gemini ? Number(mapa.cota_diaria_gemini) : CONFIG_PADRAO.cota_diaria_gemini,
-      cota_diaria_claude: mapa.cota_diaria_claude ? Number(mapa.cota_diaria_claude) : CONFIG_PADRAO.cota_diaria_claude,
+      glossario_relevante: mapa.glossario_relevante
+        ? mapa.glossario_relevante === 'true'
+        : CONFIG_PADRAO.glossario_relevante,
+      cotas_diarias: lerCotasDiarias(mapa),
     };
   },
 
@@ -720,12 +722,28 @@ export const reposConfig = {
     );
     db.transaction(() => {
       for (const [chave, valor] of Object.entries(valores)) {
-        if (valor !== undefined) stmt.run(chave, String(valor));
+        if (valor === undefined) continue;
+        stmt.run(chave, typeof valor === 'object' ? JSON.stringify(valor) : String(valor));
       }
     })();
     return this.obterTodas(db);
   },
 };
+
+/** Cotas por provedor (JSON) com migração das chaves antigas cota_diaria_gemini/claude. */
+function lerCotasDiarias(mapa: Record<string, string>): Record<string, number> {
+  if (mapa.cotas_diarias) {
+    try {
+      return JSON.parse(mapa.cotas_diarias) as Record<string, number>;
+    } catch {
+      /* valor corrompido: cai para os padrões */
+    }
+  }
+  const cotas = { ...CONFIG_PADRAO.cotas_diarias };
+  if (mapa.cota_diaria_gemini !== undefined) cotas.gemini = Number(mapa.cota_diaria_gemini);
+  if (mapa.cota_diaria_claude !== undefined) cotas.claude = Number(mapa.cota_diaria_claude);
+  return cotas;
+}
 
 // ── Uso de IA (indicador de cota gratuita) ─────────────────────────────────
 

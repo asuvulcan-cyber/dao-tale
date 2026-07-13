@@ -96,7 +96,7 @@ A interface mostra badge de pendências e tela de aceitar/ajustar/rejeitar com u
 
 ```ts
 interface ProvedorIA {
-  id: 'claude' | 'gemini' | 'mock';
+  id: 'claude' | 'gemini' | 'deepseek' | 'openrouter' | 'groq' | 'mistral' | 'mock';
   listarModelos(): Promise<ModeloInfo[]>;            // p/ seletor nas Configurações
   testarCredencial(): Promise<ResultadoTeste>;
   traduzirBloco(req: RequisicaoTraducao): Promise<RespostaTraducao>;   // §2
@@ -106,10 +106,12 @@ interface ProvedorIA {
 
 - A orquestração (blocos, retomada, persistência, SSE) é **independente de provedor**; cada implementação só traduz a requisição para o formato do SDK e garante a saída estruturada:
   - **Claude:** tool use com `input_schema` + `tool_choice` forçado; `cache_control` no sistema.
-  - **Gemini (Fase 2):** `responseMimeType: 'application/json'` + `responseSchema`; caching implícito do próprio Gemini.
+  - **Gemini (Fase 2):** `responseMimeType: 'application/json'` + `responseSchema`; caching implícito do próprio Gemini. Nas chamadas de tradução, `thinkingConfig: { thinkingBudget: 0 }` em modelos 2.5 Flash (o raciocínio encarece a saída sem melhorar tradução; na revisão fica ligado). Se o modelo rejeitar a opção (400), repete sem ela.
+  - **Compatíveis com OpenAI** (`server/src/ia/compat.ts` — DeepSeek, OpenRouter, Groq, Mistral): chat completions via `fetch`, `response_format: json_object` + instrução textual de formato no sistema, com saneamento de `<think>` e cercas de código antes do parse. Sem SDK novo; registrar = chamar `criarProvedorCompat` na fábrica.
   - **Mock:** responde localmente sem rede ("tradução simulada da frase N", vereditos alternados, termos falsos), com latência artificial opcional — permite desenvolver e demonstrar 100% do app sem chave de API (decisão D4) e é a base dos testes de integração.
 - Resolução de provedor/modelo por prioridade: parâmetro da chamada → capítulo → obra → configuração global.
-- Adicionar provedor futuro = 1 arquivo novo em `server/src/ia/` + registro na fábrica.
+- Adicionar provedor futuro = 1 arquivo novo em `server/src/ia/` (ou uma chamada a `criarProvedorCompat`) + registro na fábrica.
+- **Glossário relevante** (config `glossario_relevante`, padrão ligado): cada chamada leva só as entradas cujo `termo_zh` aparece no trecho enviado (bloco + cauda + contexto futuro + título; na revisão, frase + vizinhas + pergunta). Nesse modo o glossário vai na **mensagem do usuário** e o bloco de sistema fica idêntico entre blocos — preservando o prompt caching do Claude.
 
 ## 6. Guarda de chaves de API (decisão T6)
 

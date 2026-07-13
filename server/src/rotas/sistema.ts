@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { EstadoConfiguracoes, ProvedorId } from '@dao-tale/shared';
+import { PROVEDORES_IDS, type EstadoConfiguracoes, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposUso } from '../db/repos.js';
 import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '../credenciais/index.js';
@@ -8,14 +8,14 @@ import { listarProvedores, obterProvedor } from '../ia/fabrica.js';
 import { diretorioDados } from '../config.js';
 
 const configSchema = z.object({
-  provedor_padrao: z.enum(['claude', 'gemini', 'mock']).optional(),
+  provedor_padrao: z.enum(PROVEDORES_IDS).optional(),
   modelo_padrao: z.string().optional(),
   tamanho_bloco: z.number().int().min(1).max(100).optional(),
   vizinhas_revisao: z.number().int().min(0).max(10).optional(),
   cauda_contexto: z.number().int().min(0).max(10).optional(),
   parar_no_limite: z.boolean().optional(),
-  cota_diaria_gemini: z.number().int().min(0).max(1000000).optional(),
-  cota_diaria_claude: z.number().int().min(0).max(1000000).optional(),
+  glossario_relevante: z.boolean().optional(),
+  cotas_diarias: z.record(z.string(), z.number().int().min(0).max(1000000)).optional(),
 });
 
 export function rotasSistema(db: BancoDados): Hono {

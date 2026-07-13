@@ -13,6 +13,8 @@ import { PromptMae } from './paginas/PromptMae';
 import { BancoTestes } from './paginas/BancoTestes';
 import { TermosSugeridos } from './paginas/TermosSugeridos';
 import { Configuracoes } from './paginas/Configuracoes';
+import { Docs } from './paginas/Docs';
+import { ComparadorModelos } from './paginas/ComparadorModelos';
 
 const clienteQuery = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -24,6 +26,7 @@ const rotas = createBrowserRouter([
     element: <Casca />,
     children: [
       { index: true, element: <ListaObras /> },
+      { path: 'docs', element: <Docs /> },
       { path: 'configuracoes', element: <Configuracoes /> },
       {
         path: 'obras/:obraId',
@@ -35,6 +38,7 @@ const rotas = createBrowserRouter([
           { path: 'prompt', element: <PromptMae /> },
           { path: 'testes', element: <BancoTestes /> },
           { path: 'termos', element: <TermosSugeridos /> },
+          { path: 'comparar', element: <ComparadorModelos /> },
         ],
       },
     ],

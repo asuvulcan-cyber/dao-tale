@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { ProvedorId } from '@dao-tale/shared';
+import { PROVEDORES_IDS, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTestes, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
+import { filtrarGlossarioRelevante } from '../ia/prompts.js';
 import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 
@@ -11,7 +12,7 @@ const editarFraseSchema = z.object({ texto_pt: z.string() });
 
 const revisarSchema = z.object({
   pergunta: z.string().min(1),
-  provedor: z.enum(['claude', 'gemini', 'mock']).optional(),
+  provedor: z.enum(PROVEDORES_IDS).optional(),
   modelo: z.string().optional(),
 });
 
@@ -111,14 +112,26 @@ export function rotasFrases(db: BancoDados): Hono {
       return ultimas ? lista.slice(-n) : lista.slice(0, n);
     };
 
+    const vizinhasAntes = vizinhas((o) => o < frase.ordem, true);
+    const vizinhasDepois = vizinhas((o) => o > frase.ordem, false);
+    const glossarioTodo = reposGlossario.listar(db, obra.id);
+    const glossario = config.glossario_relevante
+      ? filtrarGlossarioRelevante(glossarioTodo, [
+          frase.texto_zh,
+          corpo.data.pergunta,
+          ...vizinhasAntes.map((v) => v.texto_zh),
+          ...vizinhasDepois.map((v) => v.texto_zh),
+        ])
+      : glossarioTodo;
+
     try {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.revisarFrase(chave, {
         modelo,
         promptMae: promptAtivo.conteudo,
-        glossario: reposGlossario.listar(db, obra.id),
-        vizinhasAntes: vizinhas((o) => o < frase.ordem, true),
-        vizinhasDepois: vizinhas((o) => o > frase.ordem, false),
+        glossario,
+        vizinhasAntes,
+        vizinhasDepois,
         frase: {
           texto_zh: frase.texto_zh,
           texto_pt: frase.texto_pt,

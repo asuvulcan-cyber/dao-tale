@@ -11,12 +11,25 @@ function formatarGlossario(glossario: EntradaGlossario[]): string {
     .join('\n');
 }
 
-export function sistemaTraducao(promptMae: string, glossario: EntradaGlossario[]): string {
+/** Entradas cujo termo chinês aparece em algum dos textos — o resto do glossário
+    não ajuda a traduzir este trecho e só gastaria tokens. */
+export function filtrarGlossarioRelevante(
+  glossario: EntradaGlossario[],
+  textos: (string | undefined | null)[],
+): EntradaGlossario[] {
+  const corpo = textos.filter(Boolean).join('\n');
+  return glossario.filter((e) => corpo.includes(e.termo_zh));
+}
+
+export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
   return [
-    promptMae.trim(),
+    req.promptMae.trim(),
     '',
-    '## GLOSSÁRIO DA OBRA (uso obrigatório e consistente)',
-    formatarGlossario(glossario),
+    ...(req.glossarioNoUsuario
+      ? // Glossário filtrado por bloco vai na mensagem do usuário: o sistema fica
+        // idêntico entre blocos (pré-requisito do prompt caching).
+        ['## GLOSSÁRIO DA OBRA', 'Os termos do glossário presentes neste trecho virão na mensagem do usuário. Uso obrigatório e consistente.']
+      : ['## GLOSSÁRIO DA OBRA (uso obrigatório e consistente)', formatarGlossario(req.glossario)]),
     '',
     '## INSTRUÇÕES OPERACIONAIS DO APLICATIVO',
     'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
@@ -28,6 +41,11 @@ export function sistemaTraducao(promptMae: string, glossario: EntradaGlossario[]
 
 export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
   const partes: string[] = [];
+  if (req.glossarioNoUsuario && req.glossario.length > 0) {
+    partes.push('### Glossário (termos presentes neste trecho — uso obrigatório):');
+    partes.push(formatarGlossario(req.glossario));
+    partes.push('');
+  }
   if (req.caudaAnterior.length > 0) {
     partes.push('### Contexto anterior (já traduzido — não retraduzir):');
     for (const f of req.caudaAnterior) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt}`);
@@ -44,12 +62,12 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
   return partes.join('\n');
 }
 
-export function sistemaRevisao(promptMae: string, glossario: EntradaGlossario[]): string {
+export function sistemaRevisao(req: Pick<RequisicaoRevisao, 'promptMae' | 'glossario'>): string {
   return [
-    promptMae.trim(),
+    req.promptMae.trim(),
     '',
     '## GLOSSÁRIO DA OBRA',
-    formatarGlossario(glossario),
+    formatarGlossario(req.glossario),
     '',
     '## PROTOCOLO DE REVISÃO (instruções do aplicativo)',
     'Você é o revisor da tradução acima descrita. O usuário questionará uma escolha de tradução de UMA frase específica.',
@@ -122,6 +140,26 @@ export const SCHEMA_TRADUCAO = {
   },
   required: ['traducoes', 'termos_novos'],
 };
+
+// Instruções textuais de formato para provedores compatíveis com OpenAI
+// (chat completions + JSON mode) — sem tool use nem responseSchema garantidos,
+// o formato precisa estar descrito no próprio prompt.
+
+export const INSTRUCAO_JSON_TRADUCAO = [
+  '## FORMATO DA RESPOSTA (obrigatório)',
+  'Responda APENAS com um objeto JSON válido, sem texto fora dele e sem cercas de código, no formato:',
+  '{"traducoes": [{"ordem": <número da frase, como recebido>, "texto_pt": "<tradução em PT-BR>"}],',
+  ' "termos_novos": [{"termo_zh": "<termo em chinês>", "termo_pt": "<tradução adotada>", "categoria": "<local|poder-habilidade|entidade|titulo-cargo|personagem|outro>", "contexto": "<frase onde apareceu>"}]}',
+  'Se não houver termos novos, use "termos_novos": [].',
+].join('\n');
+
+export const INSTRUCAO_JSON_REVISAO = [
+  '## FORMATO DA RESPOSTA (obrigatório)',
+  'Responda APENAS com um objeto JSON válido, sem texto fora dele e sem cercas de código, no formato:',
+  '{"trecho_zh": "<trecho exato do chinês>", "veredito": "correto" | "incorreto",',
+  ' "justificativa": "<explicação objetiva>", "secao_regra": "<id curto da regra ou \'geral\'>",',
+  ' "correcao_proposta": "<frase corrigida completa>" ou null}',
+].join('\n');
 
 export const SCHEMA_REVISAO = {
   type: 'object' as const,

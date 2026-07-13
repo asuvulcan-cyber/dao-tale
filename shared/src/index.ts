@@ -2,7 +2,8 @@
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
-export type ProvedorId = 'claude' | 'gemini' | 'mock';
+export const PROVEDORES_IDS = ['claude', 'gemini', 'deepseek', 'openrouter', 'groq', 'mistral', 'mock'] as const;
+export type ProvedorId = (typeof PROVEDORES_IDS)[number];
 
 export type StatusCapitulo = 'rascunho' | 'traduzindo' | 'traduzido' | 'revisado' | 'finalizado';
 export type StatusTraducaoFrase = 'pendente' | 'traduzida' | 'erro';
@@ -135,9 +136,12 @@ export interface Configuracoes {
   /** Se true, a tradução para (em vez de insistir) ao receber 429 do provedor —
    * útil para quem quer ficar só na cota gratuita. */
   parar_no_limite: boolean;
-  /** Limite diário de requisições para o indicador de cota (0 = não mostrar). */
-  cota_diaria_gemini: number;
-  cota_diaria_claude: number;
+  /** Se true, cada chamada à IA leva só os termos do glossário que aparecem no
+   * trecho enviado (economia grande de tokens em glossários longos). */
+  glossario_relevante: boolean;
+  /** Limite diário de requisições por provedor para o indicador de cota
+   * (ausente ou 0 = não mostrar). */
+  cotas_diarias: Record<string, number>;
 }
 
 export const CONFIG_PADRAO: Configuracoes = {
@@ -147,9 +151,11 @@ export const CONFIG_PADRAO: Configuracoes = {
   vizinhas_revisao: 3,
   cauda_contexto: 2,
   parar_no_limite: false,
-  // 250 = requisições/dia do Gemini Flash na cota gratuita (jul/2026) — ajustável.
-  cota_diaria_gemini: 250,
-  cota_diaria_claude: 0,
+  glossario_relevante: true,
+  // Valores da cota gratuita de cada provedor (jul/2026) — ajustáveis em Configurações.
+  // Gemini: 250 req/dia no Flash; OpenRouter: 50 req/dia em modelos :free (1000 com
+  // US$ 10 de crédito); Groq: 1000 req/dia por modelo na faixa gratuita.
+  cotas_diarias: { gemini: 250, openrouter: 50, groq: 1000 },
 };
 
 export interface EstadoConfiguracoes {
@@ -178,6 +184,9 @@ export interface ProgressoTraducao {
   frases_prontas: number;
   frases_erro: number;
   erro_fatal: string | null;
+  /** Bloco enviado ao provedor e ainda sem resposta (ordens, inclusivas) —
+   * permite à interface mostrar atividade entre um bloco e outro. */
+  em_voo?: { de: number; ate: number } | null;
 }
 
 export type EventoTraducao =

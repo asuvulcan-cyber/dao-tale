@@ -3,6 +3,7 @@ import type { EventoTraducao, ProgressoTraducao, ProvedorId } from '@dao-tale/sh
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
+import { filtrarGlossarioRelevante } from '../ia/prompts.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 
@@ -45,6 +46,7 @@ export function progressoAtual(db: BancoDados, capituloId: number): ProgressoTra
     frases_prontas: frases.filter((f) => f.status_traducao === 'traduzida').length,
     frases_erro: frases.filter((f) => f.status_traducao === 'erro').length,
     erro_fatal: null,
+    em_voo: null,
   };
 }
 
@@ -129,6 +131,7 @@ export async function iniciarTraducao(
       frases_prontas: todas.length - pendentes.length,
       frases_erro: 0,
       erro_fatal: null,
+      em_voo: null,
     },
   };
   jobs.set(capituloId, job);
@@ -183,21 +186,42 @@ async function executarJob(
         .slice(0, ctx.config.cauda_contexto)
         .map((f) => f.texto_zh);
 
+      const titulo = tituloPendente ? (capitulo.titulo ?? undefined) : undefined;
+      // Glossário relevante: só os termos que aparecem no trecho enviado — em
+      // glossários grandes isso corta a maior parte dos tokens de entrada.
+      const glossarioDoBloco = ctx.config.glossario_relevante
+        ? filtrarGlossarioRelevante(glossario, [
+            titulo,
+            ...bloco.map((f) => f.texto_zh),
+            ...caudaAnterior.map((f) => f.texto_zh),
+            ...proximas,
+          ])
+        : glossario;
+
       const req: RequisicaoTraducaoBloco = {
         modelo: ctx.modelo,
         promptMae: ctx.promptMae,
-        glossario,
-        titulo: tituloPendente ? (capitulo.titulo ?? undefined) : undefined,
+        glossario: glossarioDoBloco,
+        glossarioNoUsuario: ctx.config.glossario_relevante,
+        titulo,
         caudaAnterior,
         frases: bloco.map((f) => ({ ordem: f.ordem, texto_zh: f.texto_zh })),
         proximas,
       };
+
+      // Anuncia o bloco em voo antes da chamada: a interface mostra "traduzindo
+      // frases X–Y" em vez de ficar parada até a resposta do provedor.
+      if (bloco.length > 0) {
+        job.progresso.em_voo = { de: primeiraOrdem, ate: ultimaOrdem };
+        emitir(capituloId, { tipo: 'progresso', dados: { ...job.progresso } });
+      }
 
       const resultado = await traduzirBlocoComRetry(provedor, ctx.chave, req, {
         pararNoLimite: ctx.config.parar_no_limite,
         // Cada tentativa real conta contra a cota diária do provedor (retries inclusive).
         aoTentar: () => reposUso.registrar(db, ctx.provedorId, ctx.modelo),
       });
+      job.progresso.em_voo = null;
 
 
       if (resultado.tipo === 'fatal') {

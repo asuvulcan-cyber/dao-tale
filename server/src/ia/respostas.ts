@@ -5,7 +5,8 @@ import { z } from 'zod';
 // mas o conteúdo só entra no banco depois de passar por estes schemas.
 
 export const respostaTraducaoSchema = z.object({
-  traducoes: z.array(z.object({ ordem: z.number().int(), texto_pt: z.string() })),
+  // coerce: modelos sem saída estruturada nativa às vezes devolvem o número como string.
+  traducoes: z.array(z.object({ ordem: z.coerce.number().int(), texto_pt: z.string() })),
   termos_novos: z
     .array(
       z.object({

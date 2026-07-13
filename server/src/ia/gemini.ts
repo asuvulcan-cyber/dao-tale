@@ -86,14 +86,29 @@ function parsearJson(texto: string | undefined): unknown {
   }
 }
 
+// Tradução é tarefa direta: raciocínio prolongado ("thinking") dos modelos 2.5+
+// só queima tokens de saída sem melhorar o texto. Desliga em toda a família
+// flash (inclusive apelidos -latest); modelos que rejeitarem a opção (400) são
+// repetidos sem ela. A revisão fica de fora — lá o raciocínio ajuda no veredito.
+function pensamentoEconomico(modelo: string): { thinkingBudget: number } | undefined {
+  return /flash/.test(modelo) ? { thinkingBudget: 0 } : undefined;
+}
+
 export const provedorGemini: ProvedorIA = {
   id: 'gemini',
   nome: 'Gemini (Google)',
   precisaChave: true,
-  modeloPadrao: 'gemini-2.5-flash',
+  // Apelido -latest: sempre a geração flash mais recente; ids fixos de geração
+  // (ex.: gemini-2.5-flash) deixam de valer para contas novas quando saem de linha.
+  modeloPadrao: 'gemini-flash-latest',
 
   async listarModelos(chave): Promise<ModeloInfo[]> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    // Curadoria para tradução: fora modalidades não-texto, duplicatas datadas
+    // (-001) e gerações < 3 — estas dão 404 ("no longer available to new users")
+    // em contas novas; os apelidos -latest cobrem quem precisa delas.
+    const NAO_SERVE = /tts|image|robotics|computer-use|omni|veo|audio|live|-\d{3}$/;
+    const geracao = (id: string) => Number(id.match(/-(\d+(?:\.\d+)?)-?/)?.[1] ?? 0);
     try {
       const modelos: ModeloInfo[] = [];
       const pagina = await cliente.models.list();
@@ -101,6 +116,8 @@ export const provedorGemini: ProvedorIA = {
         const id = (m.name ?? '').replace(/^models\//, '');
         if (!id.includes('gemini')) continue;
         if (m.supportedActions && !m.supportedActions.includes('generateContent')) continue;
+        if (NAO_SERVE.test(id)) continue;
+        if (!/-latest$/.test(id) && geracao(id) < 3) continue;
         modelos.push({ id, nome: m.displayName ?? id });
       }
       return modelos;
@@ -121,14 +138,20 @@ export const provedorGemini: ProvedorIA = {
   async traduzirBloco(chave, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
     try {
-      const resposta = await cliente.models.generateContent({
-        model: req.modelo,
-        contents: usuarioTraducao(req),
-        config: {
-          systemInstruction: sistemaTraducao(req.promptMae, req.glossario),
-          responseMimeType: 'application/json',
-          responseSchema: SCHEMA_TRADUCAO_GEMINI,
-        },
+      const config = {
+        systemInstruction: sistemaTraducao(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_TRADUCAO_GEMINI,
+        thinkingConfig: pensamentoEconomico(req.modelo),
+      };
+      const gerar = (cfg: typeof config) =>
+        cliente.models.generateContent({ model: req.modelo, contents: usuarioTraducao(req), config: cfg });
+      const resposta = await gerar(config).catch((e) => {
+        // Modelo que não aceita desligar o thinking (400): repete sem a opção.
+        if (config.thinkingConfig && e instanceof ApiError && e.status === 400) {
+          return gerar({ ...config, thinkingConfig: undefined });
+        }
+        throw e;
       });
       const bruto = parsearJson(resposta.text);
       const dados = respostaTraducaoSchema.parse(bruto);
@@ -149,7 +172,7 @@ export const provedorGemini: ProvedorIA = {
         model: req.modelo,
         contents: usuarioRevisao(req),
         config: {
-          systemInstruction: sistemaRevisao(req.promptMae, req.glossario),
+          systemInstruction: sistemaRevisao(req),
           responseMimeType: 'application/json',
           responseSchema: SCHEMA_REVISAO_GEMINI,
         },

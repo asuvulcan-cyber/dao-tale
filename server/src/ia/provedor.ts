@@ -11,6 +11,9 @@ export interface RequisicaoTraducaoBloco {
   modelo: string;
   promptMae: string;
   glossario: EntradaGlossario[];
+  /** true quando o glossário foi filtrado por bloco (só termos presentes no trecho):
+   * ele entra na mensagem do usuário e o sistema fica estável para o prompt caching. */
+  glossarioNoUsuario?: boolean;
   /** Título do capítulo ainda sem tradução: entra no bloco como frase de número -1. */
   titulo?: string;
   /** Últimas frases já traduzidas antes do bloco (continuidade de tom). */

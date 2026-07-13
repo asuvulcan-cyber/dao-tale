@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Configuracoes as Config, EstadoConfiguracoes, ProvedorId, UsoIaDia } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
-import { IndicadorCota } from '../componentes/IndicadorCota';
+import { IndicadorCota, NOME_CURTO } from '../componentes/IndicadorCota';
 
 interface ProvedorInfo {
   id: ProvedorId;
@@ -38,7 +39,8 @@ export function Configuracoes() {
           Guardadas {estado.modo_guarda_chaves === 'keyring' ? 'no cofre de credenciais do sistema operacional' : (
             <>em arquivo local com permissão restrita (<code>credenciais.json</code> no diretório de dados) — o
             cofre do sistema não está disponível nesta máquina</>
-          )}. As chaves nunca saem da sua máquina, exceto na chamada direta à API do provedor.
+          )}. As chaves nunca saem da sua máquina, exceto na chamada direta à API do provedor. Não sabe qual usar ou
+          como criar uma chave? Veja o <Link className="text-jade-forte underline" to="/docs#chaves">guia de chaves de API</Link>.
         </p>
         <div className="space-y-3">
           {provedores
@@ -260,27 +262,33 @@ function FormularioPadroes({
           />
         </label>
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">
-          Cota diária do Gemini (requisições/dia; 0 = não mostrar indicador)
-          <input
-            type="number"
-            min={0}
-            value={valores.cota_diaria_gemini}
-            onChange={(e) => setValores({ ...valores, cota_diaria_gemini: Number(e.target.value) })}
-            className="entrada mt-1 w-full"
-          />
-        </label>
-        <label className="block text-sm">
-          Cota diária do Claude (0 = não mostrar)
-          <input
-            type="number"
-            min={0}
-            value={valores.cota_diaria_claude}
-            onChange={(e) => setValores({ ...valores, cota_diaria_claude: Number(e.target.value) })}
-            className="entrada mt-1 w-full"
-          />
-        </label>
+      <div className="mt-4">
+        <h3 className="text-sm font-medium">Cotas diárias por provedor</h3>
+        <p className="mb-2 mt-0.5 text-sm text-tinta-2">
+          Limite de requisições/dia usado pelo indicador de cota (0 = não mostrar). Confira o limite real da sua
+          conta no painel do provedor — veja o <Link className="text-jade-forte underline" to="/docs#cotas">guia de cotas</Link>.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {provedores
+            .filter((p) => p.precisa_chave)
+            .map((p) => (
+              <label key={p.id} className="block text-sm">
+                {NOME_CURTO[p.id] ?? p.nome}
+                <input
+                  type="number"
+                  min={0}
+                  value={valores.cotas_diarias[p.id] ?? 0}
+                  onChange={(e) =>
+                    setValores({
+                      ...valores,
+                      cotas_diarias: { ...valores.cotas_diarias, [p.id]: Number(e.target.value) },
+                    })
+                  }
+                  className="entrada mt-1 w-full"
+                />
+              </label>
+            ))}
+        </div>
       </div>
       <label className="mt-3 flex items-start gap-2 text-sm">
         <input
@@ -293,6 +301,18 @@ function FormularioPadroes({
           Usar somente a cota gratuita: ao atingir o limite de requisições do provedor (erro 429), a tradução{' '}
           <strong>para e avisa</strong> em vez de insistir. As frases restantes ficam pendentes — use "Retomar
           tradução" quando o limite renovar.
+        </span>
+      </label>
+      <label className="mt-3 flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={valores.glossario_relevante}
+          onChange={(e) => setValores({ ...valores, glossario_relevante: e.target.checked })}
+          className="mt-0.5"
+        />
+        <span>
+          Enviar só o glossário relevante: cada chamada à IA leva apenas os termos que aparecem no trecho enviado,
+          em vez do glossário inteiro — economia grande de tokens em obras com glossário extenso.
         </span>
       </label>
       <div className="mt-3 flex items-center gap-3">

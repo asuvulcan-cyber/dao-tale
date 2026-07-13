@@ -83,7 +83,7 @@ export const provedorClaude: ProvedorIA = {
         system: [
           {
             type: 'text',
-            text: sistemaTraducao(req.promptMae, req.glossario),
+            text: sistemaTraducao(req),
             cache_control: { type: 'ephemeral' },
           },
         ],
@@ -118,7 +118,7 @@ export const provedorClaude: ProvedorIA = {
         system: [
           {
             type: 'text',
-            text: sistemaRevisao(req.promptMae, req.glossario),
+            text: sistemaRevisao(req),
             cache_control: { type: 'ephemeral' },
           },
         ],

@@ -23,6 +23,7 @@ export function ObraLayout() {
     { rota: `/obras/${obraId}/termos`, texto: `Termos sugeridos${sugestoes?.length ? ` (${sugestoes.length})` : ''}` },
     { rota: `/obras/${obraId}/prompt`, texto: 'Prompt mãe' },
     { rota: `/obras/${obraId}/testes`, texto: 'Banco de testes' },
+    { rota: `/obras/${obraId}/comparar`, texto: 'Comparar modelos' },
   ];
 
   return (

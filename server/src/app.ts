@@ -8,6 +8,7 @@ import { rotasObras } from './rotas/obras.js';
 import { rotasCapitulos } from './rotas/capitulos.js';
 import { rotasFrases } from './rotas/frases.js';
 import { rotasCuradoria } from './rotas/curadoria.js';
+import { rotasComparador } from './rotas/comparador.js';
 
 const dirWebDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 
@@ -30,6 +31,7 @@ export function criarApp(db: BancoDados): Hono {
   app.route('/api', rotasCapitulos(db));
   app.route('/api', rotasFrases(db));
   app.route('/api', rotasCuradoria(db));
+  app.route('/api', rotasComparador(db));
 
   app.onError((erro, c) => {
     console.error('[erro não tratado]', erro);

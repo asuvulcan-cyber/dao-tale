@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import type { EventoTraducao } from '@dao-tale/shared';
+import { PROVEDORES_IDS, type EventoTraducao } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposFrases, reposGlossario, reposObras } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
@@ -23,12 +23,12 @@ const atualizarCapituloSchema = z.object({
   titulo: z.string().nullable().optional(),
   titulo_pt: z.string().nullable().optional(),
   status: z.enum(['rascunho', 'traduzindo', 'traduzido', 'revisado', 'finalizado']).optional(),
-  provedor: z.enum(['claude', 'gemini', 'mock']).nullable().optional(),
+  provedor: z.enum(PROVEDORES_IDS).nullable().optional(),
   modelo: z.string().nullable().optional(),
 });
 
 const traduzirSchema = z.object({
-  provedor: z.enum(['claude', 'gemini', 'mock']).optional(),
+  provedor: z.enum(PROVEDORES_IDS).optional(),
   modelo: z.string().optional(),
   sobrescrever: z.boolean().optional(),
   sobrescrever_editadas: z.boolean().optional(),

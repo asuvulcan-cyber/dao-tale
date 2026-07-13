@@ -6,7 +6,14 @@ import { api } from '../api';
 // provedores não expõem o consumo via API) contra o limite configurado em
 // Configurações. Some quando o limite do provedor é 0.
 
-const NOME_CURTO: Record<string, string> = { gemini: 'Gemini', claude: 'Claude' };
+export const NOME_CURTO: Record<string, string> = {
+  gemini: 'Gemini',
+  claude: 'Claude',
+  deepseek: 'DeepSeek',
+  openrouter: 'OpenRouter',
+  groq: 'Groq',
+  mistral: 'Mistral',
+};
 
 export function IndicadorCota({ compacto = false }: { compacto?: boolean }) {
   const { data: uso } = useQuery({
@@ -21,10 +28,9 @@ export function IndicadorCota({ compacto = false }: { compacto?: boolean }) {
 
   if (!uso || !estado) return null;
 
-  const cotas: { provedor: string; limite: number }[] = [
-    { provedor: 'gemini', limite: estado.configuracoes.cota_diaria_gemini },
-    { provedor: 'claude', limite: estado.configuracoes.cota_diaria_claude },
-  ].filter((c) => c.limite > 0);
+  const cotas: { provedor: string; limite: number }[] = Object.entries(estado.configuracoes.cotas_diarias)
+    .map(([provedor, limite]) => ({ provedor, limite }))
+    .filter((c) => c.limite > 0);
 
   const linhas = cotas
     .map((c) => {

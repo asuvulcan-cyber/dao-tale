@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { PROVEDORES_IDS } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposObras, reposPrompts } from '../db/repos.js';
 import { exportarObra, importarObra } from '../db/portabilidade.js';
@@ -27,7 +28,7 @@ const atualizarObraSchema = z.object({
   titulo_original: z.string().nullable().optional(),
   sinopse: z.string().nullable().optional(),
   tags: z.array(z.string().min(1)).max(20).optional(),
-  provedor_padrao: z.enum(['claude', 'gemini', 'mock']).nullable().optional(),
+  provedor_padrao: z.enum(PROVEDORES_IDS).nullable().optional(),
   modelo_padrao: z.string().nullable().optional(),
 });
 

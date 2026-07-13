@@ -352,14 +352,35 @@ export function EditorCapitulo() {
           <IndicadorCota compacto />
           {emExecucao ? (
             <>
-              <div className="h-2 w-32 overflow-hidden rounded-full bg-papel-fundo" title={`${pct}% traduzido`}>
+              <div
+                className="relative h-2 w-32 overflow-hidden rounded-full bg-papel-fundo"
+                title={
+                  progresso.em_voo
+                    ? `${pct}% traduzido — aguardando o provedor responder as frases ${progresso.em_voo.de + 1}–${progresso.em_voo.ate + 1}`
+                    : `${pct}% traduzido`
+                }
+              >
                 <div
                   className="h-full rounded-full bg-info transition-all duration-700"
                   style={{ width: `${Math.max(pct, 3)}%` }}
                 />
+                {/* Bloco em voo: trecho pulsante logo após o já concluído — mostra
+                    que há trabalho acontecendo mesmo sem o percentual mudar. */}
+                {progresso.em_voo && progresso.frases_total > 0 && (
+                  <div
+                    className="absolute inset-y-0 animate-pulse rounded-full bg-info/40"
+                    style={{
+                      left: `${Math.max(pct, 3)}%`,
+                      width: `${Math.round(((progresso.em_voo.ate - progresso.em_voo.de + 1) / progresso.frases_total) * 100)}%`,
+                    }}
+                  />
+                )}
               </div>
               <span className="text-sm tabular-nums text-info">
                 {progresso.frases_prontas}/{progresso.frases_total} · {pct}%
+                {progresso.em_voo && (
+                  <span className="animate-pulse"> · traduzindo {progresso.em_voo.de + 1}–{progresso.em_voo.ate + 1}…</span>
+                )}
               </span>
               <Botao
                 variante="secundario"
@@ -491,6 +512,11 @@ export function EditorCapitulo() {
                       selecionada={frase.id === fraseSelecionada}
                       aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
                       capituloId={capituloId!}
+                      emVoo={
+                        !!progresso.em_voo &&
+                        frase.ordem >= progresso.em_voo.de &&
+                        frase.ordem <= progresso.em_voo.ate
+                      }
                     />
                   ))}
                 </div>
@@ -836,6 +862,7 @@ function LinhaFrase({
   selecionada,
   aoSelecionar,
   capituloId,
+  emVoo = false,
 }: {
   frase: Frase;
   estado: EstadoFrase;
@@ -843,6 +870,8 @@ function LinhaFrase({
   selecionada: boolean;
   aoSelecionar: () => void;
   capituloId: string;
+  /** A frase está no bloco enviado ao provedor, aguardando resposta. */
+  emVoo?: boolean;
 }) {
   const clienteQuery = useQueryClient();
   const [texto, setTexto] = useState(frase.texto_pt);
@@ -899,6 +928,8 @@ function LinhaFrase({
                 <TextoTraduzido texto={frase.texto_pt} marcador={marcador} />
                 <ChipEstado estado={estado} />
               </>
+            ) : emVoo && frase.status_traducao === 'pendente' ? (
+              <span className="animate-pulse italic text-info">(traduzindo…)</span>
             ) : (
               <span className="italic text-tinta-2">
                 {frase.status_traducao === 'pendente' ? '(pendente de tradução)' : '(vazio)'}
