@@ -40,6 +40,32 @@ export function rotasFrases(db: BancoDados): Hono {
     return c.json(reposTestes.listarPorFrase(db, frase.id));
   });
 
+  // ── Correção rápida de termo: troca em lote nas traduções ───────────────
+  // previa=true só conta; sem ela, aplica e devolve o total afetado.
+
+  app.post('/obras/:obraId/substituir', async (c) => {
+    const corpo = z
+      .object({
+        de: z.string().min(1).max(80),
+        para: z.string().max(160),
+        capitulo_id: z.number().int().optional(),
+        previa: z.boolean().default(false),
+      })
+      .refine((d) => d.de !== d.para, { message: 'Os textos "de" e "para" precisam ser diferentes.' })
+      .safeParse(await c.req.json());
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+
+    const obraId = Number(c.req.param('obraId'));
+    if (!reposObras.obter(db, obraId)) {
+      return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    }
+    const opcoes = { obraId, capituloId: corpo.data.capitulo_id, de: corpo.data.de, para: corpo.data.para };
+    const afetadas = corpo.data.previa
+      ? reposFrases.contarTermo(db, opcoes)
+      : reposFrases.substituirTermo(db, opcoes);
+    return c.json(afetadas);
+  });
+
   // ── Correção de segmentação: mesclar / dividir (Fase 2) ─────────────────
 
   app.post('/frases/mesclar', async (c) => {
@@ -91,9 +117,9 @@ export function rotasFrases(db: BancoDados): Hono {
     const obra = reposObras.obter(db, capitulo.obra_id)!;
     const config = reposConfig.obterTodas(db);
 
-    const promptAtivo = reposPrompts.ativo(db, obra.id);
+    const promptAtivo = reposPrompts.ativoOuAdotado(db, obra.id);
     if (!promptAtivo) {
-      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo.' } }, 400);
+      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
     const provedorId: ProvedorId =

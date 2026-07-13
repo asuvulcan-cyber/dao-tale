@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { caminhoBanco } from '../config.js';
+import { PROMPT_PADRAO_INICIAL, VERSAO_PROMPT_PADRAO_INICIAL } from './promptPadraoInicial.js';
 
 export type BancoDados = Database.Database;
 
@@ -22,7 +23,20 @@ export function abrirBanco(caminho: string): BancoDados {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   migrar(db);
+  semearPromptPadrao(db);
   return db;
+}
+
+// Banco sem nenhuma versão de prompt padrão (recém-criado ou migrado) recebe a
+// versão genérica inicial já ativa — versões seguintes são criadas pela UI.
+function semearPromptPadrao(db: BancoDados): void {
+  const { n } = db.prepare('SELECT COUNT(*) n FROM prompt_padrao').get() as { n: number };
+  if (n > 0) return;
+  db.prepare('INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, 1)').run(
+    VERSAO_PROMPT_PADRAO_INICIAL,
+    PROMPT_PADRAO_INICIAL,
+    'Versão genérica inicial distribuída com o aplicativo.',
+  );
 }
 
 function migrar(db: BancoDados): void {

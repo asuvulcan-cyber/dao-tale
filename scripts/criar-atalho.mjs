@@ -25,8 +25,25 @@ if (process.platform === 'win32') {
   console.log(`Atalho criado: ${vbs}`);
   console.log('Dê dois cliques nele para iniciar o Dao Tale (o navegador abre sozinho).');
 } else if (process.platform === 'linux') {
-  const dirApps = path.join(process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share'), 'applications');
+  const dirDados = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share');
+  const dirApps = path.join(dirDados, 'applications');
   fs.mkdirSync(dirApps, { recursive: true });
+
+  // Instala o selo 道 no tema de ícones do sistema (SVG + PNG pré-renderizado).
+  // O .desktop usa o caminho absoluto do PNG — funciona mesmo sem o cache de
+  // ícones do tema atualizado (KDE/GNOME).
+  const iconePng = path.join(dirDados, 'icons', 'hicolor', '256x256', 'apps', 'dao-tale.png');
+  const icones = [
+    ['icone.svg', path.join(dirDados, 'icons', 'hicolor', 'scalable', 'apps', 'dao-tale.svg')],
+    ['icone-256.png', iconePng],
+  ];
+  for (const [origem, destino] of icones) {
+    const arquivo = path.join(raiz, 'web', 'public', origem);
+    if (!fs.existsSync(arquivo)) continue;
+    fs.mkdirSync(path.dirname(destino), { recursive: true });
+    fs.copyFileSync(arquivo, destino);
+  }
+
   const desktopFile = path.join(dirApps, 'dao-tale.desktop');
   fs.writeFileSync(
     desktopFile,
@@ -37,6 +54,7 @@ if (process.platform === 'win32') {
       'Comment=Tradução e revisão assistida (chinês → PT-BR)',
       `Exec=node "${inicio}"`,
       `Path=${raiz}`,
+      `Icon=${fs.existsSync(iconePng) ? iconePng : 'dao-tale'}`,
       'Terminal=false',
       'Categories=Utility;',
     ].join('\n'),

@@ -165,6 +165,24 @@ function FormularioNovaObra({
   const [tags, setTags] = useState('');
   const [prompt, setPrompt] = useState('');
   const [glossarioCsv, setGlossarioCsv] = useState('');
+  const [erroTraducao, setErroTraducao] = useState('');
+
+  // Só campos com texto chinês vão para a IA (a sinopse pode já estar em PT).
+  const temZh = (t: string) => /[一-鿿]/.test(t);
+  const traduzir = useMutation({
+    mutationFn: () =>
+      api<{ titulo_pt: string | null; sinopse_pt: string | null }>('POST', '/ia/traduzir-detalhes', {
+        ...(temZh(tituloOriginal) ? { titulo_zh: tituloOriginal.trim() } : {}),
+        ...(temZh(sinopse) ? { sinopse_zh: sinopse.trim() } : {}),
+      }),
+    onSuccess: (r) => {
+      if (r.titulo_pt) setTitulo(r.titulo_pt);
+      if (r.sinopse_pt) setSinopse(r.sinopse_pt);
+      setErroTraducao('');
+    },
+    onError: (e) => setErroTraducao((e as Error).message),
+  });
+  const haChines = temZh(tituloOriginal) || temZh(sinopse);
 
   function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -214,7 +232,7 @@ function FormularioNovaObra({
         </label>
       </div>
       <label className="block text-sm">
-        Sinopse (opcional)
+        Sinopse (opcional — pode colar em chinês e traduzir abaixo)
         <textarea
           value={sinopse}
           onChange={(e) => setSinopse(e.target.value)}
@@ -223,6 +241,15 @@ function FormularioNovaObra({
           placeholder="Resumo curto da obra, para o cartão na lista…"
         />
       </label>
+      {haChines && (
+        <div className="flex items-center gap-3">
+          <Botao variante="secundario" type="button" onClick={() => traduzir.mutate()} disabled={traduzir.isPending}>
+            {traduzir.isPending ? 'Traduzindo…' : 'Traduzir título e sinopse do chinês (IA)'}
+          </Botao>
+          <span className="text-xs text-tinta-2">usa o prompt padrão e o provedor padrão</span>
+        </div>
+      )}
+      {erroTraducao && <Aviso tipo="erro">{erroTraducao}</Aviso>}
       <label className="block text-sm">
         Tags (opcional — separadas por vírgula)
         <input
@@ -233,7 +260,7 @@ function FormularioNovaObra({
         />
       </label>
       <label className="block text-sm">
-        Prompt mãe inicial (versão 1.0 — pode colar o .md inteiro; opcional, mas necessário antes de traduzir)
+        Prompt mãe inicial (versão 1.0 — pode colar o .md inteiro; opcional: sem ele, o prompt padrão é adotado na primeira tradução)
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}

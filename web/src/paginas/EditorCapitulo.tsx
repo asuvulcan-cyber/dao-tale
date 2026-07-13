@@ -21,6 +21,7 @@ import {
   TextoTraduzido,
   type MarcadorGlossario,
 } from '../componentes/TextoRico';
+import { extrairTroca } from '../util/troca';
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -103,6 +104,13 @@ export function EditorCapitulo() {
   const [erroJob, setErroJob] = useState('');
   const [provedorEscolhido, setProvedorEscolhido] = useState('');
   const [mostrarConsistencia, setMostrarConsistencia] = useState(false);
+  // Correção rápida (troca de termo detectada numa edição manual) — o banner
+  // oferece aplicar a mesma troca nas outras frases do capítulo/obra.
+  const [troca, setTroca] = useState<{ de: string; para: string; fraseId: number } | null>(null);
+  const aoEditarTexto = (antes: string, depois: string, fraseId: number) => {
+    const t = extrairTroca(antes, depois);
+    if (t) setTroca({ ...t, fraseId });
+  };
   const [modo, setModo] = useState<ModoEditor>(() => {
     const salvo = localStorage.getItem(CHAVE_MODO);
     return MODOS_EDITOR.some((m) => m.id === salvo) ? (salvo as ModoEditor) : 'segmentado';
@@ -512,6 +520,7 @@ export function EditorCapitulo() {
                       selecionada={frase.id === fraseSelecionada}
                       aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
                       capituloId={capituloId!}
+                      aoEditarTexto={aoEditarTexto}
                       emVoo={
                         !!progresso.em_voo &&
                         frase.ordem >= progresso.em_voo.de &&
@@ -609,10 +618,21 @@ export function EditorCapitulo() {
             proxima={frases.find((f) => f.ordem === selecionada.ordem + 1) ?? null}
             capituloId={capituloId!}
             aoFechar={() => setFraseSelecionada(null)}
+            aoEditarTexto={aoEditarTexto}
           />
         )}
         </div>
       </div>
+
+      {troca && (
+        <BannerTroca
+          troca={troca}
+          obraId={obraId!}
+          capituloId={capituloId!}
+          frases={frases}
+          aoFechar={() => setTroca(null)}
+        />
+      )}
 
       {mostrarConsistencia && (
         <ModalConsistencia
@@ -862,6 +882,7 @@ function LinhaFrase({
   selecionada,
   aoSelecionar,
   capituloId,
+  aoEditarTexto,
   emVoo = false,
 }: {
   frase: Frase;
@@ -870,6 +891,8 @@ function LinhaFrase({
   selecionada: boolean;
   aoSelecionar: () => void;
   capituloId: string;
+  /** Avisa a página da edição manual — alimenta a correção rápida de termo. */
+  aoEditarTexto: (antes: string, depois: string, fraseId: number) => void;
   /** A frase está no bloco enviado ao provedor, aguardando resposta. */
   emVoo?: boolean;
 }) {
@@ -911,7 +934,13 @@ function LinhaFrase({
             onChange={(e) => setTexto(e.target.value)}
             onBlur={() => {
               setEditando(false);
-              if (texto !== frase.texto_pt) salvar.mutate(texto);
+              if (texto !== frase.texto_pt) {
+                // A detecção da troca só dispara com a edição salva — a prévia
+                // no servidor não pode contar a própria frase corrigida.
+                salvar.mutate(texto, {
+                  onSuccess: () => aoEditarTexto(frase.texto_pt, texto, frase.id),
+                });
+              }
             }}
             rows={Math.max(2, Math.ceil(texto.length / 60))}
             className="w-full resize-none rounded border border-jade bg-papel-alto px-1 py-0.5 text-sm leading-relaxed focus:outline-none"
@@ -987,11 +1016,13 @@ function PainelRevisao({
   proxima,
   capituloId,
   aoFechar,
+  aoEditarTexto,
 }: {
   frase: Frase;
   proxima: Frase | null;
   capituloId: string;
   aoFechar: () => void;
+  aoEditarTexto: (antes: string, depois: string, fraseId: number) => void;
 }) {
   const clienteQuery = useQueryClient();
   const [pergunta, setPergunta] = useState('');
@@ -1047,6 +1078,9 @@ function PainelRevisao({
   const aplicarCorrecao = useMutation({
     mutationFn: () => api('POST', `/testes/${resultado!.caso.id}/aplicar-correcao`),
     onSuccess: () => {
+      if (resultado?.revisao.correcao_proposta) {
+        aoEditarTexto(frase.texto_pt, resultado.revisao.correcao_proposta, frase.id);
+      }
       clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
       clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
       clienteQuery.invalidateQueries({ queryKey: ['testes-capitulo', capituloId] });
@@ -1127,7 +1161,11 @@ function PainelRevisao({
           value={textoPt}
           onChange={(e) => setTextoPt(e.target.value)}
           onBlur={() => {
-            if (textoPt !== frase.texto_pt) salvarPt.mutate(textoPt);
+            if (textoPt !== frase.texto_pt) {
+              salvarPt.mutate(textoPt, {
+                onSuccess: () => aoEditarTexto(frase.texto_pt, textoPt, frase.id),
+              });
+            }
           }}
           rows={Math.max(2, Math.ceil(textoPt.length / 44))}
           placeholder="(sem tradução — escreva aqui)"
@@ -1317,6 +1355,108 @@ function ModalConsistencia({
                 </>
               )}
             </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Correção rápida (troca de termo): quando uma edição manual troca um termo,
+// oferece aplicar a mesma troca nas outras frases do capítulo ou da obra.
+function BannerTroca({
+  troca,
+  obraId,
+  capituloId,
+  frases,
+  aoFechar,
+}: {
+  troca: { de: string; para: string; fraseId: number };
+  obraId: string;
+  capituloId: string;
+  frases: Frase[];
+  aoFechar: () => void;
+}) {
+  const clienteQuery = useQueryClient();
+  const [erro, setErro] = useState('');
+  const [aplicado, setAplicado] = useState<number | null>(null);
+
+  // Ocorrências restantes neste capítulo — fora a frase recém-corrigida (a
+  // lista local pode ainda não ter sido recarregada após o salvamento).
+  const noCapitulo = frases.filter((f) => f.id !== troca.fraseId && f.texto_pt.includes(troca.de)).length;
+
+  const { data: naObra } = useQuery({
+    queryKey: ['troca-previa', obraId, troca.de, troca.para],
+    queryFn: () =>
+      api<{ frases: number; capitulos: number }>('POST', `/obras/${obraId}/substituir`, {
+        de: troca.de,
+        para: troca.para,
+        previa: true,
+      }),
+  });
+
+  const aplicar = useMutation({
+    mutationFn: (escopo: 'capitulo' | 'obra') =>
+      api<{ frases: number; capitulos: number }>('POST', `/obras/${obraId}/substituir`, {
+        de: troca.de,
+        para: troca.para,
+        ...(escopo === 'capitulo' ? { capitulo_id: Number(capituloId) } : {}),
+      }),
+    onSuccess: (r) => {
+      clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+      setAplicado(r.frases);
+      setTimeout(aoFechar, 4000);
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
+
+  // Nada a propagar (a prévia da obra já chegou e não há outras ocorrências).
+  if (naObra && naObra.frases === 0 && noCapitulo === 0) return null;
+
+  return (
+    <div className="fixed bottom-4 left-1/2 z-30 w-[36rem] max-w-[calc(100vw-2rem)] -translate-x-1/2">
+      <div className="cartao space-y-2 border-ocre/60 p-3 text-sm shadow-xl shadow-tinta/10">
+        {aplicado !== null ? (
+          <p>
+            <span className="font-medium text-jade-forte">Aplicado</span> em {aplicado} frase
+            {aplicado === 1 ? '' : 's'}.
+          </p>
+        ) : (
+          <>
+            <p>
+              Você trocou <span className="rounded bg-selo-tint px-1 font-medium">{troca.de}</span> por{' '}
+              <span className="rounded bg-jade-tint px-1 font-medium">{troca.para}</span>
+              {noCapitulo > 0 && (
+                <>
+                  {' '}
+                  — aparece em mais <strong>{noCapitulo}</strong> frase{noCapitulo === 1 ? '' : 's'} deste capítulo
+                </>
+              )}
+              {naObra && naObra.frases > noCapitulo && (
+                <>
+                  {noCapitulo > 0 ? ' e' : ' — aparece'} em <strong>{naObra.frases - noCapitulo}</strong> frase
+                  {naObra.frases - noCapitulo === 1 ? '' : 's'} de outros capítulos
+                </>
+              )}
+              .
+            </p>
+            {erro && <Aviso tipo="erro">{erro}</Aviso>}
+            <div className="flex flex-wrap items-center gap-2">
+              {noCapitulo > 0 && (
+                <Botao onClick={() => aplicar.mutate('capitulo')} disabled={aplicar.isPending}>
+                  Aplicar no capítulo ({noCapitulo})
+                </Botao>
+              )}
+              {naObra && naObra.frases > 0 && naObra.frases !== noCapitulo && (
+                <Botao variante="secundario" onClick={() => aplicar.mutate('obra')} disabled={aplicar.isPending}>
+                  Aplicar na obra inteira ({naObra.frases} frase{naObra.frases === 1 ? '' : 's'} em {naObra.capitulos}{' '}
+                  capítulo{naObra.capitulos === 1 ? '' : 's'})
+                </Botao>
+              )}
+              <button onClick={aoFechar} className="ml-auto text-xs text-tinta-2 underline hover:text-tinta">
+                Ignorar
+              </button>
+            </div>
           </>
         )}
       </div>

@@ -9,7 +9,7 @@ import { ObraLayout } from './paginas/ObraLayout';
 import { Capitulos } from './paginas/Capitulos';
 import { EditorCapitulo } from './paginas/EditorCapitulo';
 import { Glossario } from './paginas/Glossario';
-import { PromptMae } from './paginas/PromptMae';
+import { PromptMae, PaginaPromptPadrao } from './paginas/PromptMae';
 import { BancoTestes } from './paginas/BancoTestes';
 import { TermosSugeridos } from './paginas/TermosSugeridos';
 import { Configuracoes } from './paginas/Configuracoes';
@@ -27,6 +27,7 @@ const rotas = createBrowserRouter([
     children: [
       { index: true, element: <ListaObras /> },
       { path: 'docs', element: <Docs /> },
+      { path: 'prompt-padrao', element: <PaginaPromptPadrao /> },
       { path: 'configuracoes', element: <Configuracoes /> },
       {
         path: 'obras/:obraId',

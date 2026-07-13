@@ -88,9 +88,10 @@ export async function iniciarTraducao(
   const provedor = obterProvedor(provedorId);
   const modelo = opcoes.modelo ?? obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao);
 
-  const promptAtivo = reposPrompts.ativo(db, capitulo.obra_id);
+  // Obra sem prompt próprio adota o padrão global na hora (vira a v1.0 dela).
+  const promptAtivo = reposPrompts.ativoOuAdotado(db, capitulo.obra_id);
   if (!promptAtivo) {
-    return { ok: false, erro: 'A obra não tem prompt mãe ativo. Cadastre um na tela de Prompt mãe.' };
+    return { ok: false, erro: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo. Cadastre um na tela de Prompt mãe.' };
   }
 
   const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
@@ -157,6 +158,11 @@ async function executarJob(
   const capitulo = reposCapitulos.obter(db, capituloId)!;
   let tituloPendente = ctx.traduzirTitulo;
 
+  // Termos que a IA adotou nos blocos anteriores deste job (zh → pt). Sem isso,
+  // um termo novo do bloco 1 era retraduzido do zero no bloco 5 — mesma palavra,
+  // traduções diferentes dentro do capítulo. O glossário do banco tem precedência.
+  const termosAdotados = new Map<string, string>();
+
   try {
     // Blocos são recomputados a cada iteração a partir do banco — assim uma frase
     // marcada como erro num bloco anterior não é reprocessada dentro do mesmo job.
@@ -198,11 +204,20 @@ async function executarJob(
           ])
         : glossario;
 
+      // Termos adotados que aparecem neste trecho e ainda não entraram no glossário
+      // (se o usuário aprovou o termo no meio do job, a versão do glossário vence).
+      const noGlossario = new Set(glossario.map((e) => e.termo_zh));
+      const corpoDoBloco = [titulo, ...bloco.map((f) => f.texto_zh), ...proximas].filter(Boolean).join('\n');
+      const termosAdotadosDoBloco = [...termosAdotados]
+        .filter(([zh]) => !noGlossario.has(zh) && corpoDoBloco.includes(zh))
+        .map(([termo_zh, termo_pt]) => ({ termo_zh, termo_pt }));
+
       const req: RequisicaoTraducaoBloco = {
         modelo: ctx.modelo,
         promptMae: ctx.promptMae,
         glossario: glossarioDoBloco,
         glossarioNoUsuario: ctx.config.glossario_relevante,
+        termosAdotados: termosAdotadosDoBloco,
         titulo,
         caudaAnterior,
         frases: bloco.map((f) => ({ ordem: f.ordem, texto_zh: f.texto_zh })),
@@ -281,6 +296,14 @@ async function executarJob(
       const faltantes = bloco.length - traduzidasNesteBloco.size;
       job.progresso.frases_prontas += traduzidasNesteBloco.size;
       job.progresso.frases_erro += faltantes;
+
+      // Primeira adoção vence: se o mesmo termo reaparecer com outra tradução,
+      // mantém a que os blocos anteriores já usaram.
+      for (const t of resultado.resposta.termos_novos) {
+        if (t.termo_zh && t.termo_pt && !termosAdotados.has(t.termo_zh)) {
+          termosAdotados.set(t.termo_zh, t.termo_pt);
+        }
+      }
 
       const novos = reposTermosSugeridos.registrar(db, capitulo.obra_id, capituloId, resultado.resposta.termos_novos);
       if (novos > 0) emitir(capituloId, { tipo: 'termos_sugeridos', dados: { quantidade: novos } });

@@ -10,9 +10,10 @@ import { diretorioDados } from '../config.js';
 const configSchema = z.object({
   provedor_padrao: z.enum(PROVEDORES_IDS).optional(),
   modelo_padrao: z.string().optional(),
-  tamanho_bloco: z.number().int().min(1).max(100).optional(),
+  // Teto alto o bastante para "capítulo inteiro num bloco só" em capítulos longos.
+  tamanho_bloco: z.number().int().min(1).max(400).optional(),
   vizinhas_revisao: z.number().int().min(0).max(10).optional(),
-  cauda_contexto: z.number().int().min(0).max(10).optional(),
+  cauda_contexto: z.number().int().min(0).max(20).optional(),
   parar_no_limite: z.boolean().optional(),
   glossario_relevante: z.boolean().optional(),
   cotas_diarias: z.record(z.string(), z.number().int().min(0).max(1000000)).optional(),

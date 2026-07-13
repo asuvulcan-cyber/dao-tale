@@ -43,9 +43,9 @@ export function rotasComparador(db: BancoDados): Hono {
     const obra = reposObras.obter(db, obraId);
     if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
 
-    const promptAtivo = reposPrompts.ativo(db, obraId);
+    const promptAtivo = reposPrompts.ativoOuAdotado(db, obraId);
     if (!promptAtivo) {
-      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo.' } }, 400);
+      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
     const { frases } = segmentar(corpo.data.texto_zh);

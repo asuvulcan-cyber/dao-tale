@@ -52,6 +52,9 @@ export interface PromptMae {
   criado_em: string;
 }
 
+/** Versão do prompt padrão global — ponto de partida para obras sem prompt próprio. */
+export type PromptPadrao = Omit<PromptMae, 'obra_id'>;
+
 export interface Capitulo {
   id: number;
   obra_id: number;
@@ -147,9 +150,12 @@ export interface Configuracoes {
 export const CONFIG_PADRAO: Configuracoes = {
   provedor_padrao: 'mock',
   modelo_padrao: '',
-  tamanho_bloco: 20,
+  // Bloco grande cobre capítulos típicos em 1–3 chamadas — junto com os termos
+  // adotados realimentados entre blocos, mantém a terminologia consistente sem
+  // arriscar estourar o limite de tokens de saída num capítulo muito longo.
+  tamanho_bloco: 60,
   vizinhas_revisao: 3,
-  cauda_contexto: 2,
+  cauda_contexto: 5,
   parar_no_limite: false,
   glossario_relevante: true,
   // Valores da cota gratuita de cada provedor (jul/2026) — ajustáveis em Configurações.

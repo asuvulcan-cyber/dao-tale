@@ -21,7 +21,26 @@ export function filtrarGlossarioRelevante(
   return glossario.filter((e) => corpo.includes(e.termo_zh));
 }
 
-export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
+export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario' | 'modo'>): string {
+  const instrucoes =
+    req.modo === 'detalhes'
+      ? // Título/sinopse de obra: a sinopse chega já quebrada em parágrafos numerados
+        // (modelos pequenos só devolviam o 1º parágrafo quando ela ia como item único).
+        [
+          'Você receberá itens numerados: o título da obra e/ou os parágrafos da sinopse, em chinês, para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
+          'Traduza CADA item numerado POR COMPLETO, mantendo o número. Não resuma, não corte e não omita nada.',
+          '- Título da obra: traduza como título — conciso, evocativo e natural em PT-BR.',
+          '- Parágrafos da sinopse: cada parágrafo vem como um item separado; traduza todos, com tom de contracapa e mantendo o encadeamento entre eles.',
+          'Devolva um item traduzido para cada número recebido — nenhum pode faltar.',
+          'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
+          'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+        ]
+      : [
+          'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
+          'Traduza cada frase numerada mantendo o número. Não traduza o contexto marcado como "já traduzido" nem o marcado como "contexto futuro".',
+          'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
+          'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+        ];
   return [
     req.promptMae.trim(),
     '',
@@ -32,10 +51,7 @@ export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' |
       : ['## GLOSSÁRIO DA OBRA (uso obrigatório e consistente)', formatarGlossario(req.glossario)]),
     '',
     '## INSTRUÇÕES OPERACIONAIS DO APLICATIVO',
-    'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
-    'Traduza cada frase numerada mantendo o número. Não traduza o contexto marcado como "já traduzido" nem o marcado como "contexto futuro".',
-    'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
-    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+    ...instrucoes,
   ].join('\n');
 }
 
@@ -46,14 +62,21 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
     partes.push(formatarGlossario(req.glossario));
     partes.push('');
   }
+  if (req.termosAdotados && req.termosAdotados.length > 0) {
+    // Termos escolhidos pela própria IA em blocos anteriores do mesmo capítulo:
+    // ainda não estão no glossário, mas mudar a tradução no meio do capítulo é pior.
+    partes.push('### Termos já adotados neste capítulo (mantenha exatamente estas traduções):');
+    for (const t of req.termosAdotados) partes.push(`${t.termo_zh} → ${t.termo_pt}`);
+    partes.push('');
+  }
   if (req.caudaAnterior.length > 0) {
     partes.push('### Contexto anterior (já traduzido — não retraduzir):');
     for (const f of req.caudaAnterior) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt}`);
     partes.push('');
   }
-  partes.push('### Frases a traduzir:');
+  partes.push(req.modo === 'detalhes' ? '### Itens a traduzir:' : '### Frases a traduzir:');
   if (req.titulo) partes.push(`[-1] ${req.titulo} (título do capítulo — traduza como título)`);
-  for (const f of req.frases) partes.push(`[${f.ordem}] ${f.texto_zh}`);
+  for (const f of req.frases) partes.push(f.rotulo ? `[${f.ordem}] (${f.rotulo})\n${f.texto_zh}` : `[${f.ordem}] ${f.texto_zh}`);
   if (req.proximas.length > 0) {
     partes.push('');
     partes.push('### Contexto futuro (apenas referência — não traduzir):');

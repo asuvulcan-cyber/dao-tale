@@ -142,14 +142,116 @@ describe('fluxo completo com provedor mock', () => {
     expect(depois.frases[0].texto_pt).toBe(textoAntes);
   });
 
-  it('tradução exige prompt mãe ativo', async () => {
+  it('obra sem prompt adota o padrão automaticamente ao traduzir', async () => {
     const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Sem Prompt' }));
     const criado = await json(
       await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '他说。' }),
     );
     const resposta = await chamar('POST', `/api/capitulos/${criado.capitulo.id}/traduzir`, { provedor: 'mock' });
-    expect(resposta.status).toBe(400);
-    expect((await json(resposta)).erro.mensagem).toContain('prompt mãe');
+    expect(resposta.status).toBe(202);
+
+    const prompts = await json(await chamar('GET', `/api/obras/${obra.id}/prompts`));
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].versao).toBe('1.0');
+    expect(prompts[0].ativo).toBe(true);
+    expect(prompts[0].notas_versao).toContain('prompt padrão');
+  });
+
+  it('traduz título e sinopse do cadastro com o prompt padrão', async () => {
+    const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', {
+      titulo_zh: '十日终焉',
+      sinopse_zh: '他醒来时发现自己在终焉之地。',
+      provedor: 'mock',
+    });
+    expect(resposta.status).toBe(200);
+    const dados = await json(resposta);
+    expect(dados.titulo_pt).toBeTruthy();
+    expect(dados.sinopse_pt).toBeTruthy();
+
+    const invalido = await chamar('POST', '/api/ia/traduzir-detalhes', { provedor: 'mock' });
+    expect(invalido.status).toBe(400);
+  });
+
+  it('sinopse com vários parágrafos volta inteira (um item por parágrafo)', async () => {
+    const paragrafos = ['第一段落的内容。', '第二段落的内容。', '第三段落的内容。'];
+    const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', {
+      sinopse_zh: paragrafos.join('\n\n'),
+      provedor: 'mock',
+    });
+    expect(resposta.status).toBe(200);
+    const dados = await json(resposta);
+    // O mock traduz cada frase; a rota remonta os parágrafos com linha em branco.
+    const linhas = dados.sinopse_pt.split('\n\n');
+    expect(linhas).toHaveLength(3);
+    for (const p of paragrafos) expect(dados.sinopse_pt).toContain(p);
+  });
+
+  it('prompt padrão: vem semeado, versiona e pode ser adotado explicitamente', async () => {
+    // Semeado na criação do banco, com uma versão ativa.
+    const versoes = await json(await chamar('GET', '/api/prompt-padrao'));
+    expect(versoes).toHaveLength(1);
+    expect(versoes[0].ativo).toBe(true);
+
+    // Nova versão ativa; só uma fica ativa por vez.
+    await chamar('POST', '/api/prompt-padrao', { versao: '1.1', conteudo: 'Regras revisadas.', ativar: true });
+    const depois = await json(await chamar('GET', '/api/prompt-padrao'));
+    expect(depois).toHaveLength(2);
+    expect(depois.filter((v: any) => v.ativo)).toHaveLength(1);
+    expect(depois.find((v: any) => v.ativo).versao).toBe('1.1');
+
+    // Adoção explícita copia a versão ativa para a obra…
+    const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Adotante' }));
+    const adotado = await json(await chamar('POST', `/api/obras/${obra.id}/prompts/adotar-padrao`));
+    expect(adotado.conteudo).toBe('Regras revisadas.');
+    expect(adotado.ativo).toBe(true);
+
+    // …e só funciona quando a obra ainda não tem versões.
+    const repetida = await chamar('POST', `/api/obras/${obra.id}/prompts/adotar-padrao`);
+    expect(repetida.status).toBe(409);
+  });
+
+  it('correção rápida: substitui termo em lote por capítulo e por obra', async () => {
+    const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Obra' }));
+    const cap1 = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '女娲说。女娲笑了。' }),
+    );
+    const cap2 = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 2, texto_origem: '女娲走了。' }),
+    );
+    const frasesDe = async (capId: number) => (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+
+    // Simula traduções com o termo errado nos dois capítulos.
+    const [f1, f2] = await frasesDe(cap1.capitulo.id);
+    const [f3] = await frasesDe(cap2.capitulo.id);
+    await chamar('PATCH', `/api/frases/${f1.id}`, { texto_pt: 'Nuwa disse.' });
+    await chamar('PATCH', `/api/frases/${f2.id}`, { texto_pt: 'Nuwa sorriu para Nuwa.' });
+    await chamar('PATCH', `/api/frases/${f3.id}`, { texto_pt: 'Nuwa foi embora.' });
+
+    // Prévia não altera nada.
+    const previa = await json(
+      await chamar('POST', `/api/obras/${obra.id}/substituir`, { de: 'Nuwa', para: 'Nüwa', previa: true }),
+    );
+    expect(previa).toEqual({ frases: 3, capitulos: 2 });
+    expect((await frasesDe(cap1.capitulo.id))[0].texto_pt).toBe('Nuwa disse.');
+
+    // Escopo capítulo: só o capítulo 1 muda (todas as ocorrências da frase).
+    const noCapitulo = await json(
+      await chamar('POST', `/api/obras/${obra.id}/substituir`, { de: 'Nuwa', para: 'Nüwa', capitulo_id: cap1.capitulo.id }),
+    );
+    expect(noCapitulo.frases).toBe(2);
+    const depois1 = await frasesDe(cap1.capitulo.id);
+    expect(depois1[1].texto_pt).toBe('Nüwa sorriu para Nüwa.');
+    expect(depois1[1].editado_manualmente).toBe(true);
+    expect((await frasesDe(cap2.capitulo.id))[0].texto_pt).toBe('Nuwa foi embora.');
+
+    // Escopo obra: pega o que restou.
+    const naObra = await json(await chamar('POST', `/api/obras/${obra.id}/substituir`, { de: 'Nuwa', para: 'Nüwa' }));
+    expect(naObra.frases).toBe(1);
+    expect((await frasesDe(cap2.capitulo.id))[0].texto_pt).toBe('Nüwa foi embora.');
+
+    // de === para é rejeitado.
+    const igual = await chamar('POST', `/api/obras/${obra.id}/substituir`, { de: 'x', para: 'x' });
+    expect(igual.status).toBe(400);
   });
 
   it('glossário: duplicado dá 409 e importação CSV funciona', async () => {

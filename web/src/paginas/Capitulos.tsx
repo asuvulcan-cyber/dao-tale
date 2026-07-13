@@ -235,8 +235,12 @@ function DetalhesObra() {
     queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
   });
 
+  const [titulo, setTitulo] = useState<string | null>(null);
+  const [tituloOriginal, setTituloOriginal] = useState<string | null>(null);
   const [sinopse, setSinopse] = useState<string | null>(null);
   const [tags, setTags] = useState<string | null>(null);
+  const tituloAtual = titulo ?? obra?.titulo ?? '';
+  const tituloOriginalAtual = tituloOriginal ?? obra?.titulo_original ?? '';
   const sinopseAtual = sinopse ?? obra?.sinopse ?? '';
   const tagsAtual = tags ?? obra?.tags.join(', ') ?? '';
 
@@ -248,6 +252,9 @@ function DetalhesObra() {
   const salvar = useMutation({
     mutationFn: () =>
       api('PUT', `/obras/${obraId}`, {
+        // Título é obrigatório no banco: só envia se preenchido (vazio mantém o atual).
+        ...(tituloAtual.trim() ? { titulo: tituloAtual.trim() } : {}),
+        titulo_original: tituloOriginalAtual.trim() || null,
         sinopse: sinopseAtual.trim() || null,
         tags: tagsAtual.split(',').map((t) => t.trim()).filter(Boolean),
       }),
@@ -282,6 +289,25 @@ function DetalhesObra() {
   const removerCapa = useMutation({
     mutationFn: () => api('DELETE', `/obras/${obraId}/capa`),
     onSuccess: aoMudarObra,
+  });
+
+  // Título original e/ou sinopse em chinês → traduz com o prompt e glossário da obra.
+  const tituloEmChines = /[一-鿿]/.test(tituloOriginalAtual);
+  const sinopseEmChines = /[一-鿿]/.test(sinopseAtual);
+  const haChines = tituloEmChines || sinopseEmChines;
+  const traduzirDetalhes = useMutation({
+    mutationFn: () =>
+      api<{ titulo_pt: string | null; sinopse_pt: string | null }>('POST', '/ia/traduzir-detalhes', {
+        obra_id: Number(obraId),
+        ...(tituloEmChines ? { titulo_zh: tituloOriginalAtual.trim() } : {}),
+        ...(sinopseEmChines ? { sinopse_zh: sinopseAtual.trim() } : {}),
+      }),
+    onSuccess: (r) => {
+      if (r.titulo_pt) setTitulo(r.titulo_pt);
+      if (r.sinopse_pt) setSinopse(r.sinopse_pt);
+      setErro('');
+    },
+    onError: (e) => setErro((e as Error).message),
   });
 
   if (!obra) return null;
@@ -326,6 +352,26 @@ function DetalhesObra() {
           </div>
         </div>
         <div className="min-w-64 flex-1 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              Título
+              <input
+                value={tituloAtual}
+                onChange={(e) => setTitulo(e.target.value)}
+                className="entrada mt-1 w-full"
+                placeholder="Título em português"
+              />
+            </label>
+            <label className="block text-sm">
+              Título original (chinês)
+              <input
+                value={tituloOriginalAtual}
+                onChange={(e) => setTituloOriginal(e.target.value)}
+                className="texto-zh entrada mt-1 w-full"
+                placeholder="十日终焉"
+              />
+            </label>
+          </div>
           <label className="block text-sm">
             Sinopse
             <textarea
@@ -349,6 +395,17 @@ function DetalhesObra() {
             <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
               Salvar detalhes
             </Botao>
+            {haChines && (
+              <Botao variante="secundario" onClick={() => traduzirDetalhes.mutate()} disabled={traduzirDetalhes.isPending}>
+                {traduzirDetalhes.isPending
+                  ? 'Traduzindo…'
+                  : tituloEmChines && sinopseEmChines
+                    ? 'Traduzir título e sinopse do chinês (IA)'
+                    : tituloEmChines
+                      ? 'Traduzir título do chinês (IA)'
+                      : 'Traduzir sinopse do chinês (IA)'}
+              </Botao>
+            )}
             {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
           </div>
         </div>

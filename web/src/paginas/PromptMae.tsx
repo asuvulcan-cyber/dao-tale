@@ -1,13 +1,93 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PromptMae as Prompt } from '@dao-tale/shared';
+import type { PromptPadrao as Prompt } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
 import { diffLinhas } from '../util/diff';
 
+// A tela é a mesma para o prompt mãe da obra e o prompt padrão global —
+// só mudam os endpoints e o estado vazio.
+
 export function PromptMae() {
   const { obraId } = useParams();
+  const clienteQuery = useQueryClient();
+  const chave = ['prompts', obraId];
+  const [erroAdotar, setErroAdotar] = useState('');
+
+  const adotar = useMutation({
+    mutationFn: () => api('POST', `/obras/${obraId}/prompts/adotar-padrao`),
+    onSuccess: () => clienteQuery.invalidateQueries({ queryKey: chave }),
+    onError: (e) => setErroAdotar((e as Error).message),
+  });
+
+  return (
+    <GerenciadorPrompts
+      titulo="Prompt mãe"
+      descricao="As regras que governam a tradução desta obra; versões são imutáveis."
+      chave={chave}
+      urlLista={`/obras/${obraId}/prompts`}
+      urlCriar={`/obras/${obraId}/prompts`}
+      urlAtivar={(id) => `/prompts/${id}/ativar`}
+      estadoVazio={
+        <Aviso tipo="info">
+          <div className="space-y-2">
+            <p>
+              Esta obra ainda não tem prompt mãe próprio. Ao traduzir, o <strong>prompt padrão</strong> é
+              adotado automaticamente como v1.0 da obra — a partir daí ele evolui separado, por novas
+              versões, conforme as correções da obra.
+            </p>
+            <p>
+              Você também pode adotá-lo agora para revisar e enriquecer antes de traduzir, ou criar uma
+              versão do zero abaixo.
+            </p>
+            <Botao variante="secundario" onClick={() => adotar.mutate()} disabled={adotar.isPending}>
+              {adotar.isPending ? 'Adotando…' : 'Adotar prompt padrão agora'}
+            </Botao>
+            {erroAdotar && <p className="text-sm text-selo-forte">{erroAdotar}</p>}
+          </div>
+        </Aviso>
+      }
+    />
+  );
+}
+
+export function PaginaPromptPadrao() {
+  return (
+    <GerenciadorPrompts
+      titulo="Prompt padrão"
+      descricao="Regras genéricas de tradução, usadas como ponto de partida por obras sem prompt próprio; versões são imutáveis."
+      chave={['prompt-padrao']}
+      urlLista="/prompt-padrao"
+      urlCriar="/prompt-padrao"
+      urlAtivar={(id) => `/prompt-padrao/${id}/ativar`}
+      estadoVazio={
+        <Aviso tipo="info">
+          Não há nenhuma versão do prompt padrão — sem ele, obras sem prompt próprio ficam bloqueadas para
+          tradução. Crie a primeira versão abaixo.
+        </Aviso>
+      }
+    />
+  );
+}
+
+function GerenciadorPrompts({
+  titulo,
+  descricao,
+  chave,
+  urlLista,
+  urlCriar,
+  urlAtivar,
+  estadoVazio,
+}: {
+  titulo: string;
+  descricao: string;
+  chave: (string | undefined)[];
+  urlLista: string;
+  urlCriar: string;
+  urlAtivar: (id: number) => string;
+  estadoVazio: ReactNode;
+}) {
   const clienteQuery = useQueryClient();
   const [selecionado, setSelecionado] = useState<number | null>(null);
   const [mostrarNova, setMostrarNova] = useState(false);
@@ -15,21 +95,21 @@ export function PromptMae() {
   const [erro, setErro] = useState('');
 
   const { data: versoes } = useQuery({
-    queryKey: ['prompts', obraId],
-    queryFn: () => api<Prompt[]>('GET', `/obras/${obraId}/prompts`),
+    queryKey: chave,
+    queryFn: () => api<Prompt[]>('GET', urlLista),
   });
 
-  const invalidar = () => clienteQuery.invalidateQueries({ queryKey: ['prompts', obraId] });
+  const invalidar = () => clienteQuery.invalidateQueries({ queryKey: chave });
 
   const ativar = useMutation({
-    mutationFn: (id: number) => api('POST', `/prompts/${id}/ativar`),
+    mutationFn: (id: number) => api('POST', urlAtivar(id)),
     onSuccess: invalidar,
     onError: (e) => setErro((e as Error).message),
   });
 
   const criar = useMutation({
     mutationFn: (dados: { versao: string; conteudo: string; notas_versao?: string; ativar: boolean }) =>
-      api('POST', `/obras/${obraId}/prompts`, dados),
+      api('POST', urlCriar, dados),
     onSuccess: () => {
       invalidar();
       setMostrarNova(false);
@@ -43,7 +123,7 @@ export function PromptMae() {
 
   return (
     <div>
-      <CabecalhoPagina titulo="Prompt mãe" descricao="As regras que governam a tradução; versões são imutáveis.">
+      <CabecalhoPagina titulo={titulo} descricao={descricao}>
         {(versoes?.length ?? 0) >= 2 && (
           <Botao variante="secundario" onClick={() => { setComparando((v) => !v); setMostrarNova(false); }}>
             {comparando ? 'Fechar comparação' : 'Comparar versões'}
@@ -55,12 +135,7 @@ export function PromptMae() {
       </CabecalhoPagina>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
-      {versoes?.length === 0 && !mostrarNova && (
-        <Aviso tipo="info">
-          Esta obra ainda não tem prompt mãe — a tradução fica bloqueada até cadastrar um. Crie a primeira versão
-          abaixo.
-        </Aviso>
-      )}
+      {versoes?.length === 0 && !mostrarNova && estadoVazio}
 
       <div className="flex gap-4">
         {/* Linha do tempo de versões (guia §五.6): ativa com filete jade */}
@@ -235,7 +310,7 @@ function FormularioNovaVersao({
         onChange={(e) => setConteudo(e.target.value)}
         rows={20}
         className="entrada w-full font-mono text-xs"
-        placeholder="Conteúdo completo do prompt mãe (pré-preenchido com a versão ativa)"
+        placeholder="Conteúdo completo do prompt (pré-preenchido com a versão ativa)"
       />
       <Botao type="submit" disabled={enviando}>
         {enviando ? 'Salvando…' : 'Criar versão'}

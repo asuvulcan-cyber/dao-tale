@@ -62,6 +62,14 @@ export function Casca() {
               Obras
             </NavLink>
             <NavLink
+              to="/prompt-padrao"
+              className={({ isActive }) =>
+                isActive ? 'font-semibold text-tinta' : 'text-tinta-2 hover:text-tinta'
+              }
+            >
+              Prompt padrão
+            </NavLink>
+            <NavLink
               to="/docs"
               className={({ isActive }) =>
                 isActive ? 'font-semibold text-tinta' : 'text-tinta-2 hover:text-tinta'

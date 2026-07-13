@@ -5,17 +5,28 @@ import type { EntradaGlossario, ModeloInfo, ProvedorId, RespostaRevisao } from '
 export interface FraseParaTraduzir {
   ordem: number;
   texto_zh: string;
+  /** Rótulo do item quando não é uma frase de capítulo (ex.: "título da obra"),
+   * apresentado ao modelo fora do texto-fonte para não contaminá-lo. */
+  rotulo?: string;
 }
 
 export interface RequisicaoTraducaoBloco {
   modelo: string;
   promptMae: string;
+  /** 'capitulo' (padrão): frases numeradas de um capítulo. 'detalhes': título e/ou
+   * sinopse de obra — muda as instruções operacionais (traduzir o item inteiro,
+   * não frase a frase). */
+  modo?: 'capitulo' | 'detalhes';
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado por bloco (só termos presentes no trecho):
    * ele entra na mensagem do usuário e o sistema fica estável para o prompt caching. */
   glossarioNoUsuario?: boolean;
   /** Título do capítulo ainda sem tradução: entra no bloco como frase de número -1. */
   titulo?: string;
+  /** Termos que a IA adotou em blocos anteriores deste mesmo job e que aparecem
+   * neste trecho — ainda não confirmados no glossário, mas obrigatórios para a
+   * consistência dentro do capítulo. */
+  termosAdotados?: { termo_zh: string; termo_pt: string }[];
   /** Últimas frases já traduzidas antes do bloco (continuidade de tom). */
   caudaAnterior: { texto_zh: string; texto_pt: string }[];
   frases: FraseParaTraduzir[];

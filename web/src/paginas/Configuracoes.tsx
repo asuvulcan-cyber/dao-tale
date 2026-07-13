@@ -233,7 +233,7 @@ function FormularioPadroes({
           <input
             type="number"
             min={1}
-            max={100}
+            max={400}
             value={valores.tamanho_bloco}
             onChange={(e) => setValores({ ...valores, tamanho_bloco: Number(e.target.value) })}
             className="entrada mt-1 w-full"
@@ -255,7 +255,7 @@ function FormularioPadroes({
           <input
             type="number"
             min={0}
-            max={10}
+            max={20}
             value={valores.cauda_contexto}
             onChange={(e) => setValores({ ...valores, cauda_contexto: Number(e.target.value) })}
             className="entrada mt-1 w-full"

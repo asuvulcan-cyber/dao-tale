@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Selo do Dao Tale: mesmo desenho do cabeçalho do app (tokens cor-selo e
+       cor-papel-alto do tema claro; raio proporcional ao raio-selo). -->
+  <rect width="64" height="64" rx="18" fill="#be3f2b"/>
+  <text x="32" y="34" font-family="Noto Serif CJK SC, Noto Serif SC, Source Han Serif SC, Songti SC, SimSun, serif" font-size="40" font-weight="600" fill="#f4f3ec" text-anchor="middle" dominant-baseline="central">道</text>
+</svg>

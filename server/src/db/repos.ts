@@ -3,6 +3,7 @@ import type {
   Obra,
   ObraComContadores,
   PromptMae,
+  PromptPadrao,
   Capitulo,
   CapituloResumo,
   Frase,
@@ -187,6 +188,69 @@ export const reposPrompts = {
     })();
     return this.obter(db, id);
   },
+
+  /** Copia o prompt padrão ativo para a obra como primeira versão (a partir daí
+      ele evolui separado, por novas versões). Devolve undefined se a obra já
+      tem versões ou se não há prompt padrão ativo. */
+  adotarPadrao(db: BancoDados, obraId: number): PromptMae | undefined {
+    return db.transaction(() => {
+      if (this.listar(db, obraId).length > 0) return undefined;
+      const padrao = reposPromptPadrao.ativo(db);
+      if (!padrao) return undefined;
+      return this.criar(db, obraId, {
+        versao: '1.0',
+        conteudo: padrao.conteudo,
+        notas_versao: `Adotado do prompt padrão v${padrao.versao}.`,
+        ativar: true,
+      });
+    })();
+  },
+
+  /** Prompt que governa a tradução da obra: o ativo dela ou, se ela ainda não
+      tem nenhum, o padrão adotado automaticamente na hora. */
+  ativoOuAdotado(db: BancoDados, obraId: number): PromptMae | undefined {
+    return this.ativo(db, obraId) ?? this.adotarPadrao(db, obraId);
+  },
+};
+
+// ── Prompt padrão global (mesmas regras de versões imutáveis) ──────────────
+
+export const reposPromptPadrao = {
+  listar(db: BancoDados): PromptPadrao[] {
+    return (db.prepare('SELECT * FROM prompt_padrao ORDER BY criado_em DESC').all() as any[]).map(paraPrompt);
+  },
+
+  obter(db: BancoDados, id: number): PromptPadrao | undefined {
+    const l = db.prepare('SELECT * FROM prompt_padrao WHERE id = ?').get(id);
+    return l ? paraPrompt(l) : undefined;
+  },
+
+  ativo(db: BancoDados): PromptPadrao | undefined {
+    const l = db.prepare('SELECT * FROM prompt_padrao WHERE ativo = 1').get();
+    return l ? paraPrompt(l) : undefined;
+  },
+
+  criar(
+    db: BancoDados,
+    dados: { versao: string; conteudo: string; notas_versao?: string; ativar: boolean },
+  ): PromptPadrao {
+    return db.transaction(() => {
+      if (dados.ativar) db.prepare('UPDATE prompt_padrao SET ativo = 0').run();
+      const info = db
+        .prepare('INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, ?)')
+        .run(dados.versao, dados.conteudo, dados.notas_versao ?? null, dados.ativar ? 1 : 0);
+      return this.obter(db, Number(info.lastInsertRowid))!;
+    })();
+  },
+
+  ativar(db: BancoDados, id: number): PromptPadrao | undefined {
+    if (!this.obter(db, id)) return undefined;
+    db.transaction(() => {
+      db.prepare('UPDATE prompt_padrao SET ativo = 0').run();
+      db.prepare('UPDATE prompt_padrao SET ativo = 1 WHERE id = ?').run(id);
+    })();
+    return this.obter(db, id);
+  },
 };
 
 // ── Capítulos ──────────────────────────────────────────────────────────────
@@ -283,6 +347,40 @@ export const reposFrases = {
   editarTexto(db: BancoDados, id: number, textoPt: string): Frase | undefined {
     db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(textoPt, id);
     return this.obter(db, id);
+  },
+
+  /** Ocorrências de um termo nas traduções da obra (ou de um capítulo dela). */
+  contarTermo(
+    db: BancoDados,
+    opcoes: { obraId: number; capituloId?: number; de: string },
+  ): { frases: number; capitulos: number } {
+    return db
+      .prepare(
+        `SELECT COUNT(*) AS frases, COUNT(DISTINCT f.capitulo_id) AS capitulos
+         FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
+         WHERE c.obra_id = ? AND (? IS NULL OR f.capitulo_id = ?) AND instr(f.texto_pt, ?) > 0`,
+      )
+      .get(opcoes.obraId, opcoes.capituloId ?? null, opcoes.capituloId ?? null, opcoes.de) as {
+      frases: number;
+      capitulos: number;
+    };
+  },
+
+  /** Correção rápida: troca o termo em todas as traduções do escopo, marcando-as
+      como editadas manualmente (mesma semântica de editarTexto). */
+  substituirTermo(
+    db: BancoDados,
+    opcoes: { obraId: number; capituloId?: number; de: string; para: string },
+  ): { frases: number; capitulos: number } {
+    return db.transaction(() => {
+      const afetadas = this.contarTermo(db, opcoes);
+      db.prepare(
+        `UPDATE frases SET texto_pt = replace(texto_pt, ?, ?), editado_manualmente = 1
+         WHERE instr(texto_pt, ?) > 0
+           AND capitulo_id IN (SELECT id FROM capitulos WHERE obra_id = ? AND (? IS NULL OR id = ?))`,
+      ).run(opcoes.de, opcoes.para, opcoes.de, opcoes.obraId, opcoes.capituloId ?? null, opcoes.capituloId ?? null);
+      return afetadas;
+    })();
   },
 
   reverterParaIa(db: BancoDados, id: number): Frase | undefined {

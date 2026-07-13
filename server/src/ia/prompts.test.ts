@@ -51,3 +51,53 @@ describe('glossário no usuário (modo relevante)', () => {
     expect(sistemaTraducao({ ...req, glossario: [] })).toBe(sistema);
   });
 });
+
+describe('termos adotados no capítulo', () => {
+  it('entram na mensagem do usuário, antes das frases, e não mudam o sistema', () => {
+    const req: RequisicaoTraducaoBloco = {
+      modelo: 'm',
+      promptMae: 'Regras.',
+      glossario: [],
+      glossarioNoUsuario: true,
+      termosAdotados: [{ termo_zh: '归墟', termo_pt: 'Abismo do Retorno' }],
+      caudaAnterior: [],
+      frases: [{ ordem: 5, texto_zh: '归墟在等待。' }],
+      proximas: [],
+    };
+    const usuario = usuarioTraducao(req);
+    expect(usuario).toContain('Termos já adotados neste capítulo');
+    expect(usuario).toContain('归墟 → Abismo do Retorno');
+    expect(usuario.indexOf('归墟 → Abismo do Retorno')).toBeLessThan(usuario.indexOf('### Frases a traduzir:'));
+    const { termosAdotados: _ignorado, ...semTermos } = req;
+    expect(sistemaTraducao(req)).toBe(sistemaTraducao(semTermos));
+  });
+});
+
+describe('modo detalhes (título/sinopse de obra)', () => {
+  const req: RequisicaoTraducaoBloco = {
+    modelo: 'm',
+    promptMae: 'Regras da obra.',
+    modo: 'detalhes',
+    glossario: [],
+    caudaAnterior: [],
+    frases: [
+      { ordem: 0, texto_zh: '十日终焉', rotulo: 'título da obra' },
+      { ordem: 1, texto_zh: '他醒来了。世界变了。', rotulo: 'sinopse da obra' },
+    ],
+    proximas: [],
+  };
+
+  it('instruções mandam traduzir o item inteiro, não frase a frase', () => {
+    const sistema = sistemaTraducao(req);
+    expect(sistema).toContain('POR COMPLETO');
+    expect(sistema).toContain('Não resuma, não corte e não omita nada.');
+    expect(sistema).not.toContain('Traduza cada frase numerada');
+  });
+
+  it('rótulo fica fora do texto-fonte, em linha própria', () => {
+    const usuario = usuarioTraducao(req);
+    expect(usuario).toContain('### Itens a traduzir:');
+    expect(usuario).toContain('[0] (título da obra)\n十日终焉');
+    expect(usuario).toContain('[1] (sinopse da obra)\n他醒来了。世界变了。');
+  });
+});
