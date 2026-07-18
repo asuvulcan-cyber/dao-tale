@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, EntradaGlossario } from '@dao-tale/shared';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais, SeletorCategoria } from '../App';
+
+interface Aparicao {
+  capitulo_id: number;
+  capitulo_numero: number;
+  frase_id: number;
+  frase_ordem: number;
+}
+type Aparicoes = Record<string, { primeira: Aparicao | null; ultima: Aparicao | null }>;
 
 export function Glossario() {
   const { obraId } = useParams();
@@ -26,7 +34,17 @@ export function Glossario() {
       ),
   });
 
-  const invalidar = () => clienteQuery.invalidateQueries({ queryKey: ['glossario', obraId] });
+  // Aparições (primeira/última) por termo — calculadas no servidor, independentes
+  // dos filtros de busca/categoria. Keyed pelo id da entrada.
+  const { data: aparicoes } = useQuery({
+    queryKey: ['glossario-aparicoes', obraId],
+    queryFn: () => api<Aparicoes>('GET', `/obras/${obraId}/glossario/aparicoes`),
+  });
+
+  const invalidar = () => {
+    clienteQuery.invalidateQueries({ queryKey: ['glossario', obraId] });
+    clienteQuery.invalidateQueries({ queryKey: ['glossario-aparicoes', obraId] });
+  };
 
   const criar = useMutation({
     mutationFn: (dados: { termo_zh: string; termo_pt: string; categoria: CategoriaGlossario; nota?: string }) =>
@@ -114,18 +132,28 @@ export function Glossario() {
       <table className="w-full border-collapse overflow-hidden cartao text-sm">
         <thead>
           <tr className="bg-papel-fundo/60 text-left">
-            <th className="olho border-b border-linha px-3 py-2">Termo 中文</th>
-            <th className="olho border-b border-linha px-3 py-2">Tradução PT-BR</th>
-            <th className="olho border-b border-linha px-3 py-2">Categoria</th>
-            <th className="olho border-b border-linha px-3 py-2">Nota</th>
-            <th className="border-b border-linha px-3 py-2"></th>
+            <th className="olho whitespace-nowrap border-b border-linha px-2 py-2">Termo 中文</th>
+            <th className="olho whitespace-nowrap border-b border-linha px-2 py-2">Tradução PT-BR</th>
+            <th className="olho whitespace-nowrap border-b border-linha px-2 py-2">Categoria</th>
+            <th className="olho whitespace-nowrap border-b border-linha px-2 py-2">Nota</th>
+            <th className="olho whitespace-nowrap border-b border-linha px-2 py-2">Aparições</th>
+            <th className="border-b border-linha px-2 py-2"></th>
           </tr>
         </thead>
         <tbody>
-          {entradas?.map((e) => <LinhaTermo key={e.id} entrada={e} aoMudar={invalidar} />)}
+          {ordenarComVariantes(entradas ?? []).map((e) => (
+            <LinhaTermo
+              key={e.id}
+              entrada={e}
+              aparicao={aparicoes?.[e.id]}
+              todas={entradas ?? []}
+              aoMudar={invalidar}
+              aoErro={setErro}
+            />
+          ))}
           {entradas?.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-3 py-4 text-center text-tinta-2">
+              <td colSpan={6} className="px-2 py-4 text-center text-tinta-2">
                 Nenhum termo encontrado.
               </td>
             </tr>
@@ -170,19 +198,94 @@ function FormularioNovoTermo({
   );
 }
 
-function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: () => void }) {
+function CelulaAparicoes({
+  obraId,
+  aparicao,
+}: {
+  obraId: string | undefined;
+  aparicao?: { primeira: Aparicao | null; ultima: Aparicao | null };
+}) {
+  const link = (a: Aparicao) => `/obras/${obraId}/capitulos/${a.capitulo_id}?frase=${a.frase_id}`;
+  const primeira = aparicao?.primeira;
+  const ultima = aparicao?.ultima;
+  if (!primeira) return <span className="text-tinta-2">—</span>;
+  // Chip com fundo colorido (tokens do Etiqueta): jade = primeira, selo = última.
+  // A cor + a ordem já dizem qual é qual; o tooltip confirma.
+  const chip = (cor: 'jade' | 'selo') =>
+    `inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium hover:underline ${
+      cor === 'jade'
+        ? 'border-jade-forte/40 bg-jade-tint text-jade-forte'
+        : 'border-selo-forte/40 bg-selo-tint text-selo-forte'
+    }`;
+  return (
+    <span className="flex flex-wrap gap-1">
+      <Link to={link(primeira)} className={chip('jade')} title="Primeira aparição — ir à frase">
+        cap. {primeira.capitulo_numero}
+      </Link>
+      {ultima && ultima.frase_id !== primeira.frase_id && (
+        <Link to={link(ultima)} className={chip('selo')} title="Última aparição — ir à frase">
+          cap. {ultima.capitulo_numero}
+        </Link>
+      )}
+    </span>
+  );
+}
+
+// Ordena com cada variante logo abaixo da sua canônica; variantes cuja canônica
+// não está na lista (por causa de filtro de busca/categoria) vão soltas ao fim.
+function ordenarComVariantes(entradas: EntradaGlossario[]): EntradaGlossario[] {
+  const out: EntradaGlossario[] = [];
+  const incluidos = new Set<number>();
+  for (const c of entradas.filter((e) => e.principal_id == null)) {
+    out.push(c);
+    incluidos.add(c.id);
+    for (const v of entradas.filter((e) => e.principal_id === c.id)) {
+      out.push(v);
+      incluidos.add(v.id);
+    }
+  }
+  for (const e of entradas) if (!incluidos.has(e.id)) out.push(e);
+  return out;
+}
+
+function LinhaTermo({
+  entrada,
+  aparicao,
+  todas,
+  aoMudar,
+  aoErro,
+}: {
+  entrada: EntradaGlossario;
+  aparicao?: { primeira: Aparicao | null; ultima: Aparicao | null };
+  todas: EntradaGlossario[];
+  aoMudar: () => void;
+  aoErro: (m: string) => void;
+}) {
+  const { obraId } = useParams();
   const [editando, setEditando] = useState(false);
   const [pt, setPt] = useState(entrada.termo_pt);
   const [cat, setCat] = useState(entrada.categoria);
   const [nota, setNota] = useState(entrada.nota ?? '');
+  const [principalSel, setPrincipalSel] = useState<number | null>(entrada.principal_id);
+
+  const ehVariante = entrada.principal_id != null;
+  const principal = ehVariante ? todas.find((e) => e.id === entrada.principal_id) : undefined;
+  const variantes = todas.filter((e) => e.principal_id === entrada.id);
+  // Candidatas a canônica: outras entradas que já são canônicas (nível único).
+  const candidatasPrincipal = todas.filter((e) => e.id !== entrada.id && e.principal_id == null);
 
   const salvar = useMutation({
-    mutationFn: () =>
-      api('PATCH', `/glossario/${entrada.id}`, { termo_pt: pt, categoria: cat, nota: nota || null }),
+    mutationFn: async () => {
+      await api('PATCH', `/glossario/${entrada.id}`, { termo_pt: pt, categoria: cat, nota: nota || null });
+      if ((principalSel ?? null) !== (entrada.principal_id ?? null)) {
+        await api('POST', `/glossario/${entrada.id}/vincular`, { principal_id: principalSel });
+      }
+    },
     onSuccess: () => {
       setEditando(false);
       aoMudar();
     },
+    onError: (e) => aoErro((e as Error).message),
   });
 
   const excluir = useMutation({
@@ -190,48 +293,190 @@ function LinhaTermo({ entrada, aoMudar }: { entrada: EntradaGlossario; aoMudar: 
     onSuccess: aoMudar,
   });
 
+  // Substituir a tradução deste termo nas frases já traduzidas.
+  const clienteQuery = useQueryClient();
+  const [substituindo, setSubstituindo] = useState(false);
+  const [de, setDe] = useState('');
+  const [previa, setPrevia] = useState<number | null>(null);
+  const [aplicado, setAplicado] = useState<number | null>(null);
+
+  const abrirSubstituir = () => {
+    setSubstituindo((v) => !v);
+    setDe('');
+    setPrevia(null);
+    setAplicado(null);
+  };
+  const prever = useMutation({
+    mutationFn: () =>
+      api<{ frases: number; capitulos: number }>('POST', `/glossario/${entrada.id}/substituir`, { de, previa: true }),
+    onSuccess: (r) => {
+      setPrevia(r.frases);
+      setAplicado(null);
+      aoErro('');
+    },
+    onError: (e) => aoErro((e as Error).message),
+  });
+  const aplicar = useMutation({
+    mutationFn: () =>
+      api<{ frases: number; capitulos: number }>('POST', `/glossario/${entrada.id}/substituir`, { de, previa: false }),
+    onSuccess: (r) => {
+      setAplicado(r.frases);
+      setPrevia(null);
+      clienteQuery.invalidateQueries({ queryKey: ['capitulo'] });
+      aoErro('');
+    },
+    onError: (e) => aoErro((e as Error).message),
+  });
+
   if (!editando) {
     return (
+      <>
       <tr className="group border-b border-linha/60 last:border-b-0 hover:bg-papel-fundo/40">
-        <td className="texto-zh px-3 py-2">{entrada.termo_zh}</td>
-        <td className="px-3 py-2">{entrada.termo_pt}</td>
-        <td className="px-3 py-2">
-          <span className="flex flex-wrap items-center gap-1.5">
+        <td className={`texto-zh whitespace-nowrap px-2 py-2 ${ehVariante ? 'pl-6 text-tinta-2' : ''}`}>
+          {ehVariante && <span className="mr-1">↳</span>}
+          {entrada.termo_zh}
+        </td>
+        <td className="px-2 py-2">
+          {entrada.termo_pt}
+          {principal && (
+            <span className="ml-2 text-xs text-tinta-2">variante de {principal.termo_pt}</span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-2 py-2">
+          <span className="inline-flex items-center gap-1.5">
             <Etiqueta>{entrada.categoria}</Etiqueta>
             {entrada.origem === 'sugerido-ia' && <Etiqueta cor="indigo">IA</Etiqueta>}
           </span>
         </td>
-        <td className="px-3 py-2 text-tinta-2">{entrada.nota}</td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
-          <span className="invisible group-hover:visible">
-            <button onClick={() => setEditando(true)} className="text-xs text-tinta-2 underline hover:text-tinta">
-              editar
+        <td className="px-2 py-2 text-tinta-2">
+          <span className="block max-w-[42ch]">{entrada.nota}</span>
+        </td>
+        <td className="px-2 py-2">
+          <CelulaAparicoes obraId={obraId} aparicao={aparicao} />
+        </td>
+        <td className="w-px px-2 py-2 text-right whitespace-nowrap">
+          <span className={`inline-flex gap-1 ${substituindo ? '' : 'invisible group-hover:visible'}`}>
+            <button
+              onClick={abrirSubstituir}
+              aria-pressed={substituindo}
+              title="Substituir esta tradução nas frases já traduzidas"
+              aria-label="Substituir nas traduções"
+              className={`grid size-6 place-items-center rounded ${
+                substituindo ? 'bg-jade text-papel-alto' : 'text-tinta-2 hover:bg-papel-fundo hover:text-tinta'
+              }`}
+            >
+              ⇄
+            </button>
+            <button
+              onClick={() => setEditando(true)}
+              title="Editar termo"
+              aria-label="Editar termo"
+              className="grid size-6 place-items-center rounded text-tinta-2 hover:bg-papel-fundo hover:text-tinta"
+            >
+              ✎
             </button>
             <button
               onClick={() => window.confirm(`Excluir "${entrada.termo_zh}"?`) && excluir.mutate()}
-              className="ml-2 text-xs text-erro underline hover:text-selo-forte"
+              title="Excluir termo"
+              aria-label="Excluir termo"
+              className="grid size-6 place-items-center rounded text-erro hover:bg-selo-tint hover:text-selo-forte"
             >
-              excluir
+              ✕
             </button>
           </span>
         </td>
       </tr>
+      {substituindo && (
+        <tr className="border-b border-linha/60 bg-papel-fundo/40">
+          <td colSpan={6} className="px-2 py-2">
+            <div className="flex flex-wrap items-end gap-2 text-sm">
+              <label className="text-xs text-tinta-2">
+                Substituir o texto
+                <input
+                  value={de}
+                  onChange={(e) => {
+                    setDe(e.target.value);
+                    setPrevia(null);
+                    setAplicado(null);
+                  }}
+                  placeholder="tradução antiga (ex.: Abismo)"
+                  className="entrada mt-0.5 block w-56 text-sm"
+                />
+              </label>
+              <span className="pb-1.5 text-tinta-2">
+                por <span className="font-medium text-tinta">{entrada.termo_pt}</span>
+              </span>
+              <Botao
+                variante="secundario"
+                onClick={() => prever.mutate()}
+                disabled={!de.trim() || prever.isPending}
+              >
+                {prever.isPending ? 'Contando…' : 'Prever'}
+              </Botao>
+              {previa != null && (
+                <>
+                  <span className="pb-1.5 text-tinta-2">
+                    {previa === 0 ? 'nenhuma frase' : `${previa} frase${previa === 1 ? '' : 's'}`} a trocar
+                  </span>
+                  {previa > 0 && (
+                    <Botao onClick={() => aplicar.mutate()} disabled={aplicar.isPending}>
+                      {aplicar.isPending ? 'Aplicando…' : 'Aplicar'}
+                    </Botao>
+                  )}
+                </>
+              )}
+              {aplicado != null && (
+                <span className="pb-1.5 text-jade-forte">
+                  Trocado em {aplicado} frase{aplicado === 1 ? '' : 's'}.
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-tinta-2">
+              Só nas frases cujo original tem {entrada.termo_zh}, e só em palavra isolada. As frases trocadas passam a
+              contar como editadas.
+            </p>
+          </td>
+        </tr>
+      )}
+      </>
     );
   }
 
   return (
     <tr className="border-b border-linha/60 bg-ocre-tint last:border-b-0">
-      <td className="texto-zh px-3 py-2">{entrada.termo_zh}</td>
-      <td className="px-3 py-1">
+      <td className="texto-zh whitespace-nowrap px-2 py-2">{entrada.termo_zh}</td>
+      <td className="px-2 py-1">
         <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-full entrada" />
       </td>
-      <td className="px-3 py-1">
+      <td className="px-2 py-1">
         <SeletorCategoria valor={cat} aoMudar={setCat} className="entrada" />
       </td>
-      <td className="px-3 py-1">
+      <td className="px-2 py-1 align-top">
         <input value={nota} onChange={(e) => setNota(e.target.value)} className="w-full entrada" />
+        {variantes.length > 0 ? (
+          <p className="mt-1 text-xs text-tinta-2">Termo principal de {variantes.length} variante(s).</p>
+        ) : (
+          <label className="mt-1 block text-xs text-tinta-2">
+            Variante de:
+            <select
+              value={principalSel ?? ''}
+              onChange={(e) => setPrincipalSel(e.target.value ? Number(e.target.value) : null)}
+              className="entrada mt-0.5 block w-full text-sm"
+            >
+              <option value="">— é um termo principal —</option>
+              {candidatasPrincipal.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.termo_pt} ({c.termo_zh})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </td>
-      <td className="px-3 py-1 text-right whitespace-nowrap">
+      <td className="px-2 py-1 align-top">
+        <CelulaAparicoes obraId={obraId} aparicao={aparicao} />
+      </td>
+      <td className="px-2 py-1 text-right whitespace-nowrap">
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar
         </Botao>

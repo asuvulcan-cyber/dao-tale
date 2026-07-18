@@ -97,6 +97,10 @@ export interface EntradaGlossario {
   categoria: CategoriaGlossario;
   nota: string | null;
   origem: 'manual' | 'sugerido-ia';
+  /** Entrada canônica da qual esta é uma variante (ex.: 芊芊 → 林芊); null se é
+   * canônica. Cada variante guarda a própria tradução; o vínculo só diz que
+   * apontam para o mesmo referente. */
+  principal_id: number | null;
   criado_em: string;
 }
 

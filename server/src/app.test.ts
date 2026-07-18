@@ -76,6 +76,12 @@ describe('fluxo completo com provedor mock', () => {
     const sugestoes = await json(await chamar('GET', `/api/obras/${obra.id}/termos-sugeridos?status=pendente`));
     expect(sugestoes.length).toBeGreaterThan(0);
 
+    // Aceitar sem nota herda a descrição da IA (contexto) como nota do glossário.
+    const comContexto = sugestoes.find((s: any) => s.contexto);
+    expect(comContexto).toBeTruthy();
+    const entrada = await json(await chamar('POST', `/api/termos-sugeridos/${comContexto.id}/aceitar`, {}));
+    expect(entrada.nota).toBe(comContexto.contexto);
+
     // Edição manual
     const editada = await json(await chamar('PATCH', `/api/frases/${frases[0].id}`, { texto_pt: 'Espera!' }));
     expect(editada.editado_manualmente).toBe(true);
@@ -170,6 +176,143 @@ describe('fluxo completo com provedor mock', () => {
 
     const invalido = await chamar('POST', '/api/ia/traduzir-detalhes', { provedor: 'mock' });
     expect(invalido.status).toBe(400);
+  });
+
+  it('substituir do glossário: troca escopada pela origem e por palavra isolada', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Substituição',
+        glossario_inicial: [{ termo_zh: '归墟', termo_pt: 'Abismo do Retorno', categoria: 'local' }],
+      }),
+    );
+    // Cap 1: tem 归墟 no original, tradução antiga "Abismo". Cap 2: NÃO tem 归墟,
+    // mas a tradução por acaso contém "Abismo" (não deve ser trocada).
+    const cap1 = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '归墟出现了。' }),
+    );
+    const cap2 = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 2, texto_origem: '天黑了。' }),
+    );
+    const f1 = (await json(await chamar('GET', `/api/capitulos/${cap1.capitulo.id}`))).frases[0];
+    const f2 = (await json(await chamar('GET', `/api/capitulos/${cap2.capitulo.id}`))).frases[0];
+    await chamar('PATCH', `/api/frases/${f1.id}`, { texto_pt: 'O Abismo surgiu.' });
+    await chamar('PATCH', `/api/frases/${f2.id}`, { texto_pt: 'Um Abismon qualquer.' }); // sem 归墟 + colado
+
+    const entrada = (await json(await chamar('GET', `/api/obras/${obra.id}/glossario`)))[0];
+
+    // Prévia: só a frase do cap 1 conta (cap 2 não tem 归墟).
+    const previa = await json(
+      await chamar('POST', `/api/glossario/${entrada.id}/substituir`, { de: 'Abismo', previa: true }),
+    );
+    expect(previa.frases).toBe(1);
+
+    await chamar('POST', `/api/glossario/${entrada.id}/substituir`, { de: 'Abismo', previa: false });
+    const d1 = (await json(await chamar('GET', `/api/capitulos/${cap1.capitulo.id}`))).frases[0];
+    const d2 = (await json(await chamar('GET', `/api/capitulos/${cap2.capitulo.id}`))).frases[0];
+    expect(d1.texto_pt).toBe('O Abismo do Retorno surgiu.');
+    expect(d2.texto_pt).toBe('Um Abismon qualquer.'); // intocada: sem 归墟 e "Abismon" não é palavra isolada
+  });
+
+  it('variantes: vincula termo a uma canônica, valida e desvincula', async () => {
+    const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Variantes' }));
+    const canonica = await json(
+      await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '林芊', termo_pt: 'Lin Qian', categoria: 'personagem' }),
+    );
+    const variante = await json(
+      await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '芊芊', termo_pt: 'Qianqian', categoria: 'personagem' }),
+    );
+
+    // Vincula a variante à canônica.
+    const vinculada = await chamar('POST', `/api/glossario/${variante.id}/vincular`, { principal_id: canonica.id });
+    expect(vinculada.status).toBe(200);
+    expect((await json(vinculada)).principal_id).toBe(canonica.id);
+
+    // A canônica agora tem uma variante → não pode virar variante de outra.
+    const outra = await json(
+      await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '青鸾', termo_pt: 'Qingluan', categoria: 'local' }),
+    );
+    const invalida = await chamar('POST', `/api/glossario/${canonica.id}/vincular`, { principal_id: outra.id });
+    expect(invalida.status).toBe(400);
+
+    // Vincular a si mesmo é inválido.
+    const aSiMesmo = await chamar('POST', `/api/glossario/${variante.id}/vincular`, { principal_id: variante.id });
+    expect(aSiMesmo.status).toBe(400);
+
+    // Desvincula.
+    const solta = await chamar('POST', `/api/glossario/${variante.id}/vincular`, { principal_id: null });
+    expect((await json(solta)).principal_id).toBeNull();
+
+    // Apagar a canônica solta as variantes (não as apaga).
+    await chamar('POST', `/api/glossario/${variante.id}/vincular`, { principal_id: canonica.id });
+    await chamar('DELETE', `/api/glossario/${canonica.id}`);
+    const restantes = await json(await chamar('GET', `/api/obras/${obra.id}/glossario`));
+    const aindaVariante = restantes.find((e: any) => e.id === variante.id);
+    expect(aindaVariante).toBeTruthy();
+    expect(aindaVariante.principal_id).toBeNull();
+  });
+
+  it('aparições do glossário: primeira e última no texto, por capítulo', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Aparições',
+        glossario_inicial: [{ termo_zh: '归墟', termo_pt: 'Abismo', categoria: 'local' }],
+      }),
+    );
+    await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '归墟出现了。天黑了。' });
+    await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 2, texto_origem: '他走了。他回到了归墟。' });
+
+    const glossario = await json(await chamar('GET', `/api/obras/${obra.id}/glossario`));
+    const entrada = glossario.find((e: any) => e.termo_zh === '归墟');
+    const aparicoes = await json(await chamar('GET', `/api/obras/${obra.id}/glossario/aparicoes`));
+    const ap = aparicoes[String(entrada.id)];
+    expect(ap.primeira.capitulo_numero).toBe(1);
+    expect(ap.primeira.frase_ordem).toBe(0);
+    expect(ap.ultima.capitulo_numero).toBe(2);
+    expect(ap.ultima.frase_id).not.toBe(ap.primeira.frase_id);
+
+    // Termo que não aparece no texto: sem âncora.
+    const criada = await json(
+      await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '不存在', termo_pt: 'Ausente' }),
+    );
+    const aparicoes2 = await json(await chamar('GET', `/api/obras/${obra.id}/glossario/aparicoes`));
+    expect(aparicoes2[String(criada.id)].primeira).toBeNull();
+  });
+
+  it('sugere termos de uma frase para o glossário e adiciona o escolhido', async () => {
+    const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Curadoria' }));
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '林夕走向青鸾学院。' }),
+    );
+    const capId = criado.capitulo.id;
+    await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock' });
+    let frases: any[] = [];
+    for (let i = 0; i < 100; i++) {
+      const d = await json(await chamar('GET', `/api/capitulos/${capId}`));
+      frases = d.frases;
+      if (frases.length > 0 && frases.every((f: any) => f.status_traducao === 'traduzida')) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(frases.length).toBeGreaterThan(0);
+
+    const sugestao = await json(await chamar('POST', `/api/frases/${frases[0].id}/sugerir-termos`, { provedor: 'mock' }));
+    expect(Array.isArray(sugestao.termos)).toBe(true);
+    expect(sugestao.termos.length).toBeGreaterThan(0);
+    const termo = sugestao.termos[0];
+    expect(termo.contexto).toBeTruthy();
+
+    const criada = await chamar('POST', `/api/obras/${obra.id}/glossario`, {
+      termo_zh: termo.termo_zh,
+      termo_pt: termo.termo_pt,
+      categoria: termo.categoria,
+      nota: termo.contexto,
+    });
+    expect(criada.status).toBe(201);
+    const entrada = await json(criada);
+    expect(entrada.nota).toBe(termo.contexto);
+
+    // Já catalogado: nova extração não repete o termo.
+    const sugestao2 = await json(await chamar('POST', `/api/frases/${frases[0].id}/sugerir-termos`, { provedor: 'mock' }));
+    expect(sugestao2.termos.some((t: any) => t.termo_zh === termo.termo_zh)).toBe(false);
   });
 
   it('sinopse com vários parágrafos volta inteira (um item por parágrafo)', async () => {

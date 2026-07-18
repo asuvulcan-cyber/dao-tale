@@ -2,9 +2,9 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { PROVEDORES_IDS, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTestes, reposUso } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposTestes, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
-import { filtrarGlossarioRelevante } from '../ia/prompts.js';
+import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 
@@ -142,12 +142,15 @@ export function rotasFrases(db: BancoDados): Hono {
     const vizinhasDepois = vizinhas((o) => o > frase.ordem, false);
     const glossarioTodo = reposGlossario.listar(db, obra.id);
     const glossario = config.glossario_relevante
-      ? filtrarGlossarioRelevante(glossarioTodo, [
-          frase.texto_zh,
-          corpo.data.pergunta,
-          ...vizinhasAntes.map((v) => v.texto_zh),
-          ...vizinhasDepois.map((v) => v.texto_zh),
-        ])
+      ? incluirPrincipais(
+          filtrarGlossarioRelevante(glossarioTodo, [
+            frase.texto_zh,
+            corpo.data.pergunta,
+            ...vizinhasAntes.map((v) => v.texto_zh),
+            ...vizinhasDepois.map((v) => v.texto_zh),
+          ]),
+          glossarioTodo,
+        )
       : glossarioTodo;
 
     try {
@@ -184,6 +187,58 @@ export function rotasFrases(db: BancoDados): Hono {
     } catch (e) {
       const mensagem = e instanceof ErroProvedor ? e.message : `Falha na revisão: ${(e as Error).message}`;
       return c.json({ erro: { codigo: 'revisao', mensagem } }, 502);
+    }
+  });
+
+  // ── Curadoria: extrair termos desta frase para o glossário ──────────────
+  // Varredura exaustiva (pega o que o termos_novos da tradução deixou passar);
+  // filtra o que já está no glossário ou já é sugestão pendente.
+
+  app.post('/frases/:id/sugerir-termos', async (c) => {
+    const corpo = z
+      .object({ provedor: z.enum(PROVEDORES_IDS).optional(), modelo: z.string().optional() })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+
+    const frase = reposFrases.obter(db, Number(c.req.param('id')));
+    if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
+
+    const capitulo = reposCapitulos.obter(db, frase.capitulo_id)!;
+    const obra = reposObras.obter(db, capitulo.obra_id)!;
+    const config = reposConfig.obterTodas(db);
+
+    const promptAtivo = reposPrompts.ativoOuAdotado(db, obra.id);
+    if (!promptAtivo) {
+      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
+    }
+
+    const provedorId: ProvedorId =
+      corpo.data.provedor ?? (capitulo.provedor as ProvedorId | null) ?? obra.provedor_padrao ?? config.provedor_padrao;
+    const provedor = obterProvedor(provedorId);
+    const modelo = corpo.data.modelo ?? capitulo.modelo ?? obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao);
+    const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
+    if (provedor.precisaChave && !chave) {
+      return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
+    }
+
+    try {
+      reposUso.registrar(db, provedorId, modelo);
+      const resposta = await provedor.extrairTermos(chave, {
+        modelo,
+        promptMae: promptAtivo.conteudo,
+        glossario: reposGlossario.listar(db, obra.id),
+        frase: { texto_zh: frase.texto_zh, texto_pt: frase.texto_pt },
+      });
+      // Rede de segurança: descarta o que já está catalogado ou já é sugestão
+      // pendente (o modelo pode repetir apesar da instrução).
+      const pendentes = new Set(reposTermosSugeridos.listar(db, obra.id, 'pendente').map((s) => s.termo_zh));
+      const termos = resposta.termos.filter(
+        (t) => t.termo_zh && t.termo_pt && !reposGlossario.existeTermo(db, obra.id, t.termo_zh) && !pendentes.has(t.termo_zh),
+      );
+      return c.json({ termos });
+    } catch (e) {
+      const mensagem = e instanceof ErroProvedor ? e.message : `Falha ao extrair termos: ${(e as Error).message}`;
+      return c.json({ erro: { codigo: 'extracao', mensagem } }, 502);
     }
   });
 

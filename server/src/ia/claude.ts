@@ -4,21 +4,26 @@ import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
+  type RequisicaoExtrairTermos,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RespostaExtrairTermos,
   type RespostaRevisaoProvedor,
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
+  SCHEMA_EXTRAIR_TERMOS,
   SCHEMA_REVISAO,
   SCHEMA_TRADUCAO,
+  sistemaExtrairTermos,
   sistemaRevisao,
   sistemaTraducao,
+  usuarioExtrairTermos,
   usuarioRevisao,
   usuarioTraducao,
 } from './prompts.js';
 
-import { respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
+import { respostaExtrairTermosSchema, respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof Anthropic.APIError) {
@@ -104,6 +109,35 @@ export const provedorClaude: ProvedorIA = {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo,
+        max_tokens: 2048,
+        system: [{ type: 'text', text: sistemaExtrairTermos(req) }],
+        messages: [{ role: 'user', content: usuarioExtrairTermos(req) }],
+        tools: [
+          {
+            name: 'entregar_termos',
+            description: 'Entrega os termos da frase que merecem entrar no glossário.',
+            input_schema: SCHEMA_EXTRAIR_TERMOS as Anthropic.Tool['input_schema'],
+          },
+        ],
+        tool_choice: { type: 'tool', name: 'entregar_termos' },
+      });
+      const bruto = extrairToolUse(resposta, 'entregar_termos');
+      const dados = respostaExtrairTermosSchema.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de extração de termos.', 'transitorio');
       }
       throw classificarErro(e);
     }

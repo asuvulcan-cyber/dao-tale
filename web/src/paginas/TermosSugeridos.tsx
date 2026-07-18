@@ -56,9 +56,16 @@ function CartaoSugestao({
       ? (sugestao.categoria as CategoriaGlossario)
       : 'outro',
   );
+  // Descrição da IA já entra como nota editável — ao aceitar, vira a nota do glossário.
+  const [nota, setNota] = useState(sugestao.contexto ?? '');
 
   const aceitar = useMutation({
-    mutationFn: () => api('POST', `/termos-sugeridos/${sugestao.id}/aceitar`, { termo_pt: pt, categoria: cat }),
+    mutationFn: () =>
+      api('POST', `/termos-sugeridos/${sugestao.id}/aceitar`, {
+        termo_pt: pt,
+        categoria: cat,
+        nota: nota.trim() || undefined,
+      }),
     onSuccess: aoMudar,
     onError: (e) => aoErro((e as Error).message),
   });
@@ -76,11 +83,13 @@ function CartaoSugestao({
           <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-52 entrada text-sm" />
           <SeletorCategoria valor={cat} aoMudar={setCat} />
         </div>
-        {sugestao.contexto && (
-          <p className="texto-zh mt-1 truncate text-xs text-tinta-2" title={sugestao.contexto}>
-            {sugestao.contexto}
-          </p>
-        )}
+        <input
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          placeholder="Nota (descrição para lembrança) — vai para o glossário"
+          title="Descrição do termo; salva como nota no glossário ao aceitar"
+          className="entrada mt-1.5 w-full text-xs"
+        />
       </div>
       <div className="flex shrink-0 gap-2">
         <Botao onClick={() => aceitar.mutate()} disabled={aceitar.isPending || !pt.trim()}>

@@ -17,6 +17,14 @@ import type {
 } from '@dao-tale/shared';
 import { CONFIG_PADRAO } from '@dao-tale/shared';
 
+/** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
+    letra/número (fronteira Unicode, então acentos contam como letra). Evita trocar
+    "Rio" dentro de "Prioridade". */
+function trocaPorPalavra(texto: string, de: string, para: string): string {
+  const esc = de.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return texto.replace(new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, 'gu'), para);
+}
+
 // Linhas cruas do SQLite (booleanos como 0/1) → tipos do domínio.
 function paraPrompt(l: any): PromptMae {
   return { ...l, ativo: !!l.ativo };
@@ -383,6 +391,37 @@ export const reposFrases = {
     })();
   },
 
+  /** Troca a tradução de um termo do glossário nas frases JÁ traduzidas, com duas
+      travas contra troca errada: (1) só nas frases cujo texto-fonte contém o termo
+      chinês; (2) só ocorrências isoladas por palavra (fronteira Unicode), nunca
+      dentro de outra palavra. `previa` só conta. Marca as frases como editadas. */
+  substituirTermoGlossario(
+    db: BancoDados,
+    opcoes: { obraId: number; termoZh: string; de: string; para: string; previa: boolean },
+  ): { frases: number; capitulos: number } {
+    const candidatas = db
+      .prepare(
+        `SELECT f.id, f.texto_pt, f.capitulo_id FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
+         WHERE c.obra_id = ? AND instr(f.texto_zh, ?) > 0 AND instr(f.texto_pt, ?) > 0`,
+      )
+      .all(opcoes.obraId, opcoes.termoZh, opcoes.de) as { id: number; texto_pt: string; capitulo_id: number }[];
+
+    const afetadas: { id: number; texto: string; capitulo_id: number }[] = [];
+    for (const f of candidatas) {
+      const novo = trocaPorPalavra(f.texto_pt, opcoes.de, opcoes.para);
+      if (novo !== f.texto_pt) afetadas.push({ id: f.id, texto: novo, capitulo_id: f.capitulo_id });
+    }
+    const capitulos = new Set(afetadas.map((a) => a.capitulo_id)).size;
+
+    if (!opcoes.previa && afetadas.length > 0) {
+      const upd = db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?');
+      db.transaction(() => {
+        for (const a of afetadas) upd.run(a.texto, a.id);
+      })();
+    }
+    return { frases: afetadas.length, capitulos };
+  },
+
   reverterParaIa(db: BancoDados, id: number): Frase | undefined {
     db.prepare(
       `UPDATE frases SET texto_pt = COALESCE(texto_pt_original_ia, ''), editado_manualmente = 0
@@ -589,7 +628,30 @@ export const reposGlossario = {
   },
 
   excluir(db: BancoDados, id: number): boolean {
+    // Solta as variantes antes de apagar (redundante com ON DELETE SET NULL, mas
+    // vale mesmo se a checagem de FK estiver desligada em algum caminho).
+    db.prepare('UPDATE glossario SET principal_id = NULL WHERE principal_id = ?').run(id);
     return db.prepare('DELETE FROM glossario WHERE id = ?').run(id).changes > 0;
+  },
+
+  /** Marca `id` como variante de `principalId` (ou desvincula com null). Vínculo
+      é de um nível só: a canônica não pode ser ela mesma uma variante, e um termo
+      que já tem variantes não pode virar variante. Devolve 'invalido' se violar. */
+  vincular(db: BancoDados, id: number, principalId: number | null): EntradaGlossario | 'invalido' | undefined {
+    const entrada = this.obter(db, id);
+    if (!entrada) return undefined;
+    if (principalId === null) {
+      db.prepare('UPDATE glossario SET principal_id = NULL WHERE id = ?').run(id);
+      return this.obter(db, id)!;
+    }
+    if (principalId === id) return 'invalido';
+    const principal = this.obter(db, principalId);
+    if (!principal || principal.obra_id !== entrada.obra_id) return 'invalido';
+    if (principal.principal_id !== null) return 'invalido'; // canônica não pode ser variante
+    const temVariantes = db.prepare('SELECT 1 FROM glossario WHERE principal_id = ?').get(id);
+    if (temVariantes) return 'invalido'; // este termo já é canônica de outras
+    db.prepare('UPDATE glossario SET principal_id = ? WHERE id = ?').run(principalId, id);
+    return this.obter(db, id)!;
   },
 
   existeTermo(db: BancoDados, obraId: number, termoZh: string): boolean {
@@ -597,7 +659,45 @@ export const reposGlossario = {
       .prepare('SELECT 1 FROM glossario WHERE obra_id = ? AND termo_zh = ?')
       .get(obraId, termoZh);
   },
+
+  /** Primeira e última aparição de cada termo do glossário no texto-fonte da obra,
+      por (capítulo, ordem da frase). Calculado sob demanda — nada é gravado, então
+      sobrevive a retradução, divisão/mescla e reordenação de capítulos. */
+  aparicoes(db: BancoDados, obraId: number): Record<number, { primeira: AparicaoTermo | null; ultima: AparicaoTermo | null }> {
+    const termos = db.prepare('SELECT id, termo_zh FROM glossario WHERE obra_id = ?').all(obraId) as {
+      id: number;
+      termo_zh: string;
+    }[];
+    const frases = db
+      .prepare(
+        `SELECT f.id AS frase_id, f.ordem AS frase_ordem, f.texto_zh, c.id AS capitulo_id, c.numero AS capitulo_numero
+         FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
+         WHERE c.obra_id = ? ORDER BY c.numero, f.ordem`,
+      )
+      .all(obraId) as (AparicaoTermo & { texto_zh: string })[];
+    const resultado: Record<number, { primeira: AparicaoTermo | null; ultima: AparicaoTermo | null }> = {};
+    for (const t of termos) {
+      let primeira: AparicaoTermo | null = null;
+      let ultima: AparicaoTermo | null = null;
+      for (const f of frases) {
+        if (f.texto_zh.includes(t.termo_zh)) {
+          const ap = { capitulo_id: f.capitulo_id, capitulo_numero: f.capitulo_numero, frase_id: f.frase_id, frase_ordem: f.frase_ordem };
+          if (!primeira) primeira = ap;
+          ultima = ap;
+        }
+      }
+      resultado[t.id] = { primeira, ultima };
+    }
+    return resultado;
+  },
 };
+
+export interface AparicaoTermo {
+  capitulo_id: number;
+  capitulo_numero: number;
+  frase_id: number;
+  frase_ordem: number;
+}
 
 // ── Termos sugeridos ───────────────────────────────────────────────────────
 
@@ -655,7 +755,9 @@ export const reposTermosSugeridos = {
         termo_zh: sugestao.termo_zh,
         termo_pt: ajustes?.termo_pt ?? sugestao.termo_pt,
         categoria: ajustes?.categoria ?? (ehCategoriaValida(sugestao.categoria) ? sugestao.categoria! : 'outro'),
-        nota: ajustes?.nota,
+        // Sem nota editada, aproveita a descrição da IA (contexto) como nota —
+        // antes ela era exibida na triagem e descartada ao aceitar.
+        nota: ajustes?.nota ?? sugestao.contexto ?? undefined,
         origem: 'sugerido-ia',
       });
       db.prepare("UPDATE termos_sugeridos SET status = 'aceito' WHERE id = ?").run(id);

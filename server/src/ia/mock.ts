@@ -1,4 +1,10 @@
-import { ErroProvedor, type ProvedorIA, type RequisicaoRevisao, type RequisicaoTraducaoBloco } from './provedor.js';
+import {
+  ErroProvedor,
+  type ProvedorIA,
+  type RequisicaoExtrairTermos,
+  type RequisicaoRevisao,
+  type RequisicaoTraducaoBloco,
+} from './provedor.js';
 
 // Provedor simulado (decisão D4): permite desenvolver, demonstrar e testar todo o
 // fluxo do aplicativo sem chave de API e sem rede. Determinístico de propósito.
@@ -45,11 +51,29 @@ export const provedorMock: ProvedorIA = {
               termo_zh: [...maisLonga.texto_zh].slice(0, 2).join(''),
               termo_pt: `Termo Simulado ${maisLonga.ordem}`,
               categoria: 'outro',
-              contexto: maisLonga.texto_zh,
+              contexto: `Descrição simulada do termo da frase ${maisLonga.ordem}.`,
             },
           ]
         : [];
     return { traducoes, termos_novos, bruta: JSON.stringify({ traducoes, termos_novos }) };
+  },
+
+  async extrairTermos(_chave, req: RequisicaoExtrairTermos) {
+    await espera(latenciaMs());
+    // Determinístico: propõe os 2 primeiros e os 2 últimos caracteres do chinês
+    // como termos distintos (exercita a varredura exaustiva). Filtra o que já
+    // está no glossário; a rota ainda tira as sugestões pendentes.
+    const chineses = [...req.frase.texto_zh].filter((c) => /[一-鿿]/.test(c));
+    const candidatos = [...new Set([chineses.slice(0, 2).join(''), chineses.slice(-2).join('')])];
+    const termos = candidatos
+      .filter((zh) => zh.length >= 2 && !req.glossario.some((e) => e.termo_zh === zh))
+      .map((zh) => ({
+        termo_zh: zh,
+        termo_pt: `Termo Extraído (${zh})`,
+        categoria: 'outro',
+        contexto: 'Descrição simulada para curadoria do glossário.',
+      }));
+    return { termos, bruta: JSON.stringify({ termos }) };
   },
 
   async revisarFrase(_chave, req: RequisicaoRevisao) {

@@ -1,14 +1,43 @@
 import type { EntradaGlossario } from '@dao-tale/shared';
-import type { RequisicaoRevisao, RequisicaoTraducaoBloco } from './provedor.js';
+import type { RequisicaoExtrairTermos, RequisicaoRevisao, RequisicaoTraducaoBloco } from './provedor.js';
 
 // Montagem dos textos de sistema e usuário — compartilhada por todos os provedores.
 // O bloco de sistema é idêntico em todas as chamadas de um capítulo (pré-requisito do prompt caching).
 
 function formatarGlossario(glossario: EntradaGlossario[]): string {
   if (glossario.length === 0) return '(glossário ainda vazio)';
+  const porId = new Map(glossario.map((e) => [e.id, e]));
   return glossario
-    .map((e) => `${e.termo_zh} → ${e.termo_pt} [${e.categoria}]${e.nota ? ` — ${e.nota}` : ''}`)
+    .map((e) => {
+      let linha = `${e.termo_zh} → ${e.termo_pt} [${e.categoria}]${e.nota ? ` — ${e.nota}` : ''}`;
+      // Variante: diz ao modelo que aponta para o mesmo referente da canônica,
+      // ajudando a resolver referências (ex.: apelido/forma curta do nome).
+      if (e.principal_id != null) {
+        const p = porId.get(e.principal_id);
+        linha += p ? ` · variante de ${p.termo_pt} (${p.termo_zh})` : ' · variante';
+      }
+      return linha;
+    })
     .join('\n');
+}
+
+/** Garante que a canônica de cada variante selecionada esteja no conjunto — assim,
+    no modo glossário-relevante, o modelo enxerga a relação mesmo que só a variante
+    tenha aparecido no trecho. */
+export function incluirPrincipais(selecionados: EntradaGlossario[], todos: EntradaGlossario[]): EntradaGlossario[] {
+  const porId = new Map(todos.map((e) => [e.id, e]));
+  const ids = new Set(selecionados.map((e) => e.id));
+  const extra: EntradaGlossario[] = [];
+  for (const e of selecionados) {
+    if (e.principal_id != null && !ids.has(e.principal_id)) {
+      const p = porId.get(e.principal_id);
+      if (p) {
+        extra.push(p);
+        ids.add(p.id);
+      }
+    }
+  }
+  return extra.length > 0 ? [...selecionados, ...extra] : selecionados;
 }
 
 /** Entradas cujo termo chinês aparece em algum dos textos — o resto do glossário
@@ -128,6 +157,60 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
   return partes.join('\n');
 }
 
+// ── Extração exaustiva de termos de uma frase ──────────────────────────────
+
+export function sistemaExtrairTermos(req: Pick<RequisicaoExtrairTermos, 'promptMae' | 'glossario'>): string {
+  return [
+    req.promptMae.trim(),
+    '',
+    '## GLOSSÁRIO ATUAL DA OBRA (já catalogado — NÃO repita estes)',
+    formatarGlossario(req.glossario),
+    '',
+    '## TAREFA: CURADORIA DO GLOSSÁRIO',
+    'Você está ajudando a curar o glossário da obra. Receberá UMA frase em chinês e sua tradução em português.',
+    'Liste EXAUSTIVAMENTE todos os termos da frase que merecem entrar no glossário — nomes próprios, lugares, personagens, técnicas/poderes, títulos/cargos, entidades, organizações — mesmo os secundários ou de aparência corriqueira.',
+    'Inclua nomes de lugar mantidos em pinyin (ex.: transliterações), que costumam passar despercebidos e precisam de consistência.',
+    'NÃO liste: palavras comuns, verbos, adjetivos genéricos, nem termos que já estão no glossário acima.',
+    'Para cada termo devolva: termo_zh (como no original), termo_pt (exatamente como aparece na tradução), categoria e uma descrição curta em PT (o que é/papel na história) para a nota do glossário.',
+    'Se não houver nenhum termo novo digno de glossário, devolva a lista vazia.',
+    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+  ].join('\n');
+}
+
+export function usuarioExtrairTermos(req: RequisicaoExtrairTermos): string {
+  return [`ZH: ${req.frase.texto_zh}`, `PT: ${req.frase.texto_pt || '(sem tradução)'}`].join('\n');
+}
+
+export const SCHEMA_EXTRAIR_TERMOS = {
+  type: 'object' as const,
+  properties: {
+    termos: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          termo_zh: { type: 'string' },
+          termo_pt: { type: 'string' },
+          categoria: {
+            type: 'string',
+            enum: ['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro'],
+          },
+          contexto: { type: 'string', description: 'Descrição curta em PT do termo, para a nota do glossário' },
+        },
+        required: ['termo_zh', 'termo_pt'],
+      },
+    },
+  },
+  required: ['termos'],
+};
+
+export const INSTRUCAO_JSON_EXTRAIR = [
+  '## FORMATO DA RESPOSTA (obrigatório)',
+  'Responda APENAS com um objeto JSON válido, sem texto fora dele e sem cercas de código, no formato:',
+  '{"termos": [{"termo_zh": "<termo em chinês>", "termo_pt": "<tradução como na frase>", "categoria": "<local|poder-habilidade|entidade|titulo-cargo|personagem|outro>", "contexto": "<descrição curta em PT do termo>"}]}',
+  'Se não houver termos novos, use "termos": [].',
+].join('\n');
+
 // JSON Schemas da saída estruturada (tool use / responseSchema)
 
 export const SCHEMA_TRADUCAO = {
@@ -155,7 +238,11 @@ export const SCHEMA_TRADUCAO = {
             type: 'string',
             enum: ['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro'],
           },
-          contexto: { type: 'string', description: 'Frase ou trecho onde o termo apareceu' },
+          contexto: {
+            type: 'string',
+            description:
+              'Descrição curta do termo em português (1 frase) para lembrança no glossário — o que é, papel na história. NÃO copie o trecho chinês.',
+          },
         },
         required: ['termo_zh', 'termo_pt'],
       },
@@ -172,7 +259,7 @@ export const INSTRUCAO_JSON_TRADUCAO = [
   '## FORMATO DA RESPOSTA (obrigatório)',
   'Responda APENAS com um objeto JSON válido, sem texto fora dele e sem cercas de código, no formato:',
   '{"traducoes": [{"ordem": <número da frase, como recebido>, "texto_pt": "<tradução em PT-BR>"}],',
-  ' "termos_novos": [{"termo_zh": "<termo em chinês>", "termo_pt": "<tradução adotada>", "categoria": "<local|poder-habilidade|entidade|titulo-cargo|personagem|outro>", "contexto": "<frase onde apareceu>"}]}',
+  ' "termos_novos": [{"termo_zh": "<termo em chinês>", "termo_pt": "<tradução adotada>", "categoria": "<local|poder-habilidade|entidade|titulo-cargo|personagem|outro>", "contexto": "<descrição curta em PT do termo, para o glossário — não o trecho chinês>"}]}',
   'Se não houver termos novos, use "termos_novos": [].',
 ].join('\n');
 

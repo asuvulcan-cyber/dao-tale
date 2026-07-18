@@ -4,13 +4,22 @@ import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
+  type RequisicaoExtrairTermos,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RespostaExtrairTermos,
   type RespostaRevisaoProvedor,
   type RespostaTraducaoBloco,
 } from './provedor.js';
-import { respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
-import { sistemaRevisao, sistemaTraducao, usuarioRevisao, usuarioTraducao } from './prompts.js';
+import { respostaExtrairTermosSchema, respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
+import {
+  sistemaExtrairTermos,
+  sistemaRevisao,
+  sistemaTraducao,
+  usuarioExtrairTermos,
+  usuarioRevisao,
+  usuarioTraducao,
+} from './prompts.js';
 
 // Schemas no formato do Gemini (responseSchema). Espelham os de prompts.ts.
 
@@ -46,6 +55,29 @@ const SCHEMA_TRADUCAO_GEMINI: Schema = {
     },
   },
   required: ['traducoes', 'termos_novos'],
+};
+
+const SCHEMA_EXTRAIR_TERMOS_GEMINI: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    termos: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          termo_zh: { type: Type.STRING },
+          termo_pt: { type: Type.STRING },
+          categoria: {
+            type: Type.STRING,
+            enum: ['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro'],
+          },
+          contexto: { type: Type.STRING, description: 'Descrição curta em PT do termo, para a nota do glossário' },
+        },
+        required: ['termo_zh', 'termo_pt'],
+      },
+    },
+  },
+  required: ['termos'],
 };
 
 const SCHEMA_REVISAO_GEMINI: Schema = {
@@ -160,6 +192,30 @@ export const provedorGemini: ProvedorIA = {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.models.generateContent({
+        model: req.modelo,
+        contents: usuarioExtrairTermos(req),
+        config: {
+          systemInstruction: sistemaExtrairTermos(req),
+          responseMimeType: 'application/json',
+          responseSchema: SCHEMA_EXTRAIR_TERMOS_GEMINI,
+        },
+      });
+      const bruto = parsearJson(resposta.text);
+      const dados = respostaExtrairTermosSchema.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de extração de termos.', 'transitorio');
       }
       throw classificarErro(e);
     }

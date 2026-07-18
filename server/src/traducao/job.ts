@@ -3,7 +3,7 @@ import type { EventoTraducao, ProgressoTraducao, ProvedorId } from '@dao-tale/sh
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
-import { filtrarGlossarioRelevante } from '../ia/prompts.js';
+import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 
@@ -196,12 +196,15 @@ async function executarJob(
       // Glossário relevante: só os termos que aparecem no trecho enviado — em
       // glossários grandes isso corta a maior parte dos tokens de entrada.
       const glossarioDoBloco = ctx.config.glossario_relevante
-        ? filtrarGlossarioRelevante(glossario, [
-            titulo,
-            ...bloco.map((f) => f.texto_zh),
-            ...caudaAnterior.map((f) => f.texto_zh),
-            ...proximas,
-          ])
+        ? incluirPrincipais(
+            filtrarGlossarioRelevante(glossario, [
+              titulo,
+              ...bloco.map((f) => f.texto_zh),
+              ...caudaAnterior.map((f) => f.texto_zh),
+              ...proximas,
+            ]),
+            glossario,
+          )
         : glossario;
 
       // Termos adotados que aparecem neste trecho e ainda não entraram no glossário

@@ -19,6 +19,19 @@ export const respostaTraducaoSchema = z.object({
     .default([]),
 });
 
+export const respostaExtrairTermosSchema = z.object({
+  termos: z
+    .array(
+      z.object({
+        termo_zh: z.string(),
+        termo_pt: z.string(),
+        categoria: z.string().optional(),
+        contexto: z.string().optional(),
+      }),
+    )
+    .default([]),
+});
+
 export const respostaRevisaoSchema = z.object({
   trecho_zh: z.string(),
   veredito: z.enum(['correto', 'incorreto']),

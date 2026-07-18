@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { BancoDados } from '../db/index.js';
-import { reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
+import { reposFrases, reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
 
 // Categoria é texto livre (o usuário cria as suas); limitada só em tamanho.
 const categoriaSchema = z.string().trim().min(1).max(30);
@@ -73,6 +73,11 @@ export function rotasCuradoria(db: BancoDados): Hono {
     return c.json(entradas);
   });
 
+  // Primeira/última aparição de cada termo no texto (para o link "ir à frase").
+  app.get('/obras/:obraId/glossario/aparicoes', (c) =>
+    c.json(reposGlossario.aparicoes(db, Number(c.req.param('obraId')))),
+  );
+
   app.post('/obras/:obraId/glossario', async (c) => {
     const corpo = criarEntradaSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
@@ -95,6 +100,52 @@ export function rotasCuradoria(db: BancoDados): Hono {
     const ok = reposGlossario.excluir(db, Number(c.req.param('id')));
     if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
     return c.json({ ok: true });
+  });
+
+  // Aplica a tradução do termo nas frases já traduzidas: troca `de` (texto antigo)
+  // pela tradução atual do termo, só nas frases cujo original tem o termo chinês
+  // e só em palavra isolada. previa=true apenas conta.
+  app.post('/glossario/:id/substituir', async (c) => {
+    const corpo = z
+      .object({ de: z.string().min(1).max(160), previa: z.boolean().default(false) })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const entrada = reposGlossario.obter(db, Number(c.req.param('id')));
+    if (!entrada) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
+    if (corpo.data.de === entrada.termo_pt) {
+      return c.json({ erro: { codigo: 'iguais', mensagem: 'O texto a substituir é igual à tradução atual do termo.' } }, 400);
+    }
+    const r = reposFrases.substituirTermoGlossario(db, {
+      obraId: entrada.obra_id,
+      termoZh: entrada.termo_zh,
+      de: corpo.data.de,
+      para: entrada.termo_pt,
+      previa: corpo.data.previa,
+    });
+    return c.json(r);
+  });
+
+  // Vincula uma entrada como variante de outra (canônica), ou desvincula (null).
+  app.post('/glossario/:id/vincular', async (c) => {
+    const corpo = z
+      .object({ principal_id: z.number().int().nullable() })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const r = reposGlossario.vincular(db, Number(c.req.param('id')), corpo.data.principal_id);
+    if (r === undefined) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
+    if (r === 'invalido') {
+      return c.json(
+        {
+          erro: {
+            codigo: 'vinculo-invalido',
+            mensagem:
+              'Vínculo inválido: a canônica precisa ser outro termo da mesma obra, não pode ser ela mesma uma variante, e um termo que já é canônica de outras variantes não pode virar variante.',
+          },
+        },
+        400,
+      );
+    }
+    return c.json(r);
   });
 
   app.post('/obras/:obraId/glossario/importar', async (c) => {

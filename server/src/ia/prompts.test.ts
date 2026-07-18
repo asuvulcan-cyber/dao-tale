@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntradaGlossario } from '@dao-tale/shared';
-import { filtrarGlossarioRelevante, sistemaTraducao, usuarioTraducao } from './prompts.js';
+import { filtrarGlossarioRelevante, incluirPrincipais, sistemaTraducao, usuarioTraducao } from './prompts.js';
 import type { RequisicaoTraducaoBloco } from './provedor.js';
 
 const entrada = (termo_zh: string, termo_pt: string): EntradaGlossario => ({
@@ -11,6 +11,7 @@ const entrada = (termo_zh: string, termo_pt: string): EntradaGlossario => ({
   categoria: 'personagem',
   nota: null,
   origem: 'manual',
+  principal_id: null,
   criado_em: '',
 });
 
@@ -70,6 +71,26 @@ describe('termos adotados no capítulo', () => {
     expect(usuario.indexOf('归墟 → Abismo do Retorno')).toBeLessThan(usuario.indexOf('### Frases a traduzir:'));
     const { termosAdotados: _ignorado, ...semTermos } = req;
     expect(sistemaTraducao(req)).toBe(sistemaTraducao(semTermos));
+  });
+});
+
+describe('variantes de termo no glossário', () => {
+  const canonica: EntradaGlossario = { ...entrada('林芊', 'Lin Qian'), id: 1 };
+  const variante: EntradaGlossario = { ...entrada('芊芊', 'Qianqian'), id: 2, principal_id: 1 };
+
+  it('a formatação anota a variante apontando para a canônica', () => {
+    const sistema = sistemaTraducao({ promptMae: 'Regras.', glossario: [canonica, variante] });
+    expect(sistema).toContain('芊芊 → Qianqian');
+    expect(sistema).toContain('variante de Lin Qian (林芊)');
+  });
+
+  it('incluirPrincipais traz a canônica quando só a variante entrou no trecho', () => {
+    const sel = incluirPrincipais([variante], [canonica, variante]);
+    expect(sel.map((e) => e.id).sort()).toEqual([1, 2]);
+  });
+
+  it('incluirPrincipais não duplica se a canônica já estava', () => {
+    expect(incluirPrincipais([canonica, variante], [canonica, variante])).toHaveLength(2);
   });
 });
 

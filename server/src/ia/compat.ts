@@ -3,17 +3,22 @@ import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
+  type RequisicaoExtrairTermos,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RespostaExtrairTermos,
   type RespostaRevisaoProvedor,
   type RespostaTraducaoBloco,
 } from './provedor.js';
-import { respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
+import { respostaExtrairTermosSchema, respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
 import {
+  INSTRUCAO_JSON_EXTRAIR,
   INSTRUCAO_JSON_REVISAO,
   INSTRUCAO_JSON_TRADUCAO,
+  sistemaExtrairTermos,
   sistemaRevisao,
   sistemaTraducao,
+  usuarioExtrairTermos,
   usuarioRevisao,
   usuarioTraducao,
 } from './prompts.js';
@@ -160,6 +165,20 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
+        }
+        throw e;
+      }
+    },
+
+    async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
+      const sistema = `${sistemaExtrairTermos(req)}\n\n${INSTRUCAO_JSON_EXTRAIR}`;
+      const bruto = await completar(chave, req.modelo, sistema, usuarioExtrairTermos(req));
+      try {
+        const dados = respostaExtrairTermosSchema.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto) };
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          throw new ErroProvedor('Resposta do modelo fora do contrato de extração de termos.', 'transitorio');
         }
         throw e;
       }

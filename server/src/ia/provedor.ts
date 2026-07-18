@@ -38,6 +38,7 @@ export interface TermoNovoDetectado {
   termo_zh: string;
   termo_pt: string;
   categoria?: string;
+  /** Descrição curta em PT do termo (vira a nota do glossário ao aceitar). */
   contexto?: string;
 }
 
@@ -59,6 +60,24 @@ export interface RequisicaoRevisao {
 }
 
 export interface RespostaRevisaoProvedor extends RespostaRevisao {
+  bruta: string;
+}
+
+// ── Extração exaustiva de termos de uma frase (curadoria manual do glossário) ─
+// Distinta do termos_novos oportunista da tradução: aqui a instrução é varrer a
+// frase inteira e devolver TODO nome próprio/entidade que mereça glossário —
+// para pegar o que o pipeline deixou passar.
+
+export interface RequisicaoExtrairTermos {
+  modelo: string;
+  promptMae: string;
+  /** Glossário atual da obra: o modelo não deve repetir o que já está aqui. */
+  glossario: EntradaGlossario[];
+  frase: { texto_zh: string; texto_pt: string };
+}
+
+export interface RespostaExtrairTermos {
+  termos: TermoNovoDetectado[];
   bruta: string;
 }
 
@@ -87,4 +106,5 @@ export interface ProvedorIA {
   testarCredencial(chave: string | null): Promise<{ ok: boolean; mensagem: string }>;
   traduzirBloco(chave: string | null, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco>;
   revisarFrase(chave: string | null, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor>;
+  extrairTermos(chave: string | null, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Capitulo,
@@ -27,6 +27,13 @@ interface DetalheCapitulo {
   capitulo: Capitulo;
   frases: Frase[];
   progresso: ProgressoTraducao;
+}
+
+interface TermoExtraido {
+  termo_zh: string;
+  termo_pt: string;
+  categoria?: string;
+  contexto?: string;
 }
 
 interface ViolacaoConsistencia {
@@ -150,6 +157,26 @@ export function EditorCapitulo() {
     () => (marcarTermos ? montarMarcadorGlossario(glossario) : null),
     [glossario, marcarTermos],
   );
+
+  // Deep-link "ir à frase" (?frase=<id>), vindo do glossário: seleciona e rola
+  // até ela quando o capítulo carrega; depois limpa o parâmetro da URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const alvo = searchParams.get('frase');
+    if (!alvo || !data?.frases.some((f) => f.id === Number(alvo))) return;
+    const id = Number(alvo);
+    setFraseSelecionada(id);
+    requestAnimationFrame(() =>
+      document.getElementById(`frase-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+    );
+    setSearchParams(
+      (p) => {
+        p.delete('frase');
+        return p;
+      },
+      { replace: true },
+    );
+  }, [searchParams, data, setSearchParams]);
 
   // Casos de teste do capítulo → selo-ponto de pergunta/regra/confirmação (item 7).
   const { data: casosDoCapitulo } = useQuery({
@@ -1025,6 +1052,7 @@ function PainelRevisao({
   aoEditarTexto: (antes: string, depois: string, fraseId: number) => void;
 }) {
   const clienteQuery = useQueryClient();
+  const { obraId } = useParams();
   const [pergunta, setPergunta] = useState('');
   const [resultado, setResultado] = useState<{ revisao: RespostaRevisao; caso: CasoTeste } | null>(null);
   const [erro, setErro] = useState('');
@@ -1037,6 +1065,7 @@ function PainelRevisao({
     setResultado(null);
     setErro('');
     setDividindo(false);
+    setCandidatos(null);
   }, [frase.id]);
 
   // Edição direta da tradução pelo painel — é assim que se edita nos modos de
@@ -1092,6 +1121,34 @@ function PainelRevisao({
   const reverter = useMutation({
     mutationFn: () => api('POST', `/frases/${frase.id}/reverter-ia`),
     onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] }),
+  });
+
+  // Curadoria sob demanda: varre a frase atrás de termos que o pipeline deixou
+  // passar (o termos_novos da tradução é oportunista e ignora muita coisa). A IA
+  // alinha ZH↔PT, então você escolhe pelo português e adiciona num clique.
+  const [candidatos, setCandidatos] = useState<TermoExtraido[] | null>(null);
+  const sugerirTermos = useMutation({
+    mutationFn: () => api<{ termos: TermoExtraido[] }>('POST', `/frases/${frase.id}/sugerir-termos`, {}),
+    onSuccess: (r) => {
+      setCandidatos(r.termos);
+      setErro('');
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
+  const adicionarAoGlossario = useMutation({
+    mutationFn: (t: TermoExtraido) =>
+      api('POST', `/obras/${obraId}/glossario`, {
+        termo_zh: t.termo_zh,
+        termo_pt: t.termo_pt,
+        categoria: t.categoria || 'outro',
+        nota: t.contexto || undefined,
+      }),
+    onSuccess: (_r, t) => {
+      setCandidatos((cs) => cs?.filter((c) => c.termo_zh !== t.termo_zh) ?? null);
+      clienteQuery.invalidateQueries({ queryKey: ['glossario', obraId] });
+      setErro('');
+    },
+    onError: (e) => setErro((e as Error).message),
   });
 
   // ── Arrasto da gaveta ──────────────────────────────────────────────────
@@ -1177,6 +1234,39 @@ function PainelRevisao({
             Reverter para a tradução original da IA
           </button>
         )}
+
+        <div className="space-y-1.5 border-t border-linha/60 pt-3">
+          <button
+            onClick={() => sugerirTermos.mutate()}
+            disabled={sugerirTermos.isPending}
+            className="text-xs text-jade-forte underline hover:text-jade disabled:opacity-50"
+          >
+            {sugerirTermos.isPending ? 'Procurando termos…' : 'Sugerir termos desta frase para o glossário (IA)'}
+          </button>
+          {candidatos?.length === 0 && (
+            <p className="text-xs text-tinta-2">Nenhum termo novo digno de glossário nesta frase.</p>
+          )}
+          {candidatos && candidatos.length > 0 && (
+            <div className="space-y-1.5">
+              {candidatos.map((t) => (
+                <div key={t.termo_zh} className="flex items-center gap-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate" title={t.contexto ?? undefined}>
+                    <span className="font-medium">{t.termo_pt}</span>
+                    <span className="texto-zh ml-1.5 text-xs text-tinta-2">{t.termo_zh}</span>
+                  </span>
+                  <button
+                    onClick={() => adicionarAoGlossario.mutate(t)}
+                    disabled={adicionarAoGlossario.isPending}
+                    title={t.contexto ? `Nota: ${t.contexto}` : 'Adicionar ao glossário'}
+                    className="shrink-0 rounded border border-linha px-2 py-0.5 text-xs text-jade-forte hover:border-jade disabled:opacity-50"
+                  >
+                    + glossário
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <textarea
           value={pergunta}
