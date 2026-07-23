@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BancoDados } from './index.js';
-import type { Obra } from '@dao-tale/shared';
+import { STATUS_CAPITULO, type Obra } from '@dao-tale/shared';
 import { reposObras } from './repos.js';
 
 // Exportação/reimportação completa da obra (formato dao-tale-export v1, doc 03).
@@ -30,6 +30,10 @@ const exportSchema = z.object({
       conteudo: z.string(),
       notas_versao: z.string().nullable(),
       ativo: z.boolean(),
+      // default: compatibilidade com exports anteriores à migração 006.
+      // nucleo_id não viaja no export: é um id interno de outro banco — na
+      // reimportação o delta volta a compor com o núcleo ativo local.
+      tipo: z.enum(['completo', 'delta']).default('completo'),
       criado_em: z.string(),
     }),
   ),
@@ -39,7 +43,7 @@ const exportSchema = z.object({
       titulo: z.string().nullable(),
       // default(null): compatibilidade com exports anteriores à migração 002.
       titulo_pt: z.string().nullable().default(null),
-      status: z.enum(['rascunho', 'traduzindo', 'traduzido', 'revisado', 'finalizado']),
+      status: z.enum(STATUS_CAPITULO),
       texto_origem: z.string(),
       provedor: z.string().nullable(),
       modelo: z.string().nullable(),
@@ -136,6 +140,7 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
       conteudo: p.conteudo,
       notas_versao: p.notas_versao,
       ativo: !!p.ativo,
+      tipo: (p.tipo ?? 'completo') as 'completo' | 'delta',
       criado_em: p.criado_em,
     })),
     capitulos: capitulos.map((cap) => ({
@@ -234,9 +239,9 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
     for (const p of dados.prompts) {
       const info = db
         .prepare(
-          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, criado_em) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, tipo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(obraId, p.versao, p.conteudo, p.notas_versao, p.ativo ? 1 : 0, p.criado_em);
+        .run(obraId, p.versao, p.conteudo, p.notas_versao, p.ativo ? 1 : 0, p.tipo, p.criado_em);
       promptIdPorVersao.set(p.versao, Number(info.lastInsertRowid));
     }
 

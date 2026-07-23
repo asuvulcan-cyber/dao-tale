@@ -1,96 +1,48 @@
-import { ApiError, GoogleGenAI, Type, type Schema } from '@google/genai';
+import { ApiError, GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
   type RequisicaoExtrairTermos,
+  type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RequisicaoQa,
   type RespostaExtrairTermos,
+  type RespostaQa,
+  type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
   type RespostaTraducaoBloco,
 } from './provedor.js';
-import { respostaExtrairTermosSchema, respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
 import {
   sistemaExtrairTermos,
+  sistemaQa,
+  sistemaRefinarPrompt,
   sistemaRevisao,
   sistemaTraducao,
   usuarioExtrairTermos,
+  usuarioQa,
+  usuarioRefinarPrompt,
   usuarioRevisao,
   usuarioTraducao,
 } from './prompts.js';
+import {
+  CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_QA,
+  CONTRATO_REFINAR_PROMPT,
+  CONTRATO_REVISAO,
+  CONTRATO_TRADUCAO,
+  paraGemini,
+} from './contratos.js';
 
-// Schemas no formato do Gemini (responseSchema). Espelham os de prompts.ts.
+// Schemas no formato do Gemini (responseSchema), derivados da fonte única (M7).
 
-const SCHEMA_TRADUCAO_GEMINI: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    traducoes: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          ordem: { type: Type.INTEGER, description: 'Número da frase, exatamente como recebido' },
-          texto_pt: { type: Type.STRING, description: 'Tradução em português brasileiro' },
-        },
-        required: ['ordem', 'texto_pt'],
-      },
-    },
-    termos_novos: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          termo_zh: { type: Type.STRING },
-          termo_pt: { type: Type.STRING },
-          categoria: {
-            type: Type.STRING,
-            enum: ['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro'],
-          },
-          contexto: { type: Type.STRING },
-        },
-        required: ['termo_zh', 'termo_pt'],
-      },
-    },
-  },
-  required: ['traducoes', 'termos_novos'],
-};
-
-const SCHEMA_EXTRAIR_TERMOS_GEMINI: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    termos: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          termo_zh: { type: Type.STRING },
-          termo_pt: { type: Type.STRING },
-          categoria: {
-            type: Type.STRING,
-            enum: ['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro'],
-          },
-          contexto: { type: Type.STRING, description: 'Descrição curta em PT do termo, para a nota do glossário' },
-        },
-        required: ['termo_zh', 'termo_pt'],
-      },
-    },
-  },
-  required: ['termos'],
-};
-
-const SCHEMA_REVISAO_GEMINI: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    trecho_zh: { type: Type.STRING },
-    veredito: { type: Type.STRING, enum: ['correto', 'incorreto'] },
-    justificativa: { type: Type.STRING },
-    secao_regra: { type: Type.STRING },
-    correcao_proposta: { type: Type.STRING, nullable: true },
-  },
-  required: ['trecho_zh', 'veredito', 'justificativa', 'secao_regra'],
-};
+const SCHEMA_TRADUCAO_GEMINI = paraGemini(CONTRATO_TRADUCAO.schema);
+const SCHEMA_EXTRAIR_TERMOS_GEMINI = paraGemini(CONTRATO_EXTRAIR_TERMOS.schema);
+const SCHEMA_REVISAO_GEMINI = paraGemini(CONTRATO_REVISAO.schema);
+const SCHEMA_REFINAR_GEMINI = paraGemini(CONTRATO_REFINAR_PROMPT.schema);
+const SCHEMA_QA_GEMINI = paraGemini(CONTRATO_QA.schema);
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof ApiError) {
@@ -185,8 +137,12 @@ export const provedorGemini: ProvedorIA = {
         }
         throw e;
       });
+      // A1: resposta cortada pelo teto de tokens de saída — o job divide o bloco.
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+        throw new ErroProvedor('O Gemini truncou a resposta no limite de tokens de saída.', 'truncado');
+      }
       const bruto = parsearJson(resposta.text);
-      const dados = respostaTraducaoSchema.parse(bruto);
+      const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
       return { ...dados, bruta: JSON.stringify(bruto) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
@@ -210,7 +166,7 @@ export const provedorGemini: ProvedorIA = {
         },
       });
       const bruto = parsearJson(resposta.text);
-      const dados = respostaExtrairTermosSchema.parse(bruto);
+      const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
       return { ...dados, bruta: JSON.stringify(bruto) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
@@ -234,12 +190,63 @@ export const provedorGemini: ProvedorIA = {
         },
       });
       const bruto = parsearJson(resposta.text);
-      const dados = respostaRevisaoSchema.parse(bruto);
+      const dados = CONTRATO_REVISAO.zod.parse(bruto);
       return { ...dados, bruta: JSON.stringify(bruto) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato do Protocolo de Revisão.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async refinarPrompt(chave, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.models.generateContent({
+        model: req.modelo,
+        contents: usuarioRefinarPrompt(req),
+        config: {
+          systemInstruction: sistemaRefinarPrompt(req),
+          responseMimeType: 'application/json',
+          responseSchema: SCHEMA_REFINAR_GEMINI,
+        },
+      });
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de refinamento do prompt.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async analisarQa(chave, req: RequisicaoQa): Promise<RespostaQa> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.models.generateContent({
+        model: req.modelo,
+        contents: usuarioQa(req),
+        config: {
+          systemInstruction: sistemaQa(req),
+          responseMimeType: 'application/json',
+          responseSchema: SCHEMA_QA_GEMINI,
+        },
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+        throw new ErroProvedor('O Gemini truncou a resposta de QA no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_QA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');
       }
       throw classificarErro(e);
     }

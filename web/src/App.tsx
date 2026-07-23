@@ -244,6 +244,7 @@ export function Etiqueta({ children, cor = 'neutro' }: { children: React.ReactNo
 export const STATUS_CAPITULO_ROTULO: Record<string, { texto: string; cor: CorEtiqueta }> = {
   rascunho: { texto: 'Rascunho', cor: 'neutro' },
   traduzindo: { texto: 'Traduzindo', cor: 'indigo' },
+  parcial: { texto: 'Parcial', cor: 'selo' },
   traduzido: { texto: 'Traduzido', cor: 'jade' },
   revisado: { texto: 'Revisado', cor: 'ocre' },
   finalizado: { texto: 'Finalizado', cor: 'jade' },

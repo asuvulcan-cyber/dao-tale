@@ -1,11 +1,17 @@
 import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { PROVEDORES_IDS, type ProvedorId } from '@dao-tale/shared';
+import { FASES_TRADUCAO, PROVEDORES_IDS, type EventoLote, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposUso } from '../db/repos.js';
+import { reposCapitulos, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
+import { jobEmExecucao } from '../traducao/job.js';
+import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote } from '../traducao/lote.js';
+import { checkpointDaObra } from '../traducao/checkpoint.js';
+import { comporPromptMae, extrairCamadas } from '../db/promptPadraoInicial.js';
 import { exportarObra, importarObra } from '../db/portabilidade.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { obterChave } from '../credenciais/index.js';
+import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { FraseParaTraduzir } from '../ia/provedor.js';
 
 const criarObraSchema = z.object({
@@ -52,6 +58,16 @@ export function dividirParagrafos(texto: string): string[] {
 }
 
 const criarPromptSchema = z.object({
+  versao: z.string().min(1),
+  // Delta pode ser vazio (obra sem diretriz específica ainda); a rota valida
+  // que um prompt 'completo' não fique sem conteúdo.
+  conteudo: z.string(),
+  notas_versao: z.string().optional(),
+  ativar: z.boolean().default(true),
+  tipo: z.enum(['completo', 'delta']).optional(),
+});
+
+const criarPromptPadraoSchema = z.object({
   versao: z.string().min(1),
   conteudo: z.string().min(1),
   notas_versao: z.string().optional(),
@@ -122,9 +138,102 @@ export function rotasObras(db: BancoDados): Hono {
     if (c.req.query('simular') === '1') {
       return c.json(reposObras.simularExclusao(db, id));
     }
+    // M4: mesmo bloqueio do delete de capítulo — excluir a obra com job em voo
+    // (ou lote ativo) deixaria a chamada corrente pagar contra frases que já
+    // não existem.
+    if (loteEmExecucao(id) || reposCapitulos.listar(db, id).some((cap) => jobEmExecucao(cap.id))) {
+      return c.json(
+        { erro: { codigo: 'job-ativo', mensagem: 'Cancele o lote/traduções em andamento antes de excluir a obra.' } },
+        409,
+      );
+    }
     const ok = reposObras.excluir(db, id);
     if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     return c.json({ ok: true });
+  });
+
+  // ── Pipeline: checkpoint de estabilidade e fase (doc 09 §4) ──────────────
+
+  app.get('/obras/:id/checkpoint', (c) => {
+    const id = Number(c.req.param('id'));
+    const obra = reposObras.obter(db, id);
+    if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    return c.json(checkpointDaObra(db, id, obra.fase_traducao, reposConfig.obterTodas(db)));
+  });
+
+  app.put('/obras/:id/fase', async (c) => {
+    const id = Number(c.req.param('id'));
+    const corpo = z
+      .object({ fase: z.enum(FASES_TRADUCAO) })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const obra = reposObras.definirFase(db, id, corpo.data.fase);
+    if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    return c.json(obra);
+  });
+
+  // ── Lote de tradução (fase de cruzeiro, doc 09 §5) ───────────────────────
+
+  app.get('/obras/:id/lote', (c) => {
+    const lote = reposLotes.atual(db, Number(c.req.param('id')));
+    return c.json({ lote: lote ?? null });
+  });
+
+  app.post('/obras/:id/lote', async (c) => {
+    const id = Number(c.req.param('id'));
+    const corpo = z
+      .object({ capitulo_ids: z.array(z.number().int()).optional(), qa_automatica: z.boolean().optional() })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const r = iniciarLote(db, id, { capituloIds: corpo.data.capitulo_ids, qaAutomatica: corpo.data.qa_automatica });
+    if (!r.ok) {
+      const codigo = r.erro?.includes('andamento') ? 409 : 400;
+      return c.json({ erro: { codigo: 'lote', mensagem: r.erro } }, codigo);
+    }
+    return c.json({ lote: r.lote }, 202);
+  });
+
+  app.post('/obras/:id/lote/cancelar', (c) => {
+    return c.json({ ok: cancelarLote(db, Number(c.req.param('id'))) });
+  });
+
+  app.post('/obras/:id/lote/retomar', (c) => {
+    const r = retomarLote(db, Number(c.req.param('id')));
+    if (!r.ok) return c.json({ erro: { codigo: 'lote', mensagem: r.erro } }, 400);
+    return c.json({ lote: r.lote }, 202);
+  });
+
+  app.get('/obras/:id/lote/eventos', (c) => {
+    const id = Number(c.req.param('id'));
+    return streamSSE(c, async (stream) => {
+      const emissor = emissorDoLote(id);
+      let encerrar: (() => void) | null = null;
+      const encerrado = new Promise<void>((resolve) => {
+        encerrar = resolve;
+      });
+
+      let fila: Promise<unknown> = Promise.resolve();
+      const escrever = (evento: string, dados: unknown, aoFim?: () => void) => {
+        fila = fila
+          .then(() => stream.writeSSE({ event: evento, data: JSON.stringify(dados) }))
+          .then(() => aoFim?.())
+          .catch(() => encerrar?.());
+      };
+
+      const ouvinte = (evento: EventoLote) => {
+        escrever(evento.tipo, evento.dados, evento.tipo === 'lote_encerrado' ? () => encerrar?.() : undefined);
+      };
+      emissor.on('evento', ouvinte);
+      stream.onAbort(() => encerrar?.());
+
+      // Estado atual ao conectar; se não há lote rodando, encerra o stream.
+      const lote = reposLotes.atual(db, id);
+      if (lote) escrever('lote', lote);
+      if (!loteEmExecucao(id)) escrever('lote_encerrado', lote ?? null, () => encerrar?.());
+
+      await encerrado;
+      emissor.off('evento', ouvinte);
+    });
   });
 
   // ── Exportação / reimportação completa (formato dao-tale-export v1) ──────
@@ -157,8 +266,22 @@ export function rotasObras(db: BancoDados): Hono {
   app.post('/obras/:id/prompts', async (c) => {
     const corpo = criarPromptSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const obraId = Number(c.req.param('id'));
+    // Sem tipo explícito, a nova versão herda o tipo da ativa (delta continua
+    // delta; prompt completo legado continua completo).
+    const tipo = corpo.data.tipo ?? reposPrompts.ativo(db, obraId)?.tipo ?? 'completo';
+    if (tipo === 'completo' && corpo.data.conteudo.trim().length === 0) {
+      return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Um prompt completo não pode ser vazio.' } }, 400);
+    }
     try {
-      return c.json(reposPrompts.criar(db, Number(c.req.param('id')), corpo.data), 201);
+      return c.json(
+        reposPrompts.criar(db, obraId, {
+          ...corpo.data,
+          tipo,
+          nucleo_id: tipo === 'delta' ? (reposPromptPadrao.ativo(db)?.id ?? null) : null,
+        }),
+        201,
+      );
     } catch (e: any) {
       if (String(e.message).includes('UNIQUE')) {
         return c.json({ erro: { codigo: 'versao-duplicada', mensagem: 'Já existe uma versão com esse identificador nesta obra.' } }, 409);
@@ -167,10 +290,100 @@ export function rotasObras(db: BancoDados): Hono {
     }
   });
 
+  // Prompt mãe efetivo (núcleo + delta compostos) — prévia na UI e medição.
+  app.get('/obras/:id/prompt-composto', (c) => {
+    const composto = reposPrompts.composto(db, Number(c.req.param('id')));
+    if (!composto) {
+      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 404);
+    }
+    return c.json(composto);
+  });
+
+  // Prévia da conversão assistida (doc 08 §4): separa o prompt completo ativo em
+  // rascunho de delta (Seção 6) + núcleo da obra, para o usuário comparar com o
+  // núcleo global e decidir o que vai para onde. Não altera nada.
+  app.get('/obras/:id/prompts/previa-conversao', (c) => {
+    const ativo = reposPrompts.ativo(db, Number(c.req.param('id')));
+    if (!ativo) return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt ativo.' } }, 404);
+    if (ativo.tipo === 'delta') {
+      return c.json({ erro: { codigo: 'ja-convertido', mensagem: 'O prompt ativo já está no formato em camadas.' } }, 409);
+    }
+    const camadas = extrairCamadas(ativo.conteudo);
+    const nucleoAtivo = reposPromptPadrao.ativo(db);
+    return c.json({
+      convertivel: camadas !== null,
+      delta_rascunho: camadas?.delta ?? '',
+      // Restante do prompt da obra (com marcador no lugar da Seção 6) — é o que
+      // se compara ao núcleo global para achar divergências a promover/absorver.
+      nucleo_da_obra: camadas?.nucleo ?? ativo.conteudo,
+      nucleo_global: nucleoAtivo?.conteudo ?? '',
+      nucleo_global_versao: nucleoAtivo?.versao ?? null,
+    });
+  });
+
   app.post('/prompts/:id/ativar', (c) => {
     const prompt = reposPrompts.ativar(db, Number(c.req.param('id')));
     if (!prompt) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Versão não encontrada.' } }, 404);
     return c.json(prompt);
+  });
+
+  // Versionamento semiautomático (doc 08 §7): recorrências do banco de testes →
+  // propostas concretas de regra para o delta. Usa o modelo do papel de revisão
+  // (raciocínio) quando configurado; nada é gravado — o usuário decide na UI.
+  app.post('/obras/:id/prompts/sugerir-refinamento', async (c) => {
+    const obraId = Number(c.req.param('id'));
+    const obra = reposObras.obter(db, obraId);
+    if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+
+    const prompt = reposPrompts.composto(db, obraId);
+    if (!prompt) {
+      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
+    }
+
+    const recorrencias = reposTestes.recorrencias(db, obraId);
+    if (recorrencias.length === 0) {
+      return c.json({ erro: { codigo: 'sem-recorrencias', mensagem: 'Nenhuma seção/regra com 2+ casos não-confirmados no banco de testes — nada indica lacuna sistemática do prompt.' } }, 409);
+    }
+
+    // Até 5 casos por seção recorrente mantêm a chamada enxuta e representativa.
+    const casos = recorrencias.flatMap((r) =>
+      reposTestes
+        .listar(db, obraId, { secao_regra: r.secao_regra, limite: 5 })
+        .casos.filter((caso) => caso.status === 'pendente' || caso.status === 'regra-nova-necessaria')
+        .map((caso) => ({
+          secao_regra: r.secao_regra,
+          trecho_zh: caso.trecho_zh,
+          pergunta: caso.pergunta,
+          veredito: caso.veredito,
+          justificativa: caso.justificativa,
+          correcao_proposta: caso.correcao_proposta,
+        })),
+    );
+
+    const config = reposConfig.obterTodas(db);
+    const provedorId: ProvedorId =
+      (config.provedor_revisao || undefined) ?? obra.provedor_padrao ?? config.provedor_padrao;
+    const provedor = obterProvedor(provedorId);
+    const modelo = config.provedor_revisao
+      ? config.modelo_revisao || provedor.modeloPadrao
+      : (obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao));
+    const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
+    if (provedor.precisaChave && !chave) {
+      return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
+    }
+
+    try {
+      reposUso.registrar(db, provedorId, modelo);
+      const resposta = await provedor.refinarPrompt(chave, {
+        modelo,
+        promptMae: prompt.texto,
+        deltaAtual: prompt.prompt.tipo === 'delta' ? prompt.prompt.conteudo : (extrairCamadas(prompt.prompt.conteudo)?.delta ?? ''),
+        casos,
+      });
+      return c.json({ propostas: resposta.propostas, recorrencias, provedor: provedorId, modelo });
+    } catch (e) {
+      return c.json({ erro: { codigo: 'provedor', mensagem: (e as Error).message } }, 502);
+    }
   });
 
   // Copia o prompt padrão ativo como v1.0 da obra (só quando ela não tem versões).
@@ -194,7 +407,7 @@ export function rotasObras(db: BancoDados): Hono {
   app.get('/prompt-padrao', (c) => c.json(reposPromptPadrao.listar(db)));
 
   app.post('/prompt-padrao', async (c) => {
-    const corpo = criarPromptSchema.safeParse(await c.req.json());
+    const corpo = criarPromptPadraoSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     try {
       return c.json(reposPromptPadrao.criar(db, corpo.data), 201);
@@ -234,8 +447,15 @@ export function rotasObras(db: BancoDados): Hono {
     if (corpo.data.obra_id && !obra) {
       return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     }
-    const prompt = obra ? reposPrompts.ativoOuAdotado(db, obra.id) : reposPromptPadrao.ativo(db);
-    if (!prompt) {
+    // Com obra: composição núcleo + delta dela. Sem obra (cadastro): o núcleo
+    // ativo composto com delta vazio — a composição também remove o marcador.
+    const nucleoAtivo = reposPromptPadrao.ativo(db);
+    const promptTexto = obra
+      ? reposPrompts.composto(db, obra.id)?.texto
+      : nucleoAtivo
+        ? comporPromptMae(nucleoAtivo.conteudo, '')
+        : undefined;
+    if (!promptTexto) {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'Não há prompt padrão ativo para orientar a tradução.' } }, 400);
     }
 
@@ -263,14 +483,24 @@ export function rotasObras(db: BancoDados): Hono {
       });
     });
 
+    // Mesmo desenho da tradução de capítulo: glossário filtrado pelo trecho vai
+    // na mensagem do usuário e o sistema fica estável (cacheável).
+    const glossarioTodo = obra ? reposGlossario.listar(db, obra.id) : [];
+    const glossario = config.glossario_relevante
+      ? incluirPrincipais(
+          filtrarGlossarioRelevante(glossarioTodo, [corpo.data.titulo_zh, corpo.data.sinopse_zh]),
+          glossarioTodo,
+        )
+      : glossarioTodo;
+
     try {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.traduzirBloco(chave, {
         modelo,
-        promptMae: prompt.conteudo,
+        promptMae: promptTexto,
         modo: 'detalhes',
-        glossario: obra ? reposGlossario.listar(db, obra.id) : [],
-        glossarioNoUsuario: false,
+        glossario,
+        glossarioNoUsuario: config.glossario_relevante,
         caudaAnterior: [],
         frases,
         proximas: [],

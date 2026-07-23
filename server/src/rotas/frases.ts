@@ -117,15 +117,27 @@ export function rotasFrases(db: BancoDados): Hono {
     const obra = reposObras.obter(db, capitulo.obra_id)!;
     const config = reposConfig.obterTodas(db);
 
-    const promptAtivo = reposPrompts.ativoOuAdotado(db, obra.id);
-    if (!promptAtivo) {
+    const prompt = reposPrompts.composto(db, obra.id);
+    if (!prompt) {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
+    // Modelo por papel (doc 08 §5): a revisão é rara e de alto valor — se houver
+    // um par provedor/modelo de revisão configurado (modelo de raciocínio), ele
+    // vence a cadeia normal. O pedido explícito do usuário vence tudo, e nunca
+    // misturamos modelo de um provedor com outro.
+    const papelRevisao = !corpo.data.provedor && !!config.provedor_revisao;
     const provedorId: ProvedorId =
-      corpo.data.provedor ?? (capitulo.provedor as ProvedorId | null) ?? obra.provedor_padrao ?? config.provedor_padrao;
+      corpo.data.provedor ??
+      (papelRevisao
+        ? (config.provedor_revisao as ProvedorId)
+        : ((capitulo.provedor as ProvedorId | null) ?? obra.provedor_padrao ?? config.provedor_padrao));
     const provedor = obterProvedor(provedorId);
-    const modelo = corpo.data.modelo ?? capitulo.modelo ?? obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao);
+    const modelo =
+      corpo.data.modelo ??
+      (papelRevisao
+        ? config.modelo_revisao || provedor.modeloPadrao
+        : (capitulo.modelo ?? obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao)));
     const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
     if (provedor.precisaChave && !chave) {
       return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
@@ -157,8 +169,11 @@ export function rotasFrases(db: BancoDados): Hono {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.revisarFrase(chave, {
         modelo,
-        promptMae: promptAtivo.conteudo,
+        promptMae: prompt.texto,
         glossario,
+        // A4 da auditoria: glossário filtrado vai na mensagem do usuário e o
+        // sistema fica estável entre revisões da obra (cache passa a acertar).
+        glossarioNoUsuario: config.glossario_relevante,
         vizinhasAntes,
         vizinhasDepois,
         frase: {
@@ -207,8 +222,8 @@ export function rotasFrases(db: BancoDados): Hono {
     const obra = reposObras.obter(db, capitulo.obra_id)!;
     const config = reposConfig.obterTodas(db);
 
-    const promptAtivo = reposPrompts.ativoOuAdotado(db, obra.id);
-    if (!promptAtivo) {
+    const prompt = reposPrompts.composto(db, obra.id);
+    if (!prompt) {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
@@ -221,12 +236,20 @@ export function rotasFrases(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
     }
 
+    // M2 da auditoria: só os termos já catalogados PRESENTES na frase servem
+    // para deduplicar — o resto do glossário só gastava tokens a cada clique.
+    const glossarioTodo = reposGlossario.listar(db, obra.id);
+    const glossario = config.glossario_relevante
+      ? incluirPrincipais(filtrarGlossarioRelevante(glossarioTodo, [frase.texto_zh]), glossarioTodo)
+      : glossarioTodo;
+
     try {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.extrairTermos(chave, {
         modelo,
-        promptMae: promptAtivo.conteudo,
-        glossario: reposGlossario.listar(db, obra.id),
+        promptMae: prompt.texto,
+        glossario,
+        glossarioNoUsuario: config.glossario_relevante,
         frase: { texto_zh: frase.texto_zh, texto_pt: frase.texto_pt },
       });
       // Rede de segurança: descarta o que já está catalogado ou já é sugestão

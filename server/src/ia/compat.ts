@@ -4,24 +4,36 @@ import {
   ErroProvedor,
   type ProvedorIA,
   type RequisicaoExtrairTermos,
+  type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RequisicaoQa,
   type RespostaExtrairTermos,
+  type RespostaQa,
+  type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
   type RespostaTraducaoBloco,
 } from './provedor.js';
-import { respostaExtrairTermosSchema, respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
 import {
-  INSTRUCAO_JSON_EXTRAIR,
-  INSTRUCAO_JSON_REVISAO,
-  INSTRUCAO_JSON_TRADUCAO,
   sistemaExtrairTermos,
+  sistemaQa,
+  sistemaRefinarPrompt,
   sistemaRevisao,
   sistemaTraducao,
   usuarioExtrairTermos,
+  usuarioQa,
+  usuarioRefinarPrompt,
   usuarioRevisao,
   usuarioTraducao,
 } from './prompts.js';
+import {
+  CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_QA,
+  CONTRATO_REFINAR_PROMPT,
+  CONTRATO_REVISAO,
+  CONTRATO_TRADUCAO,
+  instrucaoJson,
+} from './contratos.js';
 
 // Provedor genérico para APIs compatíveis com OpenAI (chat completions):
 // DeepSeek, OpenRouter, Groq, Mistral etc. usam o mesmo protocolo — só mudam
@@ -47,12 +59,12 @@ export interface OpcoesCompat {
 interface RespostaChat {
   /** `reasoning`: modelos de raciocínio (gpt-oss etc.) podem devolver o conteúdo
    * útil separado — ou até só nele, quando o raciocínio consome o limite. */
-  choices?: { message?: { content?: string | null; reasoning?: string | null } }[];
+  choices?: { message?: { content?: string | null; reasoning?: string | null }; finish_reason?: string | null }[];
   data?: { id: string; name?: string }[];
   error?: { message?: string };
 }
 
-function classificarErro(nome: string, status: number, mensagem: string): ErroProvedor {
+function classificarErro(nome: string, status: number, mensagem: string, retryAfterMs?: number): ErroProvedor {
   if (status === 401 || status === 403) {
     return new ErroProvedor(`Chave de API do ${nome} inválida ou sem permissão. Verifique em Configurações.`, 'fatal');
   }
@@ -68,9 +80,19 @@ function classificarErro(nome: string, status: number, mensagem: string): ErroPr
     return new ErroProvedor(`Requisição rejeitada pela API do ${nome}: ${mensagem}`, 'fatal');
   }
   if (status === 429) {
-    return new ErroProvedor(`Limite de requisições do ${nome} atingido (429).`, 'limite');
+    return new ErroProvedor(`Limite de requisições do ${nome} atingido (429).`, 'limite', { retryAfterMs });
   }
   return new ErroProvedor(`Erro da API do ${nome} (${status}): ${mensagem}`, 'transitorio');
+}
+
+/** Retry-After pode vir em segundos ou como data HTTP; devolve ms ou undefined. */
+export function parsearRetryAfter(valor: string | null): number | undefined {
+  if (!valor) return undefined;
+  const segundos = Number(valor);
+  if (!Number.isNaN(segundos) && segundos >= 0) return Math.min(segundos * 1000, 10 * 60 * 1000);
+  const data = Date.parse(valor);
+  if (!Number.isNaN(data)) return Math.min(Math.max(data - Date.now(), 0), 10 * 60 * 1000);
+  return undefined;
 }
 
 /** Remove raciocínio inline (<think>…</think>) e cercas de código em volta do JSON. */
@@ -79,10 +101,11 @@ function sanearConteudo(texto: string): string {
   const cerca = t.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
   if (cerca) t = cerca[1];
   // Alguns modelos ainda põem uma frase antes/depois do objeto: recorta do
-  // primeiro '{' ao último '}'.
+  // primeiro '{' ao último '}'. (M5: >= 0 — objeto na posição 0 com lixo
+  // depois do fechamento também precisa do recorte.)
   const inicio = t.indexOf('{');
   const fim = t.lastIndexOf('}');
-  if (inicio > 0 && fim > inicio) t = t.slice(inicio, fim + 1);
+  if (inicio >= 0 && fim > inicio) t = t.slice(inicio, fim + 1);
   return t;
 }
 
@@ -104,7 +127,12 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     }
     const json = (await resposta.json().catch(() => ({}))) as RespostaChat;
     if (!resposta.ok) {
-      throw classificarErro(opts.nome, resposta.status, json.error?.message ?? resposta.statusText);
+      throw classificarErro(
+        opts.nome,
+        resposta.status,
+        json.error?.message ?? resposta.statusText,
+        parsearRetryAfter(resposta.headers.get('retry-after')),
+      );
     }
     return json;
   }
@@ -119,7 +147,16 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       response_format: { type: 'json_object' },
       ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
     });
-    const mensagem = json.choices?.[0]?.message;
+    const escolha = json.choices?.[0];
+    // A1: resposta cortada pelo teto de tokens de saída — repetir a chamada
+    // igual só paga de novo; quem trata é o chamador (dividindo o bloco).
+    if (escolha?.finish_reason === 'length') {
+      throw new ErroProvedor(
+        `O ${opts.nome} truncou a resposta no limite de tokens de saída.`,
+        'truncado',
+      );
+    }
+    const mensagem = escolha?.message;
     // Fallback para `reasoning`: se o JSON final ficou lá, o saneamento o recorta.
     const conteudo = mensagem?.content?.trim() || mensagem?.reasoning?.trim();
     if (!conteudo) throw new ErroProvedor('O modelo não devolveu a resposta estruturada esperada.', 'transitorio');
@@ -157,10 +194,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     },
 
     async traduzirBloco(chave, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco> {
-      const sistema = `${sistemaTraducao(req)}\n\n${INSTRUCAO_JSON_TRADUCAO}`;
+      const sistema = `${sistemaTraducao(req)}\n\n${instrucaoJson(CONTRATO_TRADUCAO)}`;
       const bruto = await completar(chave, req.modelo, sistema, usuarioTraducao(req));
       try {
-        const dados = respostaTraducaoSchema.parse(bruto);
+        const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto) };
       } catch (e) {
         if (e instanceof z.ZodError) {
@@ -171,10 +208,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     },
 
     async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
-      const sistema = `${sistemaExtrairTermos(req)}\n\n${INSTRUCAO_JSON_EXTRAIR}`;
+      const sistema = `${sistemaExtrairTermos(req)}\n\n${instrucaoJson(CONTRATO_EXTRAIR_TERMOS)}`;
       const bruto = await completar(chave, req.modelo, sistema, usuarioExtrairTermos(req));
       try {
-        const dados = respostaExtrairTermosSchema.parse(bruto);
+        const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto) };
       } catch (e) {
         if (e instanceof z.ZodError) {
@@ -185,14 +222,42 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     },
 
     async revisarFrase(chave, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor> {
-      const sistema = `${sistemaRevisao(req)}\n\n${INSTRUCAO_JSON_REVISAO}`;
+      const sistema = `${sistemaRevisao(req)}\n\n${instrucaoJson(CONTRATO_REVISAO)}`;
       const bruto = await completar(chave, req.modelo, sistema, usuarioRevisao(req));
       try {
-        const dados = respostaRevisaoSchema.parse(bruto);
+        const dados = CONTRATO_REVISAO.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto) };
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato do Protocolo de Revisão.', 'transitorio');
+        }
+        throw e;
+      }
+    },
+
+    async refinarPrompt(chave, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt> {
+      const sistema = `${sistemaRefinarPrompt(req)}\n\n${instrucaoJson(CONTRATO_REFINAR_PROMPT)}`;
+      const bruto = await completar(chave, req.modelo, sistema, usuarioRefinarPrompt(req));
+      try {
+        const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto) };
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          throw new ErroProvedor('Resposta do modelo fora do contrato de refinamento do prompt.', 'transitorio');
+        }
+        throw e;
+      }
+    },
+
+    async analisarQa(chave, req: RequisicaoQa): Promise<RespostaQa> {
+      const sistema = `${sistemaQa(req)}\n\n${instrucaoJson(CONTRATO_QA)}`;
+      const bruto = await completar(chave, req.modelo, sistema, usuarioQa(req));
+      try {
+        const dados = CONTRATO_QA.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto) };
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');
         }
         throw e;
       }

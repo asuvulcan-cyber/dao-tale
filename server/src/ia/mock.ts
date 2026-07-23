@@ -2,6 +2,8 @@ import {
   ErroProvedor,
   type ProvedorIA,
   type RequisicaoExtrairTermos,
+  type RequisicaoQa,
+  type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
 } from './provedor.js';
@@ -74,6 +76,37 @@ export const provedorMock: ProvedorIA = {
         contexto: 'Descrição simulada para curadoria do glossário.',
       }));
     return { termos, bruta: JSON.stringify({ termos }) };
+  },
+
+  async refinarPrompt(_chave, req: RequisicaoRefinarPrompt) {
+    await espera(latenciaMs());
+    // Uma proposta determinística por seção recorrente — exercita o fluxo inteiro.
+    const secoes = [...new Set(req.casos.map((c) => c.secao_regra))];
+    const propostas = secoes.map((secao) => ({
+      secao_regra: secao,
+      regra_proposta: `[regra simulada] Ao cair no caso "${secao}", aplique a correção validada pelo revisor.`,
+      justificativa: `[simulado] ${req.casos.filter((c) => c.secao_regra === secao).length} casos recorrentes nesta seção.`,
+    }));
+    return { propostas, bruta: JSON.stringify({ propostas }) };
+  },
+
+  async analisarQa(_chave, req: RequisicaoQa) {
+    await espera(latenciaMs());
+    // Determinístico: aponta 'omissao' de severidade média nos pares cuja
+    // tradução não menciona nenhum caractere chinês do original que seja dígito
+    // — na prática, gera ~1 apontamento por bloco para exercitar a triagem.
+    const apontamentos = req.pares
+      .filter((p) => p.texto_pt.includes('simulada'))
+      .slice(0, 1)
+      .map((p) => ({
+        ordem: p.ordem,
+        tipo: 'omissao' as const,
+        severidade: 'media' as const,
+        trecho_zh: [...p.texto_zh].slice(0, 6).join(''),
+        observacao: '[simulado] Possível omissão de trecho na tradução — conferir.',
+        sugestao: null,
+      }));
+    return { apontamentos, bruta: JSON.stringify({ apontamentos }) };
   },
 
   async revisarFrase(_chave, req: RequisicaoRevisao) {

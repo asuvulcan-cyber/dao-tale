@@ -10,13 +10,34 @@ import { diretorioDados } from '../config.js';
 const configSchema = z.object({
   provedor_padrao: z.enum(PROVEDORES_IDS).optional(),
   modelo_padrao: z.string().optional(),
-  // Teto alto o bastante para "capítulo inteiro num bloco só" em capítulos longos.
-  tamanho_bloco: z.number().int().min(1).max(400).optional(),
+  // A1: teto alinhado à capacidade real de saída dos provedores (~8K tokens) —
+  // acima disso o truncamento era garantido e cada bloco pagava 5 chamadas
+  // fadadas a falhar. O job ainda divide o bloco sozinho se truncar.
+  tamanho_bloco: z.number().int().min(1).max(120).optional(),
   vizinhas_revisao: z.number().int().min(0).max(10).optional(),
   cauda_contexto: z.number().int().min(0).max(20).optional(),
   parar_no_limite: z.boolean().optional(),
   glossario_relevante: z.boolean().optional(),
+  // Modelo por papel: revisão pode usar um provedor/modelo de raciocínio
+  // próprio ('' = usar a cadeia normal).
+  provedor_revisao: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
+  modelo_revisao: z.string().max(120).optional(),
   cotas_diarias: z.record(z.string(), z.number().int().min(0).max(1000000)).optional(),
+  // Checkpoint de estabilidade (doc 09 §4): limiares do semáforo de liberação do lote.
+  checkpoint_janela: z.number().int().min(1).max(50).optional(),
+  checkpoint_termos_max: z.number().min(0).max(100).optional(),
+  checkpoint_edicao_max: z.number().min(0).max(100).optional(),
+  checkpoint_violacoes_max: z.number().min(0).max(100).optional(),
+  // Lote / cruzeiro (doc 09 §5): paralelismo e cadeia de failover.
+  lote_paralelo: z.number().int().min(1).max(8).optional(),
+  failover: z
+    .array(z.object({ provedor: z.enum(PROVEDORES_IDS), modelo: z.string().max(120) }))
+    .max(6)
+    .optional(),
+  // QA por segunda IA (doc 09 §6): par próprio + automação opt-in.
+  provedor_qa: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
+  modelo_qa: z.string().max(120).optional(),
+  qa_automatica: z.boolean().optional(),
 });
 
 export function rotasSistema(db: BancoDados): Hono {

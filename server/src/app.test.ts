@@ -342,11 +342,30 @@ describe('fluxo completo com provedor mock', () => {
     expect(depois.filter((v: any) => v.ativo)).toHaveLength(1);
     expect(depois.find((v: any) => v.ativo).versao).toBe('1.1');
 
-    // Adoção explícita copia a versão ativa para a obra…
+    // Adoção explícita cria um delta VAZIO sobre o núcleo (não copia o prompt):
+    // o texto efetivo enviado à IA é a composição núcleo ativo + delta.
     const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Adotante' }));
     const adotado = await json(await chamar('POST', `/api/obras/${obra.id}/prompts/adotar-padrao`));
-    expect(adotado.conteudo).toBe('Regras revisadas.');
+    expect(adotado.tipo).toBe('delta');
+    expect(adotado.conteudo).toBe('');
     expect(adotado.ativo).toBe(true);
+    const composto = await json(await chamar('GET', `/api/obras/${obra.id}/prompt-composto`));
+    expect(composto.texto).toContain('Regras revisadas.');
+    expect(composto.nucleo.versao).toBe('1.1');
+
+    // Delta com conteúdo entra como Seção 6 na composição — e melhorias do
+    // núcleo fluem para a obra sem tocar no delta.
+    await chamar('POST', `/api/obras/${obra.id}/prompts`, {
+      versao: '1.1',
+      conteudo: 'Lin Feng fala sempre em gírias.',
+      ativar: true,
+    });
+    await chamar('POST', '/api/prompt-padrao', { versao: '1.2', conteudo: 'Regras revisadas de novo.', ativar: true });
+    const composto2 = await json(await chamar('GET', `/api/obras/${obra.id}/prompt-composto`));
+    expect(composto2.texto).toContain('## 6. DIRETRIZES ESPECÍFICAS DA OBRA');
+    expect(composto2.texto).toContain('Lin Feng fala sempre em gírias.');
+    expect(composto2.texto).toContain('Regras revisadas de novo.');
+    expect(composto2.prompt.tipo).toBe('delta');
 
     // …e só funciona quando a obra ainda não tem versões.
     const repetida = await chamar('POST', `/api/obras/${obra.id}/prompts/adotar-padrao`);

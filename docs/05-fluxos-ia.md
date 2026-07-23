@@ -88,7 +88,7 @@ Função pura `segmentar(textoOrigem: string): { texto_zh: string; paragrafo: nu
 Duas fontes, mesmo destino (`termos_sugeridos`):
 
 1. **Durante a tradução:** campo `termos_novos` da saída estruturada de cada bloco (§2) — formaliza o que o prompt mãe do usuário já pedia em texto livre no fluxo antigo.
-2. **Fase 2, varredura passiva:** ao concluir um capítulo, comparação simples das strings zh do glossário contra o texto de origem para detectar termos do glossário que **não** foram usados na tradução com o `termo_pt` canônico (controle de consistência reverso).
+2. **Varredura passiva de consistência:** ao concluir um capítulo, comparação simples das strings zh do glossário contra o texto de origem para detectar termos do glossário que **não** foram usados na tradução com o `termo_pt` canônico (controle de consistência reverso). Implementada e **automática ao fim de cada job** (doc 09 §3, resolve D5): o resultado é gravado em `capitulos.consistencia_violacoes` e vira badge na lista de capítulos, além de alimentar a métrica de violações do checkpoint. A rota manual `GET /capitulos/:id/consistencia` continua disponível.
 
 A interface mostra badge de pendências e tela de aceitar/ajustar/rejeitar com um clique.
 

@@ -39,3 +39,35 @@ export const respostaRevisaoSchema = z.object({
   secao_regra: z.string().default('geral'),
   correcao_proposta: z.string().nullable().default(null),
 });
+
+export const respostaRefinarPromptSchema = z.object({
+  propostas: z
+    .array(
+      z.object({
+        secao_regra: z.string(),
+        regra_proposta: z.string(),
+        justificativa: z.string(),
+      }),
+    )
+    .default([]),
+});
+
+// QA por segunda IA (doc 09 §6): apontamentos por frase — a IA só aponta, nunca
+// reescreve. Validação frouxa de propósito (tipo/severidade coeridos): um modelo
+// criativo com um rótulo fora do enum não deve derrubar o bloco inteiro.
+export const respostaQaSchema = z.object({
+  apontamentos: z
+    .array(
+      z.object({
+        ordem: z.coerce.number().int(),
+        tipo: z
+          .enum(['glossario', 'pronome-genero', 'repeticao', 'omissao', 'outro'])
+          .catch('outro'),
+        severidade: z.enum(['alta', 'media', 'baixa']).catch('media'),
+        trecho_zh: z.string().default(''),
+        observacao: z.string(),
+        sugestao: z.string().nullable().default(null),
+      }),
+    )
+    .default([]),
+});

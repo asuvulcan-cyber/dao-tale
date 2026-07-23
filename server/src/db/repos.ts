@@ -4,6 +4,8 @@ import type {
   ObraComContadores,
   PromptMae,
   PromptPadrao,
+  PromptComposto,
+  TipoPrompt,
   Capitulo,
   CapituloResumo,
   Frase,
@@ -14,8 +16,17 @@ import type {
   CriarObraPayload,
   StatusCasoTeste,
   StatusCapitulo,
+  FaseTraducao,
+  Lote,
+  StatusLote,
+  StatusLoteCapitulo,
+  ParProvedor,
+  ProvedorId,
+  ApontamentoQa,
+  StatusApontamentoQa,
 } from '@dao-tale/shared';
 import { CONFIG_PADRAO } from '@dao-tale/shared';
+import { comporPromptMae } from './promptPadraoInicial.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
     letra/número (fronteira Unicode, então acentos contam como letra). Evita trocar
@@ -37,7 +48,7 @@ function paraFrase(l: any): Frase {
 
 // Colunas sem o BLOB da capa (pesado e sem lugar em JSON); tem_capa o resume.
 const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.sinopse, o.tags, o.provedor_padrao,
-  o.modelo_padrao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
+  o.modelo_padrao, o.fase_traducao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
 
 function paraObra<T extends { tags: unknown; tem_capa: unknown }>(linha: T): T & { tags: string[]; tem_capa: boolean } {
   return { ...linha, tags: JSON.parse((linha.tags as string) || '[]'), tem_capa: !!linha.tem_capa };
@@ -113,6 +124,14 @@ export const reposObras = {
     return this.obter(db, id);
   },
 
+  /** Muda a fase do pipeline da obra (doc 09 §2). */
+  definirFase(db: BancoDados, id: number, fase: FaseTraducao): Obra | undefined {
+    const alterou = db
+      .prepare(`UPDATE obras SET fase_traducao = ?, atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+      .run(fase, id).changes;
+    return alterou ? this.obter(db, id) : undefined;
+  },
+
   obterCapa(db: BancoDados, id: number): { capa: Buffer; mime: string } | undefined {
     const linha = db.prepare('SELECT capa, capa_mime FROM obras WHERE id = ?').get(id) as
       | { capa: Buffer | null; capa_mime: string | null }
@@ -172,7 +191,14 @@ export const reposPrompts = {
   criar(
     db: BancoDados,
     obraId: number,
-    dados: { versao: string; conteudo: string; notas_versao?: string; ativar: boolean },
+    dados: {
+      versao: string;
+      conteudo: string;
+      notas_versao?: string;
+      ativar: boolean;
+      tipo?: TipoPrompt;
+      nucleo_id?: number | null;
+    },
   ): PromptMae {
     return db.transaction(() => {
       if (dados.ativar) {
@@ -180,9 +206,17 @@ export const reposPrompts = {
       }
       const info = db
         .prepare(
-          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, tipo, nucleo_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(obraId, dados.versao, dados.conteudo, dados.notas_versao ?? null, dados.ativar ? 1 : 0);
+        .run(
+          obraId,
+          dados.versao,
+          dados.conteudo,
+          dados.notas_versao ?? null,
+          dados.ativar ? 1 : 0,
+          dados.tipo ?? 'completo',
+          dados.nucleo_id ?? null,
+        );
       return this.obter(db, Number(info.lastInsertRowid))!;
     })();
   },
@@ -197,27 +231,42 @@ export const reposPrompts = {
     return this.obter(db, id);
   },
 
-  /** Copia o prompt padrão ativo para a obra como primeira versão (a partir daí
-      ele evolui separado, por novas versões). Devolve undefined se a obra já
-      tem versões ou se não há prompt padrão ativo. */
+  /** Cria o delta inicial (vazio) da obra sobre o núcleo ativo — a obra passa a
+      usar o núcleo global + o próprio delta, sem copiar o prompt inteiro.
+      Devolve undefined se a obra já tem versões ou se não há núcleo ativo. */
   adotarPadrao(db: BancoDados, obraId: number): PromptMae | undefined {
     return db.transaction(() => {
       if (this.listar(db, obraId).length > 0) return undefined;
-      const padrao = reposPromptPadrao.ativo(db);
-      if (!padrao) return undefined;
+      const nucleo = reposPromptPadrao.ativo(db);
+      if (!nucleo) return undefined;
       return this.criar(db, obraId, {
         versao: '1.0',
-        conteudo: padrao.conteudo,
-        notas_versao: `Adotado do prompt padrão v${padrao.versao}.`,
+        conteudo: '',
+        notas_versao: `Delta criado sobre o prompt padrão (núcleo) v${nucleo.versao} — registre aqui só o que é específico da obra.`,
         ativar: true,
+        tipo: 'delta',
+        nucleo_id: nucleo.id,
       });
     })();
   },
 
   /** Prompt que governa a tradução da obra: o ativo dela ou, se ela ainda não
-      tem nenhum, o padrão adotado automaticamente na hora. */
+      tem nenhum, o delta adotado automaticamente na hora. */
   ativoOuAdotado(db: BancoDados, obraId: number): PromptMae | undefined {
     return this.ativo(db, obraId) ?? this.adotarPadrao(db, obraId);
+  },
+
+  /** Prompt mãe efetivo da obra: 'completo' legado vai como está; 'delta' é
+      composto com o núcleo ATIVO no momento (melhorias do núcleo fluem para
+      todas as obras; a proveniência exata fica registrada no capítulo). */
+  composto(db: BancoDados, obraId: number): PromptComposto | undefined {
+    const prompt = this.ativoOuAdotado(db, obraId);
+    if (!prompt) return undefined;
+    if (prompt.tipo !== 'delta') return { texto: prompt.conteudo, prompt, nucleo: null };
+    const nucleo = reposPromptPadrao.ativo(db);
+    // Sem núcleo ativo (estado excepcional), o delta sozinho é o que há.
+    if (!nucleo) return { texto: comporPromptMae('', prompt.conteudo), prompt, nucleo: null };
+    return { texto: comporPromptMae(nucleo.conteudo, prompt.conteudo), prompt, nucleo };
   },
 };
 
@@ -267,11 +316,12 @@ export const reposCapitulos = {
   listar(db: BancoDados, obraId: number): CapituloResumo[] {
     return db
       .prepare(
-        `SELECT c.id, c.obra_id, c.numero, c.titulo, c.titulo_pt, c.status, c.provedor, c.modelo, c.prompt_id,
-                c.criado_em, c.atualizado_em,
+        `SELECT c.id, c.obra_id, c.numero, c.titulo, c.titulo_pt, c.status, c.provedor, c.modelo, c.prompt_id, c.nucleo_id,
+                c.consistencia_violacoes, c.qa_em, c.criado_em, c.atualizado_em,
            (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id) AS frases_total,
            (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'traduzida') AS frases_traduzidas,
-           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'erro') AS frases_erro
+           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'erro') AS frases_erro,
+           (SELECT COUNT(*) FROM qa_apontamentos q WHERE q.capitulo_id = c.id AND q.status = 'pendente') AS qa_pendentes
          FROM capitulos c WHERE c.obra_id = ? ORDER BY c.numero`,
       )
       .all(obraId) as CapituloResumo[];
@@ -279,6 +329,44 @@ export const reposCapitulos = {
 
   obter(db: BancoDados, id: number): Capitulo | undefined {
     return db.prepare('SELECT * FROM capitulos WHERE id = ?').get(id) as Capitulo | undefined;
+  },
+
+  /** Grava a contagem da última varredura de consistência (D5). */
+  definirConsistencia(db: BancoDados, id: number, violacoes: number): void {
+    db.prepare('UPDATE capitulos SET consistencia_violacoes = ? WHERE id = ?').run(violacoes, id);
+  },
+
+  /** Marca a data da última passada de QA (doc 09 §6). */
+  definirQaEm(db: BancoDados, id: number): void {
+    db.prepare("UPDATE capitulos SET qa_em = datetime('now') WHERE id = ?").run(id);
+  },
+
+  /** Agregados por capítulo para o checkpoint (doc 09 §4): contagens de frases,
+   * frases editadas manualmente e termos sugeridos registrados. */
+  agregadosCheckpoint(db: BancoDados, obraId: number): {
+    id: number;
+    numero: number;
+    status: StatusCapitulo;
+    frases_total: number;
+    frases_editadas: number;
+    termos_sugeridos: number;
+  }[] {
+    return db
+      .prepare(
+        `SELECT c.id, c.numero, c.status,
+           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id) AS frases_total,
+           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.editado_manualmente = 1) AS frases_editadas,
+           (SELECT COUNT(*) FROM termos_sugeridos s WHERE s.capitulo_id = c.id) AS termos_sugeridos
+         FROM capitulos c WHERE c.obra_id = ? ORDER BY c.numero`,
+      )
+      .all(obraId) as {
+      id: number;
+      numero: number;
+      status: StatusCapitulo;
+      frases_total: number;
+      frases_editadas: number;
+      termos_sugeridos: number;
+    }[];
   },
 
   criar(
@@ -303,12 +391,12 @@ export const reposCapitulos = {
   atualizar(
     db: BancoDados,
     id: number,
-    campos: Partial<{ titulo: string | null; titulo_pt: string | null; status: StatusCapitulo; provedor: string | null; modelo: string | null; prompt_id: number | null }>,
+    campos: Partial<{ titulo: string | null; titulo_pt: string | null; status: StatusCapitulo; provedor: string | null; modelo: string | null; prompt_id: number | null; nucleo_id: number | null }>,
   ): Capitulo | undefined {
     const atual = this.obter(db, id);
     if (!atual) return undefined;
     db.prepare(
-      `UPDATE capitulos SET titulo = ?, titulo_pt = ?, status = ?, provedor = ?, modelo = ?, prompt_id = ?,
+      `UPDATE capitulos SET titulo = ?, titulo_pt = ?, status = ?, provedor = ?, modelo = ?, prompt_id = ?, nucleo_id = ?,
         atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
     ).run(
       campos.titulo !== undefined ? campos.titulo : atual.titulo,
@@ -317,6 +405,7 @@ export const reposCapitulos = {
       campos.provedor !== undefined ? campos.provedor : atual.provedor,
       campos.modelo !== undefined ? campos.modelo : atual.modelo,
       campos.prompt_id !== undefined ? campos.prompt_id : atual.prompt_id,
+      campos.nucleo_id !== undefined ? campos.nucleo_id : atual.nucleo_id,
       id,
     );
     return this.obter(db, id);
@@ -875,7 +964,14 @@ export const reposTestes = {
     if (!caso) return undefined;
     if (!caso.correcao_proposta) return 'sem-correcao';
     return db.transaction(() => {
-      db.prepare('UPDATE frases SET texto_pt = ? WHERE id = ?').run(caso.correcao_proposta, caso.frase_id);
+      // M3: aceitar a correção do Protocolo de Revisão é uma decisão humana —
+      // marca editado_manualmente para que "sobrescrever preservando editadas"
+      // não reabra a frase e a IA não apague a correção; e conta certo na
+      // métrica de edição do checkpoint (doc 09 §4).
+      db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(
+        caso.correcao_proposta,
+        caso.frase_id,
+      );
       db.prepare("UPDATE banco_testes SET status = 'corrigido' WHERE id = ?").run(id);
       return { caso: this.obter(db, id)!, frase: reposFrases.obter(db, caso.frase_id)! };
     })();
@@ -912,7 +1008,18 @@ export const reposConfig = {
       glossario_relevante: mapa.glossario_relevante
         ? mapa.glossario_relevante === 'true'
         : CONFIG_PADRAO.glossario_relevante,
+      provedor_revisao: (mapa.provedor_revisao as Configuracoes['provedor_revisao']) ?? CONFIG_PADRAO.provedor_revisao,
+      modelo_revisao: mapa.modelo_revisao ?? CONFIG_PADRAO.modelo_revisao,
       cotas_diarias: lerCotasDiarias(mapa),
+      checkpoint_janela: numeroConfig(mapa.checkpoint_janela, CONFIG_PADRAO.checkpoint_janela),
+      checkpoint_termos_max: numeroConfig(mapa.checkpoint_termos_max, CONFIG_PADRAO.checkpoint_termos_max),
+      checkpoint_edicao_max: numeroConfig(mapa.checkpoint_edicao_max, CONFIG_PADRAO.checkpoint_edicao_max),
+      checkpoint_violacoes_max: numeroConfig(mapa.checkpoint_violacoes_max, CONFIG_PADRAO.checkpoint_violacoes_max),
+      lote_paralelo: numeroConfig(mapa.lote_paralelo, CONFIG_PADRAO.lote_paralelo),
+      failover: lerFailover(mapa),
+      provedor_qa: (mapa.provedor_qa as Configuracoes['provedor_qa']) ?? CONFIG_PADRAO.provedor_qa,
+      modelo_qa: mapa.modelo_qa ?? CONFIG_PADRAO.modelo_qa,
+      qa_automatica: mapa.qa_automatica ? mapa.qa_automatica === 'true' : CONFIG_PADRAO.qa_automatica,
     };
   },
 
@@ -929,6 +1036,27 @@ export const reposConfig = {
     return this.obterTodas(db);
   },
 };
+
+/** Config numérica com guarda de NaN (B9): valor corrompido cai no padrão. */
+function numeroConfig(valor: string | undefined, padrao: number): number {
+  if (valor === undefined) return padrao;
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : padrao;
+}
+
+/** Cadeia de failover (JSON de pares {provedor, modelo}); valor corrompido = vazia. */
+function lerFailover(mapa: Record<string, string>): ParProvedor[] {
+  if (!mapa.failover) return [...CONFIG_PADRAO.failover];
+  try {
+    const lista = JSON.parse(mapa.failover);
+    if (!Array.isArray(lista)) return [];
+    return lista
+      .filter((p) => p && typeof p.provedor === 'string')
+      .map((p) => ({ provedor: p.provedor as ProvedorId, modelo: typeof p.modelo === 'string' ? p.modelo : '' }));
+  } catch {
+    return [];
+  }
+}
 
 /** Cotas por provedor (JSON) com migração das chaves antigas cota_diaria_gemini/claude. */
 function lerCotasDiarias(mapa: Record<string, string>): Record<string, number> {
@@ -964,5 +1092,208 @@ export const reposUso = {
     return db
       .prepare('SELECT provedor, modelo, requisicoes FROM uso_ia WHERE data = ? ORDER BY requisicoes DESC')
       .all(dataLocalHoje()) as { provedor: string; modelo: string; requisicoes: number }[];
+  },
+};
+
+// ── Lotes de tradução (fase de cruzeiro, doc 09 §5) ────────────────────────
+
+interface LinhaLote {
+  id: number;
+  obra_id: number;
+  status: StatusLote;
+  qa_automatica: number;
+  criado_em: string;
+  encerrado_em: string | null;
+}
+
+export const reposLotes = {
+  /** Lote atual (executando) ou o último encerrado da obra, com seus capítulos. */
+  atual(db: BancoDados, obraId: number): Lote | undefined {
+    const linha = db
+      .prepare(
+        `SELECT * FROM lotes WHERE obra_id = ?
+         ORDER BY (status = 'executando') DESC, criado_em DESC LIMIT 1`,
+      )
+      .get(obraId) as LinhaLote | undefined;
+    return linha ? this.montar(db, linha) : undefined;
+  },
+
+  obter(db: BancoDados, loteId: number): Lote | undefined {
+    const linha = db.prepare('SELECT * FROM lotes WHERE id = ?').get(loteId) as LinhaLote | undefined;
+    return linha ? this.montar(db, linha) : undefined;
+  },
+
+  ativoDaObra(db: BancoDados, obraId: number): Lote | undefined {
+    const linha = db
+      .prepare("SELECT * FROM lotes WHERE obra_id = ? AND status = 'executando'")
+      .get(obraId) as LinhaLote | undefined;
+    return linha ? this.montar(db, linha) : undefined;
+  },
+
+  montar(db: BancoDados, linha: LinhaLote): Lote {
+    const capitulos = db
+      .prepare(
+        `SELECT lc.capitulo_id, c.numero, c.titulo, lc.posicao, lc.status, lc.provedores_tentados, lc.erro,
+           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id) AS frases_total,
+           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'traduzida') AS frases_traduzidas,
+           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'erro') AS frases_erro
+         FROM lote_capitulos lc JOIN capitulos c ON c.id = lc.capitulo_id
+         WHERE lc.lote_id = ? ORDER BY lc.posicao`,
+      )
+      .all(linha.id)
+      .map((r: any) => ({
+        capitulo_id: r.capitulo_id,
+        numero: r.numero,
+        titulo: r.titulo,
+        posicao: r.posicao,
+        status: r.status as StatusLoteCapitulo,
+        provedores_tentados: JSON.parse(r.provedores_tentados) as ParProvedor[],
+        erro: r.erro,
+        frases_total: r.frases_total,
+        frases_traduzidas: r.frases_traduzidas,
+        frases_erro: r.frases_erro,
+      }));
+    return {
+      id: linha.id,
+      obra_id: linha.obra_id,
+      status: linha.status,
+      qa_automatica: !!linha.qa_automatica,
+      criado_em: linha.criado_em,
+      encerrado_em: linha.encerrado_em,
+      capitulos,
+    };
+  },
+
+  /** Cria o lote e enfileira os capítulos na ordem dada. */
+  criar(db: BancoDados, obraId: number, capituloIds: number[], qaAutomatica: boolean): Lote {
+    return db.transaction(() => {
+      const info = db
+        .prepare('INSERT INTO lotes (obra_id, qa_automatica) VALUES (?, ?)')
+        .run(obraId, qaAutomatica ? 1 : 0);
+      const loteId = Number(info.lastInsertRowid);
+      const ins = db.prepare('INSERT INTO lote_capitulos (lote_id, capitulo_id, posicao) VALUES (?, ?, ?)');
+      capituloIds.forEach((cid, i) => ins.run(loteId, cid, i));
+      return this.obter(db, loteId)!;
+    })();
+  },
+
+  definirStatusCapitulo(
+    db: BancoDados,
+    loteId: number,
+    capituloId: number,
+    status: StatusLoteCapitulo,
+    extra?: { erro?: string | null; tentado?: ParProvedor },
+  ): void {
+    db.transaction(() => {
+      if (extra?.tentado) {
+        const atual = db
+          .prepare('SELECT provedores_tentados FROM lote_capitulos WHERE lote_id = ? AND capitulo_id = ?')
+          .get(loteId, capituloId) as { provedores_tentados: string } | undefined;
+        const lista = atual ? (JSON.parse(atual.provedores_tentados) as ParProvedor[]) : [];
+        lista.push(extra.tentado);
+        db.prepare('UPDATE lote_capitulos SET provedores_tentados = ? WHERE lote_id = ? AND capitulo_id = ?').run(
+          JSON.stringify(lista),
+          loteId,
+          capituloId,
+        );
+      }
+      db.prepare('UPDATE lote_capitulos SET status = ?, erro = ? WHERE lote_id = ? AND capitulo_id = ?').run(
+        status,
+        extra?.erro ?? null,
+        loteId,
+        capituloId,
+      );
+    })();
+  },
+
+  encerrar(db: BancoDados, loteId: number, status: Exclude<StatusLote, 'executando'>): void {
+    db.prepare("UPDATE lotes SET status = ?, encerrado_em = datetime('now') WHERE id = ?").run(status, loteId);
+  },
+
+  /** No boot: nenhum job sobrevive ao processo, então lotes 'executando' de uma
+   * sessão anterior estão interrompidos (doc 09 §5). Capítulos que ficaram em
+   * 'traduzindo'/'qa' voltam para 'na_fila' para a retomada reprocessá-los. */
+  marcarInterrompidosNoBoot(db: BancoDados): void {
+    db.transaction(() => {
+      const ativos = db.prepare("SELECT id FROM lotes WHERE status = 'executando'").all() as { id: number }[];
+      for (const { id } of ativos) {
+        db.prepare(
+          "UPDATE lote_capitulos SET status = 'na_fila' WHERE lote_id = ? AND status IN ('traduzindo','qa')",
+        ).run(id);
+        db.prepare("UPDATE lotes SET status = 'interrompido', encerrado_em = datetime('now') WHERE id = ?").run(id);
+      }
+    })();
+  },
+};
+
+// ── Apontamentos de QA (doc 09 §6) ─────────────────────────────────────────
+
+export const reposQa = {
+  listar(db: BancoDados, capituloId: number): ApontamentoQa[] {
+    return db
+      .prepare(
+        `SELECT * FROM qa_apontamentos WHERE capitulo_id = ?
+         ORDER BY CASE severidade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END,
+                  CASE status WHEN 'pendente' THEN 0 ELSE 1 END, id`,
+      )
+      .all(capituloId) as ApontamentoQa[];
+  },
+
+  obter(db: BancoDados, id: number): ApontamentoQa | undefined {
+    return db.prepare('SELECT * FROM qa_apontamentos WHERE id = ?').get(id) as ApontamentoQa | undefined;
+  },
+
+  /** Substitui os apontamentos PENDENTES do capítulo pelos novos (uma nova
+   * passada de QA re-aponta do zero; os já triados ficam como histórico). */
+  substituirPendentes(
+    db: BancoDados,
+    capituloId: number,
+    provedor: string,
+    modelo: string,
+    apontamentos: Omit<ApontamentoQa, 'id' | 'capitulo_id' | 'status' | 'provedor' | 'modelo' | 'criado_em'>[],
+  ): number {
+    return db.transaction(() => {
+      db.prepare("DELETE FROM qa_apontamentos WHERE capitulo_id = ? AND status = 'pendente'").run(capituloId);
+      const ins = db.prepare(
+        `INSERT INTO qa_apontamentos (capitulo_id, frase_id, tipo, severidade, trecho_zh, observacao, sugestao, provedor, modelo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const a of apontamentos) {
+        ins.run(capituloId, a.frase_id, a.tipo, a.severidade, a.trecho_zh, a.observacao, a.sugestao, provedor, modelo);
+      }
+      reposCapitulos.definirQaEm(db, capituloId);
+      return apontamentos.length;
+    })();
+  },
+
+  definirStatus(db: BancoDados, id: number, status: StatusApontamentoQa): ApontamentoQa | undefined {
+    db.prepare('UPDATE qa_apontamentos SET status = ? WHERE id = ?').run(status, id);
+    return this.obter(db, id);
+  },
+
+  /** Aplica a sugestão do apontamento na frase (marca editado_manualmente, M3)
+   * e marca o apontamento como aceito. */
+  aplicarSugestao(db: BancoDados, id: number): { apontamento: ApontamentoQa; frase: Frase } | 'sem-sugestao' | undefined {
+    const a = this.obter(db, id);
+    if (!a) return undefined;
+    if (!a.sugestao || !a.frase_id) return 'sem-sugestao';
+    return db.transaction(() => {
+      db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(a.sugestao, a.frase_id);
+      db.prepare("UPDATE qa_apontamentos SET status = 'aceito' WHERE id = ?").run(id);
+      return { apontamento: this.obter(db, id)!, frase: reposFrases.obter(db, a.frase_id!)! };
+    })();
+  },
+
+  /** Pendentes por capítulo para os badges da lista. */
+  pendentesPorCapitulo(db: BancoDados, obraId: number): Map<number, { total: number; altas: number }> {
+    const linhas = db
+      .prepare(
+        `SELECT q.capitulo_id, COUNT(*) AS total,
+           SUM(CASE WHEN q.severidade = 'alta' THEN 1 ELSE 0 END) AS altas
+         FROM qa_apontamentos q JOIN capitulos c ON c.id = q.capitulo_id
+         WHERE c.obra_id = ? AND q.status = 'pendente' GROUP BY q.capitulo_id`,
+      )
+      .all(obraId) as { capitulo_id: number; total: number; altas: number }[];
+    return new Map(linhas.map((l) => [l.capitulo_id, { total: l.total, altas: l.altas }]));
   },
 };

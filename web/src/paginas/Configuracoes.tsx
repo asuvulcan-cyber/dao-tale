@@ -229,11 +229,43 @@ function FormularioPadroes({
           />
         </label>
         <label className="block text-sm">
+          Provedor de revisão
+          <select
+            value={valores.provedor_revisao}
+            onChange={(e) => setValores({ ...valores, provedor_revisao: e.target.value as ProvedorId | '', modelo_revisao: '' })}
+            className="entrada mt-1 w-full"
+          >
+            <option value="">— o mesmo da tradução —</option>
+            {provedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+          <span className="mt-0.5 block text-xs text-tinta-2">
+            A revisão é rara e vale mais raciocínio: um modelo de pensamento profundo aqui não pesa no custo da
+            tradução em volume.
+          </span>
+        </label>
+        <label className="block text-sm">
+          Modelo de revisão
+          {valores.provedor_revisao ? (
+            <SeletorModelo
+              provedor={valores.provedor_revisao}
+              valor={valores.modelo_revisao}
+              aoMudar={(novo) => setValores({ ...valores, modelo_revisao: novo })}
+              modeloPadraoProvedor={provedores.find((p) => p.id === valores.provedor_revisao)?.modelo_padrao}
+            />
+          ) : (
+            <input disabled value="" placeholder="segue o modelo da tradução" className="entrada mt-1 w-full opacity-60" />
+          )}
+        </label>
+        <label className="block text-sm">
           Frases por bloco de tradução
           <input
             type="number"
             min={1}
-            max={400}
+            max={120}
             value={valores.tamanho_bloco}
             onChange={(e) => setValores({ ...valores, tamanho_bloco: Number(e.target.value) })}
             className="entrada mt-1 w-full"
@@ -315,6 +347,187 @@ function FormularioPadroes({
           em vez do glossário inteiro — economia grande de tokens em obras com glossário extenso.
         </span>
       </label>
+
+      <div className="mt-4">
+        <h3 className="text-sm font-medium">Checkpoint de estabilidade</h3>
+        <p className="mb-2 mt-0.5 text-sm text-tinta-2">
+          Limiares do semáforo que libera a tradução em lote (cruzeiro) por obra. Medidos numa janela dos capítulos
+          recentes — não por número fixo de capítulos.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            Janela (capítulos recentes)
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={valores.checkpoint_janela}
+              onChange={(e) => setValores({ ...valores, checkpoint_janela: Number(e.target.value) })}
+              className="entrada mt-1 w-full"
+            />
+          </label>
+          <label className="block text-sm">
+            Máx. termos novos por 100 frases
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={valores.checkpoint_termos_max}
+              onChange={(e) => setValores({ ...valores, checkpoint_termos_max: Number(e.target.value) })}
+              className="entrada mt-1 w-full"
+            />
+          </label>
+          <label className="block text-sm">
+            Máx. % de frases editadas à mão
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={valores.checkpoint_edicao_max}
+              onChange={(e) => setValores({ ...valores, checkpoint_edicao_max: Number(e.target.value) })}
+              className="entrada mt-1 w-full"
+            />
+          </label>
+          <label className="block text-sm">
+            Máx. violações de glossário por 100 frases (0 = só informativa)
+            <input
+              type="number"
+              min={0}
+              value={valores.checkpoint_violacoes_max}
+              onChange={(e) => setValores({ ...valores, checkpoint_violacoes_max: Number(e.target.value) })}
+              className="entrada mt-1 w-full"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <h3 className="text-sm font-medium">QA por segunda IA (opcional)</h3>
+        <p className="mb-2 mt-0.5 text-sm text-tinta-2">
+          Uma IA diferente da que traduz aponta problemas de glossário, gênero, repetição e omissão — ela só aponta,
+          você decide. Vazio = usa o par da revisão. Custo separado da tradução; ligue a automação só se compensar.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            Provedor de QA
+            <select
+              value={valores.provedor_qa}
+              onChange={(e) => setValores({ ...valores, provedor_qa: e.target.value as ProvedorId | '', modelo_qa: '' })}
+              className="entrada mt-1 w-full"
+            >
+              <option value="">— usar o par da revisão —</option>
+              {provedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            Modelo de QA
+            {valores.provedor_qa ? (
+              <SeletorModelo
+                provedor={valores.provedor_qa}
+                valor={valores.modelo_qa}
+                aoMudar={(novo) => setValores({ ...valores, modelo_qa: novo })}
+                modeloPadraoProvedor={provedores.find((p) => p.id === valores.provedor_qa)?.modelo_padrao}
+              />
+            ) : (
+              <input disabled value="" placeholder="segue o par da revisão" className="entrada mt-1 w-full opacity-60" />
+            )}
+          </label>
+        </div>
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={valores.qa_automatica}
+            onChange={(e) => setValores({ ...valores, qa_automatica: e.target.checked })}
+            className="mt-0.5"
+          />
+          <span>
+            Rodar QA automaticamente ao fim de cada capítulo do lote. Desligado por padrão: como você revisa tudo, o
+            QA é uma despesa extra opt-in. Só roda quando há um par de QA diferente do tradutor do capítulo.
+          </span>
+        </label>
+      </div>
+
+      <div className="mt-4">
+        <h3 className="text-sm font-medium">Tradução em lote (fase de cruzeiro)</h3>
+        <p className="mb-2 mt-0.5 text-sm text-tinta-2">
+          Quantos capítulos traduzir em paralelo e a cadeia de reserva (failover). Ordene do mais barato ao mais
+          caro: o lote surfa as cotas gratuitas antes de gastar.
+        </p>
+        <label className="block w-56 text-sm">
+          Capítulos em paralelo
+          <input
+            type="number"
+            min={1}
+            max={8}
+            value={valores.lote_paralelo}
+            onChange={(e) => setValores({ ...valores, lote_paralelo: Number(e.target.value) })}
+            className="entrada mt-1 w-full"
+          />
+        </label>
+        <div className="mt-3">
+          <span className="text-sm">Cadeia de failover (em ordem de tentativa)</span>
+          <div className="mt-1 space-y-2">
+            {valores.failover.map((par, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <span className="w-5 text-right font-mono text-xs text-tinta-2">{i + 1}.</span>
+                <select
+                  value={par.provedor}
+                  onChange={(e) => {
+                    const failover = [...valores.failover];
+                    failover[i] = { provedor: e.target.value as ProvedorId, modelo: '' };
+                    setValores({ ...valores, failover });
+                  }}
+                  className="entrada"
+                >
+                  {provedores.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}
+                    </option>
+                  ))}
+                </select>
+                <div className="w-56">
+                  <SeletorModelo
+                    provedor={par.provedor}
+                    valor={par.modelo}
+                    aoMudar={(novo) => {
+                      const failover = [...valores.failover];
+                      failover[i] = { ...failover[i], modelo: novo };
+                      setValores({ ...valores, failover });
+                    }}
+                    modeloPadraoProvedor={provedores.find((p) => p.id === par.provedor)?.modelo_padrao}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setValores({ ...valores, failover: valores.failover.filter((_, j) => j !== i) })}
+                  className="text-tinta-2 hover:text-erro"
+                  title="Remover da cadeia"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          {valores.failover.length < 6 && (
+            <Botao
+              variante="secundario"
+              onClick={() =>
+                setValores({
+                  ...valores,
+                  failover: [...valores.failover, { provedor: provedores[0]?.id ?? 'mock', modelo: '' }],
+                })
+              }
+            >
+              + Adicionar provedor de reserva
+            </Botao>
+          )}
+        </div>
+      </div>
+
       <div className="mt-3 flex items-center gap-3">
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar padrões

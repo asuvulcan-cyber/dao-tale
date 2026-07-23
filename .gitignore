@@ -6,3 +6,5 @@ dist/
 *.db-wal
 *.db-shm
 .dados-dev/
+# Backups de obra (dados do usuário, não versionar — auditoria B6)
+*-backup.json

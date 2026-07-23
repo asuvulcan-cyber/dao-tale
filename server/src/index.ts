@@ -4,6 +4,13 @@ import { banco } from './db/index.js';
 import { criarApp } from './app.js';
 import { HOST, PORTA, caminhoBanco } from './config.js';
 
+// C2 (cinto de segurança): promessa órfã de um job nunca deve derrubar o
+// servidor no meio de uma tradução — loga e segue (o estado durável das
+// frases permite retomar).
+process.on('unhandledRejection', (motivo) => {
+  console.error('[dao-tale] promessa rejeitada sem tratamento:', motivo);
+});
+
 const app = criarApp(banco());
 
 serve({ fetch: app.fetch, hostname: HOST, port: PORTA }, (info) => {

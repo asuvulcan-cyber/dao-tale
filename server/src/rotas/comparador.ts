@@ -4,7 +4,7 @@ import { PROVEDORES_IDS } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposGlossario, reposObras, reposPrompts, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
-import { filtrarGlossarioRelevante } from '../ia/prompts.js';
+import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 import { segmentar } from '../segmentacao/segmentar.js';
@@ -43,8 +43,8 @@ export function rotasComparador(db: BancoDados): Hono {
     const obra = reposObras.obter(db, obraId);
     if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
 
-    const promptAtivo = reposPrompts.ativoOuAdotado(db, obraId);
-    if (!promptAtivo) {
+    const prompt = reposPrompts.composto(db, obraId);
+    if (!prompt) {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
@@ -61,12 +61,14 @@ export function rotasComparador(db: BancoDados): Hono {
 
     const config = reposConfig.obterTodas(db);
     const glossarioTodo = reposGlossario.listar(db, obraId);
+    // incluirPrincipais como no job e na revisão (B5 da auditoria): variantes
+    // selecionadas chegam com a entrada canônica junto.
     const glossario = config.glossario_relevante
-      ? filtrarGlossarioRelevante(glossarioTodo, [corpo.data.texto_zh])
+      ? incluirPrincipais(filtrarGlossarioRelevante(glossarioTodo, [corpo.data.texto_zh]), glossarioTodo)
       : glossarioTodo;
 
     const base: Omit<RequisicaoTraducaoBloco, 'modelo'> = {
-      promptMae: promptAtivo.conteudo,
+      promptMae: prompt.texto,
       glossario,
       glossarioNoUsuario: config.glossario_relevante,
       caudaAnterior: [],

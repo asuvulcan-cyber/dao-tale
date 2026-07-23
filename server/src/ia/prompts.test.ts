@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { EntradaGlossario } from '@dao-tale/shared';
-import { filtrarGlossarioRelevante, incluirPrincipais, sistemaTraducao, usuarioTraducao } from './prompts.js';
-import type { RequisicaoTraducaoBloco } from './provedor.js';
+import {
+  filtrarGlossarioRelevante,
+  incluirPrincipais,
+  sistemaExtrairTermos,
+  sistemaRevisao,
+  sistemaTraducao,
+  sistemaTraducaoPartes,
+  usuarioExtrairTermos,
+  usuarioRevisao,
+  usuarioTraducao,
+} from './prompts.js';
+import type { RequisicaoExtrairTermos, RequisicaoRevisao, RequisicaoTraducaoBloco } from './provedor.js';
 
 const entrada = (termo_zh: string, termo_pt: string): EntradaGlossario => ({
   id: 0,
@@ -50,6 +60,73 @@ describe('glossário no usuário (modo relevante)', () => {
     expect(usuarioTraducao(req)).toContain('齐夏 → Qi Xia');
     // Sistema idêntico independentemente do glossário filtrado do bloco.
     expect(sistemaTraducao({ ...req, glossario: [] })).toBe(sistema);
+  });
+});
+
+describe('sistema em duas partes (doc 08 §3)', () => {
+  it('a base é o prompt mãe composto e as partes juntas reproduzem o sistema inteiro', () => {
+    const req: RequisicaoTraducaoBloco = {
+      modelo: 'm',
+      promptMae: 'Núcleo + delta compostos.',
+      glossario: [],
+      glossarioNoUsuario: true,
+      caudaAnterior: [],
+      frases: [{ ordem: 0, texto_zh: '甲。' }],
+      proximas: [],
+    };
+    const partes = sistemaTraducaoPartes(req);
+    expect(partes.base).toBe('Núcleo + delta compostos.');
+    expect(`${partes.base}\n\n${partes.operacional}`).toBe(sistemaTraducao(req));
+  });
+});
+
+describe('revisão com glossário no usuário (A4 da auditoria)', () => {
+  const base: RequisicaoRevisao = {
+    modelo: 'm',
+    promptMae: 'Regras.',
+    glossario: [entrada('齐夏', 'Qi Xia')],
+    vizinhasAntes: [],
+    vizinhasDepois: [],
+    frase: { texto_zh: '齐夏睁开了眼睛。', texto_pt: 'Qi Xia abriu os olhos.', texto_pt_original_ia: null },
+    pergunta: 'Está correto?',
+  };
+
+  it('sem a flag, o glossário fica no sistema (comportamento legado)', () => {
+    expect(sistemaRevisao(base)).toContain('齐夏 → Qi Xia');
+    expect(usuarioRevisao(base)).not.toContain('齐夏 → Qi Xia');
+  });
+
+  it('com a flag, o glossário migra para o usuário e o sistema fica idêntico entre frases', () => {
+    const req = { ...base, glossarioNoUsuario: true };
+    const sistema = sistemaRevisao(req);
+    expect(sistema).not.toContain('齐夏 → Qi Xia');
+    expect(usuarioRevisao(req)).toContain('齐夏 → Qi Xia');
+    expect(sistemaRevisao({ ...req, glossario: [] })).toBe(sistema);
+  });
+});
+
+describe('extração de termos com glossário no usuário (M2 da auditoria)', () => {
+  const base: RequisicaoExtrairTermos = {
+    modelo: 'm',
+    promptMae: 'Regras.',
+    glossario: [entrada('齐夏', 'Qi Xia')],
+    frase: { texto_zh: '齐夏进入了归墟。', texto_pt: 'Qi Xia entrou no Abismo.' },
+  };
+
+  it('com a flag, os termos já catalogados vão na mensagem do usuário e o sistema fica estável', () => {
+    const req = { ...base, glossarioNoUsuario: true };
+    const sistema = sistemaExtrairTermos(req);
+    expect(sistema).not.toContain('齐夏 → Qi Xia');
+    const usuario = usuarioExtrairTermos(req);
+    expect(usuario).toContain('NÃO repetir');
+    expect(usuario).toContain('齐夏 → Qi Xia');
+    expect(usuario.indexOf('齐夏 → Qi Xia')).toBeLessThan(usuario.indexOf('ZH: '));
+    expect(sistemaExtrairTermos({ ...req, glossario: [] })).toBe(sistema);
+  });
+
+  it('sem a flag, mantém o comportamento legado (glossário inteiro no sistema)', () => {
+    expect(sistemaExtrairTermos(base)).toContain('齐夏 → Qi Xia');
+    expect(usuarioExtrairTermos(base)).toBe('ZH: 齐夏进入了归墟。\nPT: Qi Xia entrou no Abismo.');
   });
 });
 

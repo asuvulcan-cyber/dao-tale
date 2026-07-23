@@ -53,6 +53,9 @@ export interface RequisicaoRevisao {
   modelo: string;
   promptMae: string;
   glossario: EntradaGlossario[];
+  /** true quando o glossário foi filtrado pela frase questionada: ele entra na
+   * mensagem do usuário e o sistema fica estável entre revisões (cacheável). */
+  glossarioNoUsuario?: boolean;
   vizinhasAntes: { texto_zh: string; texto_pt: string }[];
   vizinhasDepois: { texto_zh: string; texto_pt: string }[];
   frase: { texto_zh: string; texto_pt: string; texto_pt_original_ia: string | null };
@@ -71,8 +74,12 @@ export interface RespostaRevisaoProvedor extends RespostaRevisao {
 export interface RequisicaoExtrairTermos {
   modelo: string;
   promptMae: string;
-  /** Glossário atual da obra: o modelo não deve repetir o que já está aqui. */
+  /** Termos já catalogados que o modelo não deve repetir. Com `glossarioNoUsuario`,
+   * chega filtrado pela frase (os ausentes dela não ajudam a deduplicar nada). */
   glossario: EntradaGlossario[];
+  /** true quando o glossário filtrado vai na mensagem do usuário — o sistema
+   * fica estável por obra e cacheável entre frases da curadoria. */
+  glossarioNoUsuario?: boolean;
   frase: { texto_zh: string; texto_pt: string };
 }
 
@@ -81,17 +88,95 @@ export interface RespostaExtrairTermos {
   bruta: string;
 }
 
+// ── Refinamento do prompt da obra (versionamento semiautomático, doc 08 §7) ─
+// Recorrências do banco de testes → proposta concreta de regra nova para o
+// delta (Seção 6); o usuário revisa e aprova como nova versão.
+
+export interface RequisicaoRefinarPrompt {
+  modelo: string;
+  /** Prompt mãe composto (núcleo + delta) vigente na obra. */
+  promptMae: string;
+  /** Delta atual (Seção 6) — é o que a proposta deve refinar. */
+  deltaAtual: string;
+  casos: {
+    secao_regra: string;
+    trecho_zh: string;
+    pergunta: string;
+    veredito: string;
+    justificativa: string;
+    correcao_proposta: string | null;
+  }[];
+}
+
+export interface PropostaRefinamento {
+  secao_regra: string;
+  /** Texto pronto para entrar no delta (uma regra/linha nova ou ajustada). */
+  regra_proposta: string;
+  justificativa: string;
+}
+
+export interface RespostaRefinarPrompt {
+  propostas: PropostaRefinamento[];
+  bruta: string;
+}
+
+// ── QA por segunda IA (doc 09 §6) ──────────────────────────────────────────
+// Um modelo/provedor DIFERENTE do tradutor compara cada par zh↔pt e aponta
+// problemas por frase — nunca reescreve. Blocos de pares, glossário filtrado
+// no usuário (mesmo desenho de cache das outras tarefas).
+
+export interface ParParaQa {
+  ordem: number;
+  texto_zh: string;
+  texto_pt: string;
+}
+
+export interface RequisicaoQa {
+  modelo: string;
+  promptMae: string;
+  glossario: EntradaGlossario[];
+  /** true quando o glossário filtrado vai na mensagem do usuário (sistema estável). */
+  glossarioNoUsuario?: boolean;
+  /** Pares anteriores só como contexto (repetição/omissão de fronteira) — não auditar. */
+  caudaAnterior: ParParaQa[];
+  pares: ParParaQa[];
+}
+
+export type TipoApontamentoQa = 'glossario' | 'pronome-genero' | 'repeticao' | 'omissao' | 'outro';
+
+export interface ApontamentoQa {
+  ordem: number;
+  tipo: TipoApontamentoQa;
+  severidade: 'alta' | 'media' | 'baixa';
+  trecho_zh: string;
+  observacao: string;
+  sugestao: string | null;
+}
+
+export interface RespostaQa {
+  apontamentos: ApontamentoQa[];
+  bruta: string;
+}
+
 // ── Erros classificados (doc 05 §2: transitório vs fatal; 'limite' é o 429 —
 // transitório por natureza, mas com tratamento próprio quando o usuário optou
-// por não passar da cota gratuita) ──────────────────────────────────────────
+// por não passar da cota gratuita; 'truncado' é resposta cortada por
+// max_tokens — repetir a chamada igual só paga de novo, o bloco precisa
+// encolher — doc 09 / A1 da auditoria) ─────────────────────────────────────
 
 export class ErroProvedor extends Error {
+  /** Espera sugerida pelo provedor antes de tentar de novo (cabeçalho
+   * Retry-After de um 429), em ms. */
+  public readonly retryAfterMs?: number;
+
   constructor(
     mensagem: string,
-    public readonly tipo: 'transitorio' | 'fatal' | 'limite',
+    public readonly tipo: 'transitorio' | 'fatal' | 'limite' | 'truncado',
+    opcoes?: { retryAfterMs?: number },
   ) {
     super(mensagem);
     this.name = 'ErroProvedor';
+    this.retryAfterMs = opcoes?.retryAfterMs;
   }
 }
 
@@ -107,4 +192,6 @@ export interface ProvedorIA {
   traduzirBloco(chave: string | null, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco>;
   revisarFrase(chave: string | null, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor>;
   extrairTermos(chave: string | null, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos>;
+  refinarPrompt(chave: string | null, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt>;
+  analisarQa(chave: string | null, req: RequisicaoQa): Promise<RespostaQa>;
 }

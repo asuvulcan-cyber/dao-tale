@@ -100,6 +100,6 @@ Conteúdo: `dao-tale.db` (+ arquivos WAL), `credenciais.json` (somente no modo f
 ## 6. Modelo de execução do backend
 
 - Processo único, single-user. `better-sqlite3` é síncrono; chamadas de IA são assíncronas.
-- **Jobs de tradução** rodam dentro do mesmo processo, um capítulo por vez, bloco a bloco (sequencial — ver `05-fluxos-ia.md §2`). O estado durável do job é o campo `status_traducao` de cada frase no banco: se o processo morrer no meio, "Retomar tradução" continua de onde parou sem retraduzir o que já foi feito.
+- **Jobs de tradução** rodam dentro do mesmo processo, bloco a bloco (sequencial dentro do capítulo — ver `05-fluxos-ia.md §2`). Na fase de **cruzeiro** (doc 09), um lote traduz até `lote_paralelo` capítulos ao mesmo tempo (padrão 2), cada um ainda com seus blocos sequenciais; na calibração é um capítulo por vez (decisão D3 da auditoria, resolvida no doc 09 §5). O estado durável do job é o campo `status_traducao` de cada frase no banco, e o do lote as tabelas `lotes`/`lote_capitulos`: se o processo morrer no meio, "Retomar tradução"/"Retomar lote" continua de onde parou sem retraduzir o que já foi feito.
 - **Progresso** é entregue à interface por SSE (`GET /api/capitulos/:id/traducao/eventos`); a interface também funciona por polling se a conexão SSE cair.
 - Nenhuma fila externa, nenhum worker separado — complexidade desnecessária para single-user.

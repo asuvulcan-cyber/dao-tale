@@ -1,7 +1,17 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Capitulo, CapituloResumo, Obra, ProvedorId } from '@dao-tale/shared';
+import type {
+  Capitulo,
+  CapituloResumo,
+  CheckpointObra,
+  Lote,
+  LoteCapitulo,
+  Obra,
+  PromptMae,
+  PromptPadrao,
+  ProvedorId,
+} from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
@@ -18,6 +28,26 @@ export function Capitulos() {
     queryKey: ['capitulos', obraId],
     queryFn: () => api<CapituloResumo[]>('GET', `/obras/${obraId}/capitulos`),
   });
+
+  // Proveniência (doc 08 §2 camada 4): id → versão para o tooltip "traduzido
+  // com prompt vX · núcleo vY". Mesmas chaves de cache da tela Prompt mãe.
+  const { data: promptsObra } = useQuery({
+    queryKey: ['prompts', obraId],
+    queryFn: () => api<PromptMae[]>('GET', `/obras/${obraId}/prompts`),
+  });
+  const { data: nucleos } = useQuery({
+    queryKey: ['prompt-padrao'],
+    queryFn: () => api<PromptPadrao[]>('GET', '/prompt-padrao'),
+  });
+  const versaoPrompt = new Map((promptsObra ?? []).map((p) => [p.id, p.versao]));
+  const versaoNucleo = new Map((nucleos ?? []).map((n) => [n.id, n.versao]));
+  const proveniencia = (cap: CapituloResumo): string | undefined => {
+    if (!cap.prompt_id) return undefined;
+    const prompt = versaoPrompt.get(cap.prompt_id);
+    const nucleo = cap.nucleo_id ? versaoNucleo.get(cap.nucleo_id) : undefined;
+    if (!prompt) return undefined;
+    return `Traduzido com o prompt v${prompt}${nucleo ? ` sobre o núcleo v${nucleo}` : ''}${cap.provedor ? ` (${cap.provedor}${cap.modelo ? ` · ${cap.modelo}` : ''})` : ''}`;
+  };
 
   const criar = useMutation({
     mutationFn: (dados: { numero: number; titulo?: string; texto_origem: string }) =>
@@ -58,6 +88,9 @@ export function Capitulos() {
   return (
     <div>
       <FichaObra />
+
+      <PainelCheckpoint />
+      <PainelLote />
 
       <CabecalhoPagina
         titulo="Capítulos"
@@ -120,11 +153,25 @@ export function Capitulos() {
                     <span className="texto-zh ml-2 text-sm text-tinta-2">{cap.titulo}</span>
                   )}
                 </Link>
-                <span className="font-mono text-xs text-tinta-2 tabular-nums">
+                <span className="font-mono text-xs text-tinta-2 tabular-nums" title={proveniencia(cap)}>
                   {cap.frases_traduzidas}/{cap.frases_total}
                   {cap.frases_erro > 0 && <span className="text-erro"> · {cap.frases_erro} erro</span>}
+                  {/* D5: varredura local de consistência do glossário. */}
+                  {cap.consistencia_violacoes != null && cap.consistencia_violacoes > 0 && (
+                    <span className="text-ocre-forte" title="Termos do glossário traduzidos fora do padrão — abra o capítulo para conferir">
+                      {' '}· {cap.consistencia_violacoes} glossário
+                    </span>
+                  )}
+                  {/* QA por segunda IA (doc 09 §6): apontamentos pendentes de triagem. */}
+                  {cap.qa_pendentes > 0 && (
+                    <span className="text-selo-forte" title="Apontamentos de QA pendentes — abra o capítulo para triar">
+                      {' '}· {cap.qa_pendentes} QA
+                    </span>
+                  )}
                 </span>
-                <Etiqueta cor={rotulo.cor}>{rotulo.texto}</Etiqueta>
+                <span title={proveniencia(cap)}>
+                  <Etiqueta cor={rotulo.cor}>{rotulo.texto}</Etiqueta>
+                </span>
                 <button
                   type="button"
                   onClick={() => excluir.mutate(cap)}
@@ -137,6 +184,252 @@ export function Capitulos() {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Painel-semáforo do checkpoint de estabilidade (doc 09 §4): mostra as taxas
+ * medidas e libera (ou não) a fase de cruzeiro. Quem decide é o usuário. */
+function PainelCheckpoint() {
+  const { obraId } = useParams();
+  const clienteQuery = useQueryClient();
+  const [erro, setErro] = useState('');
+
+  const { data: checkpoint } = useQuery({
+    queryKey: ['checkpoint', obraId],
+    queryFn: () => api<CheckpointObra>('GET', `/obras/${obraId}/checkpoint`),
+  });
+
+  const mudarFase = useMutation({
+    mutationFn: (fase: 'calibracao' | 'cruzeiro') => api<Obra>('PUT', `/obras/${obraId}/fase`, { fase }),
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['checkpoint', obraId] });
+      clienteQuery.invalidateQueries({ queryKey: ['obra', obraId] });
+      setErro('');
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
+
+  if (!checkpoint) return null;
+  const emCruzeiro = checkpoint.fase === 'cruzeiro';
+
+  const cor: Record<string, string> = {
+    ok: 'bg-jade text-papel-alto',
+    acima: 'bg-erro text-papel-alto',
+    'amostra-insuficiente': 'bg-papel-fundo text-tinta-2 border border-linha',
+  };
+  const simbolo: Record<string, string> = { ok: '✓', acima: '!', 'amostra-insuficiente': '·' };
+
+  return (
+    <div className="mb-6 cartao p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">
+            Fase da tradução: {emCruzeiro ? 'Cruzeiro (lote liberado)' : 'Calibração'}
+          </h3>
+          <p className="text-xs text-tinta-2">
+            {emCruzeiro
+              ? 'Tradução em lote liberada. Se as taxas piorarem num arco novo, volte para calibração.'
+              : 'Traduza e revise capítulo a capítulo até as taxas estabilizarem, depois libere o cruzeiro.'}
+          </p>
+        </div>
+        {emCruzeiro ? (
+          <Botao variante="secundario" onClick={() => mudarFase.mutate('calibracao')} disabled={mudarFase.isPending}>
+            Voltar para calibração
+          </Botao>
+        ) : checkpoint.aprovado ? (
+          <Botao onClick={() => mudarFase.mutate('cruzeiro')} disabled={mudarFase.isPending}>
+            Liberar cruzeiro
+          </Botao>
+        ) : (
+          <Botao
+            variante="secundario"
+            onClick={() => {
+              if (window.confirm('As taxas ainda não estabilizaram. Liberar o lote assim mesmo pode gerar retrabalho pago (retradução). Continuar?'))
+                mudarFase.mutate('cruzeiro');
+            }}
+            disabled={mudarFase.isPending}
+          >
+            Liberar mesmo assim
+          </Botao>
+        )}
+      </div>
+
+      {erro && <Aviso tipo="erro">{erro}</Aviso>}
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        {checkpoint.metricas.map((m) => (
+          <div key={m.chave} className="flex items-start gap-2 rounded border border-linha/60 p-2">
+            <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${cor[m.estado]}`}>
+              {simbolo[m.estado]}
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-medium">
+                {m.rotulo}
+                {!m.bloqueia && <span className="text-tinta-2"> (informativa)</span>}
+              </p>
+              <p className="text-xs text-tinta-2">{m.detalhe}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {checkpoint.janela_capitulos.length > 0 && (
+        <p className="mt-2 text-xs text-tinta-2">
+          Janela medida: capítulos {checkpoint.janela_capitulos.join(', ')} (os {checkpoint.janela_alvo} mais recentes prontos).
+        </p>
+      )}
+    </div>
+  );
+}
+
+const STATUS_LOTE_CAP: Record<LoteCapitulo['status'], { texto: string; cor: string }> = {
+  na_fila: { texto: 'Na fila', cor: 'text-tinta-2' },
+  traduzindo: { texto: 'Traduzindo…', cor: 'text-indigo-forte' },
+  qa: { texto: 'QA…', cor: 'text-indigo-forte' },
+  concluido: { texto: 'Concluído', cor: 'text-jade-forte' },
+  erro: { texto: 'Erro', cor: 'text-erro' },
+  cancelado: { texto: 'Cancelado', cor: 'text-tinta-2' },
+};
+
+/** Fila do lote (fase de cruzeiro, doc 09 §5): inicia, acompanha ao vivo (SSE),
+ * cancela e retoma a tradução em lote. Só aparece quando a obra está em cruzeiro. */
+function PainelLote() {
+  const { obraId } = useParams();
+  const clienteQuery = useQueryClient();
+  const [erro, setErro] = useState('');
+  const [lote, setLote] = useState<Lote | null>(null);
+
+  const { data: obra } = useQuery({
+    queryKey: ['obra', obraId],
+    queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
+  });
+  const { data: loteInicial } = useQuery({
+    queryKey: ['lote', obraId],
+    queryFn: () => api<{ lote: Lote | null }>('GET', `/obras/${obraId}/lote`).then((r) => r.lote),
+  });
+
+  useEffect(() => {
+    if (loteInicial !== undefined) setLote(loteInicial);
+  }, [loteInicial]);
+
+  // Assina o SSE agregado enquanto houver um lote executando.
+  const executando = lote?.status === 'executando';
+  useEffect(() => {
+    if (!executando) return;
+    const fonte = new EventSource(`/api/obras/${obraId}/lote/eventos`);
+    const receber = (e: MessageEvent) => {
+      const dados = JSON.parse(e.data) as Lote | null;
+      setLote(dados);
+      // Progresso das frases muda a lista de capítulos e o checkpoint.
+      clienteQuery.invalidateQueries({ queryKey: ['capitulos', obraId] });
+    };
+    fonte.addEventListener('lote', receber);
+    fonte.addEventListener('lote_encerrado', (e) => {
+      receber(e as MessageEvent);
+      clienteQuery.invalidateQueries({ queryKey: ['checkpoint', obraId] });
+      fonte.close();
+    });
+    return () => fonte.close();
+  }, [executando, obraId, clienteQuery]);
+
+  const acao = useMutation({
+    mutationFn: (o: 'iniciar' | 'cancelar' | 'retomar') =>
+      o === 'iniciar'
+        ? api<{ lote: Lote }>('POST', `/obras/${obraId}/lote`, {}).then((r) => r.lote)
+        : o === 'retomar'
+          ? api<{ lote: Lote }>('POST', `/obras/${obraId}/lote/retomar`, {}).then((r) => r.lote)
+          : api('POST', `/obras/${obraId}/lote/cancelar`, {}),
+    onSuccess: (r, o) => {
+      setErro('');
+      if (o !== 'cancelar' && r) setLote(r as Lote);
+      clienteQuery.invalidateQueries({ queryKey: ['lote', obraId] });
+    },
+    onError: (e) => setErro((e as Error).message),
+  });
+
+  if (!obra || obra.fase_traducao !== 'cruzeiro') return null;
+
+  const podeIniciar = !lote || lote.status !== 'executando';
+  const interrompido = lote && (lote.status === 'interrompido' || lote.status === 'cancelado');
+  const concluidos = lote?.capitulos.filter((c) => c.status === 'concluido').length ?? 0;
+  const comErro = lote?.capitulos.filter((c) => c.status === 'erro').length ?? 0;
+
+  return (
+    <div className="mb-6 cartao p-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Tradução em lote</h3>
+          <p className="text-xs text-tinta-2">
+            Traduz os capítulos pendentes em série, com failover entre provedores e retomada após falha.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {executando ? (
+            <Botao variante="secundario" onClick={() => acao.mutate('cancelar')} disabled={acao.isPending}>
+              Cancelar lote
+            </Botao>
+          ) : (
+            <>
+              {interrompido && lote!.capitulos.some((c) => c.status !== 'concluido') && (
+                <Botao variante="secundario" onClick={() => acao.mutate('retomar')} disabled={acao.isPending}>
+                  Retomar lote
+                </Botao>
+              )}
+              {podeIniciar && (
+                <Botao onClick={() => acao.mutate('iniciar')} disabled={acao.isPending}>
+                  Iniciar lote
+                </Botao>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {erro && <Aviso tipo="erro">{erro}</Aviso>}
+
+      {lote && (
+        <>
+          <p className="mb-2 text-xs text-tinta-2">
+            {lote.status === 'executando'
+              ? 'Em execução'
+              : lote.status === 'concluido'
+                ? 'Concluído'
+                : lote.status === 'cancelado'
+                  ? 'Cancelado'
+                  : 'Interrompido'}{' '}
+            · {concluidos}/{lote.capitulos.length} capítulos
+            {comErro > 0 && <span className="text-erro"> · {comErro} com erro</span>}
+          </p>
+          <div className="max-h-48 overflow-y-auto rounded border border-linha/60">
+            {lote.capitulos.map((c) => {
+              const s = STATUS_LOTE_CAP[c.status];
+              return (
+                <div
+                  key={c.capitulo_id}
+                  className="flex items-baseline gap-3 border-b border-linha/40 px-3 py-1.5 text-xs last:border-b-0"
+                >
+                  <Link
+                    to={`/obras/${obraId}/capitulos/${c.capitulo_id}`}
+                    className="w-8 shrink-0 text-right font-display font-semibold hover:text-jade-forte"
+                  >
+                    {c.numero}
+                  </Link>
+                  <span className="min-w-0 flex-1 truncate text-tinta-2">
+                    {c.titulo ?? <span className="italic">sem título</span>}
+                  </span>
+                  <span className="font-mono tabular-nums text-tinta-2">
+                    {c.frases_traduzidas}/{c.frases_total}
+                  </span>
+                  <span className={`w-24 shrink-0 text-right ${s.cor}`} title={c.erro ?? undefined}>
+                    {s.texto}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

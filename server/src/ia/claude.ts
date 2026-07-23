@@ -5,25 +5,37 @@ import {
   ErroProvedor,
   type ProvedorIA,
   type RequisicaoExtrairTermos,
+  type RequisicaoQa,
+  type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
   type RespostaExtrairTermos,
+  type RespostaQa,
+  type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
-  SCHEMA_EXTRAIR_TERMOS,
-  SCHEMA_REVISAO,
-  SCHEMA_TRADUCAO,
-  sistemaExtrairTermos,
-  sistemaRevisao,
-  sistemaTraducao,
+  sistemaExtrairTermosPartes,
+  sistemaQaPartes,
+  sistemaRefinarPromptPartes,
+  sistemaRevisaoPartes,
+  sistemaTraducaoPartes,
   usuarioExtrairTermos,
+  usuarioQa,
+  usuarioRefinarPrompt,
   usuarioRevisao,
   usuarioTraducao,
+  type PartesSistema,
 } from './prompts.js';
-
-import { respostaExtrairTermosSchema, respostaRevisaoSchema, respostaTraducaoSchema } from './respostas.js';
+import {
+  CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_QA,
+  CONTRATO_REFINAR_PROMPT,
+  CONTRATO_REVISAO,
+  CONTRATO_TRADUCAO,
+  type Contrato,
+} from './contratos.js';
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof Anthropic.APIError) {
@@ -35,11 +47,25 @@ function classificarErro(e: unknown): ErroProvedor {
       return new ErroProvedor(`Requisição rejeitada pela API da Anthropic: ${e.message}`, 'fatal');
     }
     if (status === 429) {
-      return new ErroProvedor('Limite de requisições da Anthropic atingido (429).', 'limite');
+      const retryAfter = Number(e.headers?.get('retry-after'));
+      return new ErroProvedor('Limite de requisições da Anthropic atingido (429).', 'limite', {
+        retryAfterMs: !Number.isNaN(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined,
+      });
     }
     return new ErroProvedor(`Erro da API da Anthropic (${status}): ${e.message}`, 'transitorio');
   }
   return new ErroProvedor(`Falha de rede ao chamar a Anthropic: ${String((e as Error).message ?? e)}`, 'transitorio');
+}
+
+// Sistema em dois blocos cacheados (doc 08 §3): o 1º é o prompt mãe composto
+// (núcleo + delta) — prefixo compartilhado entre tradução, revisão e extração
+// da mesma obra —, o 2º são as instruções da tarefa. Abaixo do mínimo cacheável
+// do modelo o breakpoint simplesmente não pega, sem erro.
+function sistemaEmBlocos(partes: PartesSistema): Anthropic.TextBlockParam[] {
+  return [
+    { type: 'text', text: partes.base, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: partes.operacional, cache_control: { type: 'ephemeral' } },
+  ];
 }
 
 function extrairToolUse(resposta: Anthropic.Message, nomeFerramenta: string): unknown {
@@ -50,6 +76,20 @@ function extrairToolUse(resposta: Anthropic.Message, nomeFerramenta: string): un
     throw new ErroProvedor('O modelo não devolveu a resposta estruturada esperada.', 'transitorio');
   }
   return bloco.input;
+}
+
+/** Ferramenta única forçada (tool use) a partir do contrato (fonte única — M7). */
+function ferramenta(contrato: Contrato): Pick<Anthropic.MessageCreateParams, 'tools' | 'tool_choice'> {
+  return {
+    tools: [
+      {
+        name: contrato.ferramenta,
+        description: contrato.descricao,
+        input_schema: contrato.schema as Anthropic.Tool['input_schema'],
+      },
+    ],
+    tool_choice: { type: 'tool', name: contrato.ferramenta },
+  };
 }
 
 export const provedorClaude: ProvedorIA = {
@@ -83,27 +123,17 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 8192,
-        // cache_control: o sistema (prompt mãe + glossário) é idêntico em todos os
-        // blocos do capítulo — cacheia e corta o custo de entrada nos blocos seguintes.
-        system: [
-          {
-            type: 'text',
-            text: sistemaTraducao(req),
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
+        system: sistemaEmBlocos(sistemaTraducaoPartes(req)),
         messages: [{ role: 'user', content: usuarioTraducao(req) }],
-        tools: [
-          {
-            name: 'entregar_traducoes',
-            description: 'Entrega as traduções do bloco e os termos novos detectados.',
-            input_schema: SCHEMA_TRADUCAO as Anthropic.Tool['input_schema'],
-          },
-        ],
-        tool_choice: { type: 'tool', name: 'entregar_traducoes' },
+        ...ferramenta(CONTRATO_TRADUCAO),
       });
-      const bruto = extrairToolUse(resposta, 'entregar_traducoes');
-      const dados = respostaTraducaoSchema.parse(bruto);
+      // A1: bloco grande demais para o teto de saída — o tool use vem cortado
+      // e repetir a chamada igual só paga de novo; o job divide o bloco.
+      if (resposta.stop_reason === 'max_tokens') {
+        throw new ErroProvedor('A Anthropic truncou a resposta no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = extrairToolUse(resposta, CONTRATO_TRADUCAO.ferramenta);
+      const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
       return { ...dados, bruta: JSON.stringify(bruto) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
@@ -120,19 +150,12 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 2048,
-        system: [{ type: 'text', text: sistemaExtrairTermos(req) }],
+        system: sistemaEmBlocos(sistemaExtrairTermosPartes(req)),
         messages: [{ role: 'user', content: usuarioExtrairTermos(req) }],
-        tools: [
-          {
-            name: 'entregar_termos',
-            description: 'Entrega os termos da frase que merecem entrar no glossário.',
-            input_schema: SCHEMA_EXTRAIR_TERMOS as Anthropic.Tool['input_schema'],
-          },
-        ],
-        tool_choice: { type: 'tool', name: 'entregar_termos' },
+        ...ferramenta(CONTRATO_EXTRAIR_TERMOS),
       });
-      const bruto = extrairToolUse(resposta, 'entregar_termos');
-      const dados = respostaExtrairTermosSchema.parse(bruto);
+      const bruto = extrairToolUse(resposta, CONTRATO_EXTRAIR_TERMOS.ferramenta);
+      const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
       return { ...dados, bruta: JSON.stringify(bruto) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
@@ -149,30 +172,64 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 4096,
-        system: [
-          {
-            type: 'text',
-            text: sistemaRevisao(req),
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
+        system: sistemaEmBlocos(sistemaRevisaoPartes(req)),
         messages: [{ role: 'user', content: usuarioRevisao(req) }],
-        tools: [
-          {
-            name: 'entregar_revisao',
-            description: 'Entrega a análise estruturada do Protocolo de Revisão.',
-            input_schema: SCHEMA_REVISAO as Anthropic.Tool['input_schema'],
-          },
-        ],
-        tool_choice: { type: 'tool', name: 'entregar_revisao' },
+        ...ferramenta(CONTRATO_REVISAO),
       });
-      const bruto = extrairToolUse(resposta, 'entregar_revisao');
-      const dados = respostaRevisaoSchema.parse(bruto);
+      const bruto = extrairToolUse(resposta, CONTRATO_REVISAO.ferramenta);
+      const dados = CONTRATO_REVISAO.zod.parse(bruto);
       return { ...dados, bruta: JSON.stringify(bruto) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato do Protocolo de Revisão.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async refinarPrompt(chave, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo,
+        max_tokens: 4096,
+        system: sistemaEmBlocos(sistemaRefinarPromptPartes(req)),
+        messages: [{ role: 'user', content: usuarioRefinarPrompt(req) }],
+        ...ferramenta(CONTRATO_REFINAR_PROMPT),
+      });
+      const bruto = extrairToolUse(resposta, CONTRATO_REFINAR_PROMPT.ferramenta);
+      const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de refinamento do prompt.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async analisarQa(chave, req: RequisicaoQa): Promise<RespostaQa> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo,
+        max_tokens: 8192,
+        system: sistemaEmBlocos(sistemaQaPartes(req)),
+        messages: [{ role: 'user', content: usuarioQa(req) }],
+        ...ferramenta(CONTRATO_QA),
+      });
+      if (resposta.stop_reason === 'max_tokens') {
+        throw new ErroProvedor('A Anthropic truncou a resposta de QA no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = extrairToolUse(resposta, CONTRATO_QA.ferramenta);
+      const dados = CONTRATO_QA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');
       }
       throw classificarErro(e);
     }

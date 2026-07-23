@@ -3,11 +3,12 @@ import type { EventoTraducao, ProgressoTraducao, ProvedorId } from '@dao-tale/sh
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
-import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
-import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
+import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
+import { montarBloco } from './bloco.js';
+import { varrerConsistencia } from './consistencia.js';
 
-// Orquestração da tradução em blocos (doc 05 §2).
+// Orquestração da tradução em blocos (doc 05 §2, fases no doc 09).
 // O estado durável é frases.status_traducao — este módulo só mantém em memória
 // o que é efêmero (job em execução, emissor de eventos SSE, flag de cancelamento).
 
@@ -20,6 +21,15 @@ const jobs = new Map<number, JobAtivo>();
 const emissores = new Map<number, EventEmitter>();
 
 const BACKOFF_MS = [2000, 4000, 8000, 16000];
+// M1: limite de requisições renova por minuto — esperas de segundos quase
+// nunca bastam num 429 e cada tentativa paga conta contra a cota.
+const BACKOFF_LIMITE_MS = [30_000, 60_000, 120_000];
+
+// Somente para testes: encurta as esperas do retry sem expor os backoffs na config.
+let backoffTeste: { transitorio?: number[]; limite?: number[] } = {};
+export function _backoffsParaTeste(transitorio?: number[], limite?: number[]): void {
+  backoffTeste = { transitorio, limite };
+}
 
 export function emissorDoCapitulo(capituloId: number): EventEmitter {
   let e = emissores.get(capituloId);
@@ -29,6 +39,14 @@ export function emissorDoCapitulo(capituloId: number): EventEmitter {
     emissores.set(capituloId, e);
   }
   return e;
+}
+
+/** B1: descarta o emissor quando ninguém mais escuta (jobs e SSE encerrados).
+ * Com um ouvinte ativo o emissor fica — remover trocaria o objeto que um SSE
+ * aberto ainda referencia e os eventos seguintes se perderiam. */
+export function liberarEmissor(capituloId: number): void {
+  const e = emissores.get(capituloId);
+  if (e && e.listenerCount('evento') === 0) emissores.delete(capituloId);
 }
 
 function emitir(capituloId: number, evento: EventoTraducao): void {
@@ -68,6 +86,14 @@ export interface OpcoesTraducao {
   sobrescrever_editadas?: boolean;
 }
 
+/** Desfecho classificado do job — consumido pelo orquestrador de lote (doc 09 §5). */
+export type ResultadoJob =
+  | { tipo: 'concluido' }
+  | { tipo: 'parcial'; frases_erro: number }
+  | { tipo: 'cancelado' }
+  | { tipo: 'fatal'; mensagem: string }
+  | { tipo: 'limite'; mensagem: string };
+
 /**
  * Inicia (ou retoma) a tradução do capítulo. Retorna imediatamente; o processamento
  * segue em background e o progresso sai pelo emissor SSE.
@@ -76,6 +102,8 @@ export async function iniciarTraducao(
   db: BancoDados,
   capituloId: number,
   opcoes: OpcoesTraducao,
+  /** Interno (lote): chamado uma única vez quando o job termina. */
+  aoTerminar?: (resultado: ResultadoJob) => void,
 ): Promise<{ ok: true } | { ok: false; erro: string }> {
   if (jobs.has(capituloId)) return { ok: false, erro: 'Já existe uma tradução em andamento neste capítulo.' };
 
@@ -88,48 +116,23 @@ export async function iniciarTraducao(
   const provedor = obterProvedor(provedorId);
   const modelo = opcoes.modelo ?? obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao);
 
-  // Obra sem prompt próprio adota o padrão global na hora (vira a v1.0 dela).
-  const promptAtivo = reposPrompts.ativoOuAdotado(db, capitulo.obra_id);
-  if (!promptAtivo) {
+  // Obra sem prompt próprio adota um delta vazio na hora; o texto enviado é a
+  // composição núcleo ativo + delta da obra (doc 08 §3).
+  const prompt = reposPrompts.composto(db, capitulo.obra_id);
+  if (!prompt) {
     return { ok: false, erro: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo. Cadastre um na tela de Prompt mãe.' };
   }
 
-  const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
-  if (provedor.precisaChave && !chave) {
-    return { ok: false, erro: `Nenhuma chave de API configurada para ${provedor.nome}. Cadastre em Configurações.` };
-  }
-
-  reposFrases.reabrirParaTraducao(db, capituloId, {
-    sobrescrever: opcoes.sobrescrever ?? false,
-    sobrescreverEditadas: opcoes.sobrescrever_editadas ?? false,
-  });
-
-  // Título ainda em chinês (ou retradução completa): traduz junto com o 1º bloco.
-  const traduzirTitulo = !!capitulo.titulo && (!capitulo.titulo_pt || (opcoes.sobrescrever ?? false));
-
-  const todas = reposFrases.listarPorCapitulo(db, capituloId);
-  const pendentes = todas.filter((f) => f.status_traducao !== 'traduzida');
-  if (pendentes.length === 0 && !traduzirTitulo) {
-    return { ok: false, erro: 'Nenhuma frase pendente de tradução neste capítulo.' };
-  }
-
-  // Job só de título (capítulo já concluído) não mexe no status do capítulo.
-  if (pendentes.length > 0) {
-    reposCapitulos.atualizar(db, capituloId, {
-      status: 'traduzindo',
-      provedor: provedorId,
-      modelo,
-      prompt_id: promptAtivo.id,
-    });
-  }
-
+  // C1: reserva o capítulo ANTES do primeiro await. Sem isso, duas requisições
+  // próximas (duplo clique, duas abas) passavam ambas pela checagem do topo e
+  // o capítulo era traduzido — e pago — duas vezes.
   const job: JobAtivo = {
     cancelar: false,
     progresso: {
       capitulo_id: capituloId,
       em_execucao: true,
-      frases_total: todas.length,
-      frases_prontas: todas.length - pendentes.length,
+      frases_total: 0,
+      frases_prontas: 0,
       frases_erro: 0,
       erro_fatal: null,
       em_voo: null,
@@ -137,8 +140,57 @@ export async function iniciarTraducao(
   };
   jobs.set(capituloId, job);
 
-  void executarJob(db, capituloId, job, { provedorId, modelo, chave, promptMae: promptAtivo.conteudo, config, traduzirTitulo });
-  return { ok: true };
+  try {
+    const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
+    if (provedor.precisaChave && !chave) {
+      jobs.delete(capituloId);
+      return { ok: false, erro: `Nenhuma chave de API configurada para ${provedor.nome}. Cadastre em Configurações.` };
+    }
+
+    reposFrases.reabrirParaTraducao(db, capituloId, {
+      sobrescrever: opcoes.sobrescrever ?? false,
+      sobrescreverEditadas: opcoes.sobrescrever_editadas ?? false,
+    });
+
+    // Título ainda em chinês (ou retradução completa): traduz junto com o 1º bloco.
+    const traduzirTitulo = !!capitulo.titulo && (!capitulo.titulo_pt || (opcoes.sobrescrever ?? false));
+
+    const todas = reposFrases.listarPorCapitulo(db, capituloId);
+    const pendentes = todas.filter((f) => f.status_traducao !== 'traduzida');
+    if (pendentes.length === 0 && !traduzirTitulo) {
+      jobs.delete(capituloId);
+      return { ok: false, erro: 'Nenhuma frase pendente de tradução neste capítulo.' };
+    }
+
+    // Job só de título (capítulo já concluído) não mexe no status do capítulo.
+    if (pendentes.length > 0) {
+      reposCapitulos.atualizar(db, capituloId, {
+        status: 'traduzindo',
+        provedor: provedorId,
+        modelo,
+        prompt_id: prompt.prompt.id,
+        // Proveniência do par de camadas: qual núcleo compôs o prompt deste job.
+        nucleo_id: prompt.nucleo?.id ?? null,
+      });
+    }
+
+    job.progresso.frases_total = todas.length;
+    job.progresso.frases_prontas = todas.length - pendentes.length;
+
+    void executarJob(db, capituloId, job, {
+      provedorId,
+      modelo,
+      chave,
+      promptMae: prompt.texto,
+      config,
+      traduzirTitulo,
+      aoTerminar,
+    });
+    return { ok: true };
+  } catch (e) {
+    jobs.delete(capituloId);
+    throw e;
+  }
 }
 
 async function executarJob(
@@ -152,16 +204,22 @@ async function executarJob(
     promptMae: string;
     config: ReturnType<typeof reposConfig.obterTodas>;
     traduzirTitulo: boolean;
+    aoTerminar?: (resultado: ResultadoJob) => void;
   },
 ): Promise<void> {
   const provedor = obterProvedor(ctx.provedorId);
   const capitulo = reposCapitulos.obter(db, capituloId)!;
   let tituloPendente = ctx.traduzirTitulo;
+  let desfecho: ResultadoJob | null = null;
 
   // Termos que a IA adotou nos blocos anteriores deste job (zh → pt). Sem isso,
   // um termo novo do bloco 1 era retraduzido do zero no bloco 5 — mesma palavra,
   // traduções diferentes dentro do capítulo. O glossário do banco tem precedência.
   const termosAdotados = new Map<string, string>();
+
+  // A1: encolhe quando o provedor trunca a resposta — repetir o mesmo bloco
+  // pagaria a mesma chamada fadada a falhar.
+  let tamanhoBloco = ctx.config.tamanho_bloco;
 
   try {
     // Blocos são recomputados a cada iteração a partir do banco — assim uma frase
@@ -171,61 +229,19 @@ async function executarJob(
 
       const todas = reposFrases.listarPorCapitulo(db, capituloId);
       const glossario = reposGlossario.listar(db, capitulo.obra_id);
-      const pendentes = todas.filter((f) => f.status_traducao === 'pendente');
-      if (pendentes.length === 0 && !tituloPendente) break;
+      if (!todas.some((f) => f.status_traducao === 'pendente') && !tituloPendente) break;
 
-      // Bloco pode ser vazio quando só o título falta (capítulo já traduzido):
-      // as ordens-sentinela deixam a cauda com o fim do capítulo e zero "próximas".
-      const bloco = pendentes.slice(0, ctx.config.tamanho_bloco);
-      const primeiraOrdem = bloco[0]?.ordem ?? todas.length;
-      const ultimaOrdem = bloco[bloco.length - 1]?.ordem ?? todas.length;
-
-      // Cauda: últimas N frases traduzidas imediatamente antes do bloco.
-      const caudaAnterior = todas
-        .filter((f) => f.ordem < primeiraOrdem && f.status_traducao === 'traduzida')
-        .slice(-ctx.config.cauda_contexto)
-        .map((f) => ({ texto_zh: f.texto_zh, texto_pt: f.texto_pt }));
-
-      // Contexto futuro: próximas N frases em chinês após o bloco.
-      const proximas = todas
-        .filter((f) => f.ordem > ultimaOrdem)
-        .slice(0, ctx.config.cauda_contexto)
-        .map((f) => f.texto_zh);
-
-      const titulo = tituloPendente ? (capitulo.titulo ?? undefined) : undefined;
-      // Glossário relevante: só os termos que aparecem no trecho enviado — em
-      // glossários grandes isso corta a maior parte dos tokens de entrada.
-      const glossarioDoBloco = ctx.config.glossario_relevante
-        ? incluirPrincipais(
-            filtrarGlossarioRelevante(glossario, [
-              titulo,
-              ...bloco.map((f) => f.texto_zh),
-              ...caudaAnterior.map((f) => f.texto_zh),
-              ...proximas,
-            ]),
-            glossario,
-          )
-        : glossario;
-
-      // Termos adotados que aparecem neste trecho e ainda não entraram no glossário
-      // (se o usuário aprovou o termo no meio do job, a versão do glossário vence).
-      const noGlossario = new Set(glossario.map((e) => e.termo_zh));
-      const corpoDoBloco = [titulo, ...bloco.map((f) => f.texto_zh), ...proximas].filter(Boolean).join('\n');
-      const termosAdotadosDoBloco = [...termosAdotados]
-        .filter(([zh]) => !noGlossario.has(zh) && corpoDoBloco.includes(zh))
-        .map(([termo_zh, termo_pt]) => ({ termo_zh, termo_pt }));
-
-      const req: RequisicaoTraducaoBloco = {
+      const { bloco, primeiraOrdem, ultimaOrdem, req } = montarBloco({
+        todas,
+        glossario,
+        termosAdotados,
+        titulo: tituloPendente ? (capitulo.titulo ?? undefined) : undefined,
         modelo: ctx.modelo,
         promptMae: ctx.promptMae,
-        glossario: glossarioDoBloco,
-        glossarioNoUsuario: ctx.config.glossario_relevante,
-        termosAdotados: termosAdotadosDoBloco,
-        titulo,
-        caudaAnterior,
-        frases: bloco.map((f) => ({ ordem: f.ordem, texto_zh: f.texto_zh })),
-        proximas,
-      };
+        tamanhoBloco,
+        caudaContexto: ctx.config.cauda_contexto,
+        glossarioRelevante: ctx.config.glossario_relevante,
+      });
 
       // Anuncia o bloco em voo antes da chamada: a interface mostra "traduzindo
       // frases X–Y" em vez de ficar parada até a resposta do provedor.
@@ -236,24 +252,45 @@ async function executarJob(
 
       const resultado = await traduzirBlocoComRetry(provedor, ctx.chave, req, {
         pararNoLimite: ctx.config.parar_no_limite,
+        cancelado: () => job.cancelar,
         // Cada tentativa real conta contra a cota diária do provedor (retries inclusive).
         aoTentar: () => reposUso.registrar(db, ctx.provedorId, ctx.modelo),
       });
       job.progresso.em_voo = null;
 
+      if (resultado.tipo === 'cancelado') break;
+
+      if (resultado.tipo === 'truncado') {
+        if (bloco.length === 0) break; // job só de título: uma tentativa, sem laço
+        if (bloco.length === 1) {
+          // Uma única frase que ainda estoura a saída: erro real, com motivo (D6).
+          console.warn(`[traducao] capítulo ${capituloId}, frase ${primeiraOrdem}: ${resultado.mensagem}`);
+          reposFrases.marcarErro(db, bloco.map((f) => f.id));
+          job.progresso.frases_erro += 1;
+          emitir(capituloId, { tipo: 'progresso', dados: { ...job.progresso } });
+          continue;
+        }
+        // A1: divide o bloco ao meio e segue — o tamanho reduzido vale até o
+        // fim do job (capítulo de frases longas tende a truncar de novo).
+        tamanhoBloco = Math.max(1, Math.floor(bloco.length / 2));
+        console.warn(`[traducao] capítulo ${capituloId}: resposta truncada; bloco reduzido para ${tamanhoBloco} frases.`);
+        continue;
+      }
 
       if (resultado.tipo === 'fatal') {
         job.progresso.erro_fatal = resultado.mensagem;
-        emitir(capituloId, { tipo: 'job_erro', dados: { mensagem: resultado.mensagem } });
+        desfecho = { tipo: 'fatal', mensagem: resultado.mensagem };
+        emitir(capituloId, { tipo: 'job_erro', dados: { mensagem: resultado.mensagem, tipo: 'fatal' } });
         return;
       }
 
       if (resultado.tipo === 'limite') {
         // Parada limpa: as frases do bloco continuam pendentes, então
         // "Retomar tradução" recomeça exatamente daqui quando a cota renovar.
-        const mensagem = `${resultado.mensagem} Tradução pausada para não passar da cota gratuita — use "Retomar tradução" quando o limite renovar.`;
+        const mensagem = `${resultado.mensagem} Tradução pausada — o que já foi traduzido está salvo; use "Retomar tradução" quando o limite renovar.`;
         job.progresso.erro_fatal = mensagem;
-        emitir(capituloId, { tipo: 'job_erro', dados: { mensagem } });
+        desfecho = { tipo: 'limite', mensagem: resultado.mensagem };
+        emitir(capituloId, { tipo: 'job_erro', dados: { mensagem, tipo: 'limite' } });
         return;
       }
 
@@ -293,7 +330,13 @@ async function executarJob(
           traduzidasNesteBloco.add(t.ordem);
         }
         const faltantes = bloco.filter((f) => !traduzidasNesteBloco.has(f.ordem));
-        if (faltantes.length > 0) reposFrases.marcarErro(db, faltantes.map((f) => f.id));
+        if (faltantes.length > 0) {
+          // D6: motivo em log — ajuda a diagnosticar truncamento e modelos rebeldes.
+          console.warn(
+            `[traducao] capítulo ${capituloId}: ${faltantes.length} frase(s) sem tradução na resposta (ordens ${faltantes.map((f) => f.ordem).join(', ')}).`,
+          );
+          reposFrases.marcarErro(db, faltantes.map((f) => f.id));
+        }
       })();
 
       const faltantes = bloco.length - traduzidasNesteBloco.size;
@@ -313,39 +356,92 @@ async function executarJob(
 
       emitir(capituloId, { tipo: 'progresso', dados: { ...job.progresso } });
     }
-
-    // Capítulo completo (nada pendente/erro e não cancelado): sai de "traduzindo".
-    // Só promove a partir de 'traduzindo' — não rebaixa revisado/finalizado
-    // (ex.: job só de título num capítulo já concluído).
-    if (!job.cancelar && reposCapitulos.obter(db, capituloId)?.status === 'traduzindo') {
+  } catch (e) {
+    // C2: sem este catch, qualquer exceção fora do funil de retry virava
+    // unhandled rejection e derrubava o processo Node inteiro no meio do job.
+    const mensagem = `Erro inesperado durante a tradução: ${String((e as Error).message ?? e)}`;
+    console.error(`[traducao] capítulo ${capituloId}:`, e);
+    job.progresso.erro_fatal = mensagem;
+    desfecho = { tipo: 'fatal', mensagem };
+    emitir(capituloId, { tipo: 'job_erro', dados: { mensagem, tipo: 'fatal' } });
+  } finally {
+    // M6: o capítulo nunca fica preso em 'traduzindo' sem job — completo vira
+    // 'traduzido'; incompleto (erro/cancelado/limite) vira 'parcial' se algo
+    // foi traduzido, senão volta a 'rascunho'. Job só de título não passa por
+    // aqui com status 'traduzindo', então não rebaixa revisado/finalizado.
+    if (reposCapitulos.obter(db, capituloId)?.status === 'traduzindo') {
       const finais = reposFrases.listarPorCapitulo(db, capituloId);
-      if (finais.length > 0 && finais.every((f) => f.status_traducao === 'traduzida')) {
-        reposCapitulos.atualizar(db, capituloId, { status: 'traduzido' });
+      const prontas = finais.filter((f) => f.status_traducao === 'traduzida').length;
+      const status =
+        finais.length > 0 && prontas === finais.length ? 'traduzido' : prontas > 0 ? 'parcial' : 'rascunho';
+      reposCapitulos.atualizar(db, capituloId, { status });
+
+      // D5: varredura local de consistência ao concluir (grátis, sem IA) — o
+      // resultado vira badge na lista de capítulos e alimenta a métrica 3 do
+      // checkpoint. Nunca derruba o job.
+      if (prontas > 0) {
+        try {
+          const violacoes = varrerConsistencia(finais, reposGlossario.listar(db, capitulo.obra_id)).violacoes.length;
+          reposCapitulos.definirConsistencia(db, capituloId, violacoes);
+        } catch (e) {
+          console.warn(`[traducao] capítulo ${capituloId}: varredura de consistência falhou:`, e);
+        }
       }
     }
-  } finally {
+
     job.progresso.em_execucao = false;
     jobs.delete(capituloId);
+    if (!desfecho) {
+      desfecho = job.cancelar
+        ? { tipo: 'cancelado' }
+        : job.progresso.frases_erro > 0
+          ? { tipo: 'parcial', frases_erro: job.progresso.frases_erro }
+          : { tipo: 'concluido' };
+    }
     if (!job.progresso.erro_fatal) {
       emitir(capituloId, { tipo: 'job_concluido', dados: { ...progressoAtual(db, capituloId) } });
     }
+    liberarEmissor(capituloId);
+    ctx.aoTerminar?.(desfecho);
   }
 }
 
-type ResultadoBloco =
+export type ResultadoBloco =
   | { tipo: 'ok'; resposta: Awaited<ReturnType<import('../ia/provedor.js').ProvedorIA['traduzirBloco']>> }
   | { tipo: 'transitorio-esgotado'; mensagem: string }
   | { tipo: 'limite'; mensagem: string }
-  | { tipo: 'fatal'; mensagem: string };
+  | { tipo: 'fatal'; mensagem: string }
+  | { tipo: 'truncado'; mensagem: string }
+  | { tipo: 'cancelado' };
 
-async function traduzirBlocoComRetry(
+/** Espera em fatias curtas para o cancelamento não ficar preso num backoff longo. */
+async function esperar(ms: number, cancelado?: () => boolean): Promise<void> {
+  const FATIA = 500;
+  for (let restante = ms; restante > 0; restante -= FATIA) {
+    if (cancelado?.()) return;
+    await new Promise((r) => setTimeout(r, Math.min(FATIA, restante)));
+  }
+}
+
+export async function traduzirBlocoComRetry(
   provedor: import('../ia/provedor.js').ProvedorIA,
   chave: string | null,
-  req: RequisicaoTraducaoBloco,
-  opcoes: { pararNoLimite: boolean; aoTentar?: () => void },
+  req: import('../ia/provedor.js').RequisicaoTraducaoBloco,
+  opcoes: {
+    pararNoLimite: boolean;
+    aoTentar?: () => void;
+    cancelado?: () => boolean;
+    /** Overrides para testes (padrões: BACKOFF_MS / BACKOFF_LIMITE_MS). */
+    backoffMs?: number[];
+    backoffLimiteMs?: number[];
+  },
 ): Promise<ResultadoBloco> {
-  let ultimoErro = '';
-  for (let tentativa = 0; tentativa <= BACKOFF_MS.length; tentativa++) {
+  const backoff = opcoes.backoffMs ?? backoffTeste.transitorio ?? BACKOFF_MS;
+  const backoffLimite = opcoes.backoffLimiteMs ?? backoffTeste.limite ?? BACKOFF_LIMITE_MS;
+  let tentativa = 0;
+  let tentativaLimite = 0;
+  for (;;) {
+    if (opcoes.cancelado?.()) return { tipo: 'cancelado' };
     try {
       opcoes.aoTentar?.();
       const resposta = await provedor.traduzirBloco(chave, req);
@@ -353,12 +449,22 @@ async function traduzirBlocoComRetry(
     } catch (e) {
       const erro = e instanceof ErroProvedor ? e : new ErroProvedor(String((e as Error).message ?? e), 'transitorio');
       if (erro.tipo === 'fatal') return { tipo: 'fatal', mensagem: erro.message };
-      if (erro.tipo === 'limite' && opcoes.pararNoLimite) return { tipo: 'limite', mensagem: erro.message };
-      ultimoErro = erro.message;
-      if (tentativa < BACKOFF_MS.length) {
-        await new Promise((r) => setTimeout(r, BACKOFF_MS[tentativa]));
+      if (erro.tipo === 'truncado') return { tipo: 'truncado', mensagem: erro.message };
+      if (erro.tipo === 'limite') {
+        if (opcoes.pararNoLimite) return { tipo: 'limite', mensagem: erro.message };
+        // M1: backoff próprio do 429 (respeitando Retry-After quando vier).
+        // Esgotar as esperas longas indica cota diária, não RPM — pausa limpa
+        // em vez de marcar as frases como erro.
+        if (tentativaLimite >= backoffLimite.length) {
+          return { tipo: 'limite', mensagem: `${erro.message} As esperas longas não bastaram — o limite parece ser a cota diária.` };
+        }
+        await esperar(erro.retryAfterMs ?? backoffLimite[tentativaLimite], opcoes.cancelado);
+        tentativaLimite++;
+        continue;
       }
+      if (tentativa >= backoff.length) return { tipo: 'transitorio-esgotado', mensagem: erro.message };
+      await esperar(backoff[tentativa], opcoes.cancelado);
+      tentativa++;
     }
   }
-  return { tipo: 'transitorio-esgotado', mensagem: ultimoErro };
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ApontamentoQa,
   Capitulo,
   CapituloResumo,
   CasoTeste,
@@ -111,6 +112,7 @@ export function EditorCapitulo() {
   const [erroJob, setErroJob] = useState('');
   const [provedorEscolhido, setProvedorEscolhido] = useState('');
   const [mostrarConsistencia, setMostrarConsistencia] = useState(false);
+  const [mostrarQa, setMostrarQa] = useState(false);
   // Correção rápida (troca de termo detectada numa edição manual) — o banner
   // oferece aplicar a mesma troca nas outras frases do capítulo/obra.
   const [troca, setTroca] = useState<{ de: string; para: string; fraseId: number } | null>(null);
@@ -471,6 +473,14 @@ export function EditorCapitulo() {
                     </a>
                     <button
                       type="button"
+                      onClick={() => setMostrarQa(true)}
+                      className="rounded px-2 py-1.5 text-left text-sm text-tinta hover:bg-papel-fundo"
+                      title="Revisão por uma segunda IA (aponta problemas; não reescreve)"
+                    >
+                      QA por segunda IA…
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => retraduzirTudo(frases)}
                       disabled={traduzir.isPending}
                       className="rounded px-2 py-1.5 text-left text-sm text-erro hover:bg-selo-tint"
@@ -667,6 +677,19 @@ export function EditorCapitulo() {
           aoFechar={() => setMostrarConsistencia(false)}
           aoIrParaFrase={(fraseId) => {
             setMostrarConsistencia(false);
+            setFraseSelecionada(fraseId);
+            requestAnimationFrame(() =>
+              document.getElementById(`frase-${fraseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+            );
+          }}
+        />
+      )}
+
+      {mostrarQa && (
+        <ModalQa
+          capituloId={capituloId!}
+          aoFechar={() => setMostrarQa(false)}
+          aoIrParaFrase={(fraseId) => {
             setFraseSelecionada(fraseId);
             requestAnimationFrame(() =>
               document.getElementById(`frase-${fraseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
@@ -1447,6 +1470,161 @@ function ModalConsistencia({
             </p>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// QA por segunda IA (doc 09 §6): roda a auditoria e tria os apontamentos. A IA
+// só aponta — "Aplicar sugestão" é decisão humana (marca editado_manualmente).
+const TIPO_QA_ROTULO: Record<ApontamentoQa['tipo'], string> = {
+  glossario: 'Glossário',
+  'pronome-genero': 'Pronome/gênero',
+  repeticao: 'Repetição',
+  omissao: 'Omissão',
+  outro: 'Outro',
+};
+const SEV_QA: Record<ApontamentoQa['severidade'], { rotulo: string; classe: string }> = {
+  alta: { rotulo: 'alta', classe: 'bg-selo-tint text-selo-forte' },
+  media: { rotulo: 'média', classe: 'bg-ocre-tint text-ocre-forte' },
+  baixa: { rotulo: 'baixa', classe: 'bg-papel-fundo text-tinta-2' },
+};
+
+function ModalQa({
+  capituloId,
+  aoFechar,
+  aoIrParaFrase,
+}: {
+  capituloId: string;
+  aoFechar: () => void;
+  aoIrParaFrase: (fraseId: number) => void;
+}) {
+  const clienteQuery = useQueryClient();
+  const [erro, setErro] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['qa', capituloId],
+    queryFn: () => api<{ qa_em: string | null; apontamentos: ApontamentoQa[] }>('GET', `/capitulos/${capituloId}/qa`),
+    staleTime: 0,
+  });
+
+  const invalidar = () => {
+    clienteQuery.invalidateQueries({ queryKey: ['qa', capituloId] });
+    clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
+  };
+
+  const rodar = useMutation({
+    mutationFn: (forcar: boolean) =>
+      api('POST', `/capitulos/${capituloId}/qa${forcar ? '?forcar=1' : ''}`, {}),
+    onSuccess: () => {
+      setErro('');
+      invalidar();
+    },
+    onError: (e: any) => {
+      // par-igual (409): oferece forçar.
+      if (e?.status === 409) {
+        if (window.confirm('O QA usaria o mesmo modelo que traduziu o capítulo (pontos cegos iguais). Rodar assim mesmo?'))
+          rodar.mutate(true);
+      } else {
+        setErro((e as Error).message);
+      }
+    },
+  });
+
+  const triar = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: 'aceito' | 'descartado' }) =>
+      api('PUT', `/qa/${id}`, { status }),
+    onSuccess: invalidar,
+  });
+  const aplicar = useMutation({
+    mutationFn: (id: number) => api('POST', `/qa/${id}/aplicar`, {}),
+    onSuccess: invalidar,
+    onError: (e) => setErro((e as Error).message),
+  });
+
+  const apontamentos = data?.apontamentos ?? [];
+  const pendentes = apontamentos.filter((a) => a.status === 'pendente');
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
+      <div className="max-h-[80vh] w-[46rem] max-w-full space-y-3 overflow-auto cartao p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="font-semibold">QA por segunda IA</h3>
+            <p className="text-xs text-tinta-2">
+              Uma IA diferente da que traduziu aponta problemas de glossário, gênero, repetição e omissão. Ela não
+              reescreve — você decide cada apontamento.
+            </p>
+          </div>
+          <button onClick={aoFechar} className="text-tinta-2 hover:text-tinta">
+            ✕
+          </button>
+        </div>
+
+        {erro && <Aviso tipo="erro">{erro}</Aviso>}
+
+        <div className="flex items-center gap-3">
+          <Botao onClick={() => rodar.mutate(false)} disabled={rodar.isPending}>
+            {rodar.isPending ? 'Analisando…' : data?.qa_em ? 'Rodar QA de novo' : 'Rodar QA'}
+          </Botao>
+          {data?.qa_em && (
+            <span className="text-xs text-tinta-2">
+              Última passada: {new Date(data.qa_em + 'Z').toLocaleString('pt-BR')} · {pendentes.length} pendente
+              {pendentes.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+
+        {isLoading && <p className="text-sm text-tinta-2">Carregando…</p>}
+        {data && apontamentos.length === 0 && !rodar.isPending && (
+          <p className="text-sm text-tinta-2">
+            {data.qa_em ? 'Nenhum apontamento — a tradução passou no QA.' : 'QA ainda não rodou neste capítulo.'}
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {apontamentos.map((a) => {
+            const sev = SEV_QA[a.severidade];
+            const triado = a.status !== 'pendente';
+            return (
+              <div
+                key={a.id}
+                className={`rounded border border-linha/60 p-3 text-sm ${triado ? 'opacity-50' : ''}`}
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sev.classe}`}>{sev.rotulo}</span>
+                  <span className="text-xs font-medium text-tinta-2">{TIPO_QA_ROTULO[a.tipo]}</span>
+                  {triado && <span className="text-xs text-tinta-2">· {a.status === 'aceito' ? 'aceito' : 'descartado'}</span>}
+                </div>
+                <p>{a.observacao}</p>
+                {a.trecho_zh && <p className="texto-zh mt-1 text-xs text-tinta-2">{a.trecho_zh}</p>}
+                {a.sugestao && (
+                  <p className="mt-1 rounded bg-jade-tint px-2 py-1 text-xs text-jade-forte">Sugestão: {a.sugestao}</p>
+                )}
+                {!triado && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {a.sugestao && a.frase_id && (
+                      <Botao onClick={() => aplicar.mutate(a.id)} disabled={aplicar.isPending}>
+                        Aplicar sugestão
+                      </Botao>
+                    )}
+                    {a.frase_id && (
+                      <Botao variante="secundario" onClick={() => aoIrParaFrase(a.frase_id!)}>
+                        Ir à frase
+                      </Botao>
+                    )}
+                    <Botao variante="secundario" onClick={() => triar.mutate({ id: a.id, status: 'aceito' })}>
+                      Aceitar sem aplicar
+                    </Botao>
+                    <Botao variante="secundario" onClick={() => triar.mutate({ id: a.id, status: 'descartado' })}>
+                      Descartar
+                    </Botao>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -1,12 +1,60 @@
-// Conteúdo da primeira versão do prompt padrão global, semeada quando o banco
-// ainda não tem nenhuma. Versão genérica (sem obra): a Seção 6 fica como
-// modelo a preencher quando o prompt é adotado por uma obra.
+// Núcleo universal do prompt (doc 08): identidade do tradutor e regras zh→pt-BR
+// que valem para qualquer obra. A Seção 6 (diretrizes específicas da obra) NÃO
+// vive aqui — cada obra guarda só o seu "delta", inserido na composição no lugar
+// do marcador {{DELTA_OBRA}}.
 //
 // As instruções operacionais do aplicativo (formato numerado, termos_novos,
-// protocolo de revisão) NÃO entram aqui — são anexadas pelo servidor em
+// protocolo de revisão) também NÃO entram aqui — são anexadas pelo servidor em
 // server/src/ia/prompts.ts; incluí-las no prompt causaria duplicação.
 
 export const VERSAO_PROMPT_PADRAO_INICIAL = '1.0';
+
+/** Ponto onde a composição insere a Seção 6 (delta da obra). Se o usuário
+    remover o marcador ao editar o núcleo, o delta é anexado ao final. */
+export const MARCADOR_DELTA = '{{DELTA_OBRA}}';
+
+/** Núcleo ativo + delta da obra → prompt mãe completo, determinístico
+    (mesmas versões ⇒ mesmos bytes — pré-requisito do prompt caching). */
+export function comporPromptMae(nucleoConteudo: string, deltaConteudo: string): string {
+  const delta = deltaConteudo.trim();
+  const secao = delta
+    ? [
+        '## 6. DIRETRIZES ESPECÍFICAS DA OBRA',
+        '',
+        '*(Regras desta seção têm precedência sobre as demais quando conflitarem.)*',
+        '',
+        delta,
+      ].join('\n')
+    : '';
+  const nucleo = nucleoConteudo.trimEnd();
+  const composto = nucleo.includes(MARCADOR_DELTA)
+    ? nucleo.replace(MARCADOR_DELTA, secao ? `${secao}\n\n---` : '')
+    : secao
+      ? `${nucleo}\n\n---\n\n${secao}`
+      : nucleo;
+  // Sem delta, o marcador deixa linhas em branco sobrando; normalizar mantém a
+  // saída idêntica entre chamadas (não muda a semântica do markdown).
+  return composto.replace(/\n{3,}/g, '\n\n').trimEnd();
+}
+
+/** Separa um prompt completo legado em núcleo (com marcador no lugar da Seção 6)
+    e delta (o corpo da Seção 6). null se não houver um cabeçalho "## 6" para ancorar. */
+export function extrairCamadas(conteudo: string): { nucleo: string; delta: string } | null {
+  const cabecalho = conteudo.match(/^##\s*6[.:\s][^\n]*$/m);
+  if (!cabecalho || cabecalho.index === undefined) return null;
+  const inicio = cabecalho.index;
+  const aposCabecalho = inicio + cabecalho[0].length;
+  const proxima = conteudo.slice(aposCabecalho).search(/^##\s+/m);
+  const fim = proxima === -1 ? conteudo.length : aposCabecalho + proxima;
+  const delta = conteudo
+    .slice(aposCabecalho, fim)
+    .replace(/\n-{3,}\s*$/, '')
+    .trim();
+  const nucleo = (conteudo.slice(0, inicio) + MARCADOR_DELTA + '\n\n' + conteudo.slice(fim))
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd();
+  return { nucleo, delta };
+}
 
 export const PROMPT_PADRAO_INICIAL = `# Prompt de Tradução — Padrão Genérico
 
@@ -122,11 +170,7 @@ Identifique a função antes de traduzir — nunca o equivalente "padrão" por r
 
 ---
 
-## 6. DIRETRIZES ESPECÍFICAS DA OBRA
-
-*(Vazia no prompt padrão. Ao adotar este prompt para uma obra, registre aqui, em novas versões, o que for exclusivo dela: vícios de fala de personagens, tratamento entre personagens, tom do narrador, exceções às seções acima. Regras desta seção têm precedência sobre as anteriores quando conflitarem.)*
-
----
+${MARCADOR_DELTA}
 
 ## 7. PROIBIÇÕES ABSOLUTAS (resumo rápido)
 

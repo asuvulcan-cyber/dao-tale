@@ -1,0 +1,238 @@
+import { Type, type Schema } from '@google/genai';
+import type { z } from 'zod';
+import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
+import {
+  respostaExtrairTermosSchema,
+  respostaQaSchema,
+  respostaRefinarPromptSchema,
+  respostaRevisaoSchema,
+  respostaTraducaoSchema,
+} from './respostas.js';
+
+// Fonte única dos contratos de saída estruturada (M7 da auditoria). Cada
+// contrato é declarado UMA vez: o JSON Schema (com descrições e enums que
+// guiam o modelo) alimenta o tool use do Claude diretamente; o formato do
+// Gemini (`paraGemini`) e a instrução textual do compat (`instrucaoJson`) são
+// DERIVADOS dele. O Zod correspondente (respostas.ts) valida a fronteira —
+// de propósito mais frouxo que o schema de geração (ex.: categoria é enum na
+// geração, string na validação: um modelo criativo não derruba o bloco).
+
+export interface EsquemaJson {
+  type: string | string[];
+  description?: string;
+  enum?: string[];
+  properties?: Record<string, EsquemaJson>;
+  required?: string[];
+  items?: EsquemaJson;
+}
+
+export interface Contrato<T extends z.ZodTypeAny = z.ZodTypeAny> {
+  /** Nome da ferramenta no tool use do Claude. */
+  ferramenta: string;
+  descricao: string;
+  /** Fonte estrutural única (formato JSON Schema). */
+  schema: EsquemaJson;
+  /** Validação na fronteira — todo provedor passa a resposta por aqui. */
+  zod: T;
+  /** Linhas extras no fim da instrução textual (dicas de caso vazio etc.). */
+  notasInstrucao?: string[];
+}
+
+// ── Derivações ─────────────────────────────────────────────────────────────
+
+/** JSON Schema → formato `Schema` do Gemini (responseSchema). */
+export function paraGemini(e: EsquemaJson): Schema {
+  const tipos = Array.isArray(e.type) ? e.type : [e.type];
+  const nulavel = tipos.includes('null');
+  const tipo = tipos.find((t) => t !== 'null') ?? 'string';
+  const base: Schema = {
+    ...(e.description ? { description: e.description } : {}),
+    ...(nulavel ? { nullable: true } : {}),
+  };
+  switch (tipo) {
+    case 'object':
+      return {
+        ...base,
+        type: Type.OBJECT,
+        properties: Object.fromEntries(
+          Object.entries(e.properties ?? {}).map(([chave, valor]) => [chave, paraGemini(valor)]),
+        ),
+        ...(e.required?.length ? { required: e.required } : {}),
+      };
+    case 'array':
+      return { ...base, type: Type.ARRAY, ...(e.items ? { items: paraGemini(e.items) } : {}) };
+    case 'integer':
+      return { ...base, type: Type.INTEGER };
+    case 'number':
+      return { ...base, type: Type.NUMBER };
+    case 'boolean':
+      return { ...base, type: Type.BOOLEAN };
+    default:
+      return { ...base, type: Type.STRING, ...(e.enum ? { enum: e.enum } : {}) };
+  }
+}
+
+/** Esqueleto compacto de exemplo (instrução dos provedores compat). */
+function esqueleto(e: EsquemaJson): string {
+  const tipos = Array.isArray(e.type) ? e.type : [e.type];
+  const nulavel = tipos.includes('null');
+  const tipo = tipos.find((t) => t !== 'null') ?? 'string';
+  let corpo: string;
+  if (tipo === 'object') {
+    corpo = `{${Object.entries(e.properties ?? {})
+      .map(([chave, valor]) => `"${chave}": ${esqueleto(valor)}`)
+      .join(', ')}}`;
+  } else if (tipo === 'array') {
+    corpo = `[${e.items ? esqueleto(e.items) : ''}]`;
+  } else if (e.enum) {
+    corpo = e.enum.map((v) => `"${v}"`).join(' | ');
+  } else if (tipo === 'integer' || tipo === 'number') {
+    corpo = `<${e.description ?? 'número'}>`;
+  } else if (tipo === 'boolean') {
+    corpo = 'true | false';
+  } else {
+    corpo = `"<${e.description ?? '…'}>"`;
+  }
+  return nulavel ? `${corpo} ou null` : corpo;
+}
+
+/** JSON Schema → bloco "FORMATO DA RESPOSTA" para provedores sem saída
+ * estruturada garantida (compat: JSON mode + instrução no prompt). */
+export function instrucaoJson(contrato: Contrato): string {
+  return [
+    '## FORMATO DA RESPOSTA (obrigatório)',
+    'Responda APENAS com um objeto JSON válido, sem texto fora dele e sem cercas de código, no formato:',
+    esqueleto(contrato.schema),
+    ...(contrato.notasInstrucao ?? []),
+  ].join('\n');
+}
+
+// ── Contratos ──────────────────────────────────────────────────────────────
+
+const TERMO_NOVO: EsquemaJson = {
+  type: 'object',
+  properties: {
+    termo_zh: { type: 'string', description: 'termo em chinês, como no original' },
+    termo_pt: { type: 'string', description: 'tradução adotada' },
+    categoria: { type: 'string', enum: [...CATEGORIAS_GLOSSARIO] },
+    contexto: {
+      type: 'string',
+      description:
+        'descrição curta do termo em português (1 frase) para lembrança no glossário — o que é, papel na história; NÃO copie o trecho chinês',
+    },
+  },
+  required: ['termo_zh', 'termo_pt'],
+};
+
+export const CONTRATO_TRADUCAO: Contrato<typeof respostaTraducaoSchema> = {
+  ferramenta: 'entregar_traducoes',
+  descricao: 'Entrega as traduções do bloco e os termos novos detectados.',
+  zod: respostaTraducaoSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      traducoes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ordem: { type: 'integer', description: 'número da frase, exatamente como recebido' },
+            texto_pt: { type: 'string', description: 'tradução da frase em português brasileiro' },
+          },
+          required: ['ordem', 'texto_pt'],
+        },
+      },
+      termos_novos: { type: 'array', items: TERMO_NOVO },
+    },
+    required: ['traducoes', 'termos_novos'],
+  },
+  notasInstrucao: ['Se não houver termos novos, use "termos_novos": [].'],
+};
+
+export const CONTRATO_EXTRAIR_TERMOS: Contrato<typeof respostaExtrairTermosSchema> = {
+  ferramenta: 'entregar_termos',
+  descricao: 'Entrega os termos da frase que merecem entrar no glossário.',
+  zod: respostaExtrairTermosSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      termos: { type: 'array', items: TERMO_NOVO },
+    },
+    required: ['termos'],
+  },
+  notasInstrucao: ['Se não houver termos novos, use "termos": [].'],
+};
+
+export const CONTRATO_REVISAO: Contrato<typeof respostaRevisaoSchema> = {
+  ferramenta: 'entregar_revisao',
+  descricao: 'Entrega a análise estruturada do Protocolo de Revisão.',
+  zod: respostaRevisaoSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      trecho_zh: { type: 'string', description: 'trecho exato do chinês que fundamenta a análise' },
+      veredito: { type: 'string', enum: ['correto', 'incorreto'] },
+      justificativa: { type: 'string', description: 'explicação objetiva citando a regra aplicada' },
+      secao_regra: { type: 'string', description: "id curto da regra citada (ex.: '3.2-nomes-proprios') ou 'geral'" },
+      correcao_proposta: { type: ['string', 'null'], description: 'frase corrigida completa em PT-BR' },
+    },
+    required: ['trecho_zh', 'veredito', 'justificativa', 'secao_regra'],
+  },
+  notasInstrucao: ['Use null em correcao_proposta quando o veredito for "correto".'],
+};
+
+export const CONTRATO_QA: Contrato<typeof respostaQaSchema> = {
+  ferramenta: 'entregar_qa',
+  descricao: 'Entrega os apontamentos de QA da tradução (só aponta, não reescreve).',
+  zod: respostaQaSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      apontamentos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ordem: { type: 'integer', description: 'número da frase apontada, como recebido' },
+            tipo: {
+              type: 'string',
+              enum: ['glossario', 'pronome-genero', 'repeticao', 'omissao', 'outro'],
+            },
+            severidade: { type: 'string', enum: ['alta', 'media', 'baixa'] },
+            trecho_zh: { type: 'string', description: 'trecho do chinês que evidencia o problema' },
+            observacao: { type: 'string', description: 'o problema em uma frase' },
+            sugestao: { type: ['string', 'null'], description: 'tradução corrigida completa, ou null' },
+          },
+          required: ['ordem', 'tipo', 'observacao'],
+        },
+      },
+    },
+    required: ['apontamentos'],
+  },
+  notasInstrucao: ['Se a tradução estiver boa, use "apontamentos": []. NÃO reescreva a tradução — apenas aponte.'],
+};
+
+export const CONTRATO_REFINAR_PROMPT: Contrato<typeof respostaRefinarPromptSchema> = {
+  ferramenta: 'entregar_propostas',
+  descricao: 'Entrega as propostas de refinamento das diretrizes da obra.',
+  zod: respostaRefinarPromptSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      propostas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            secao_regra: { type: 'string', description: 'identificador dos casos que motivaram a proposta' },
+            regra_proposta: { type: 'string', description: 'texto pronto para entrar nas diretrizes da obra' },
+            justificativa: { type: 'string', description: 'uma frase ligando a regra aos casos' },
+          },
+          required: ['secao_regra', 'regra_proposta', 'justificativa'],
+        },
+      },
+    },
+    required: ['propostas'],
+  },
+  notasInstrucao: ['Se nada sustentar regra nova, use "propostas": [].'],
+};
