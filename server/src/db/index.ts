@@ -5,8 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { caminhoBanco } from '../config.js';
 import { PROMPT_PADRAO_INICIAL, VERSAO_PROMPT_PADRAO_INICIAL, extrairCamadas } from './promptPadraoInicial.js';
 import { reposLotes } from './repos.js';
+import { fazerBackupSincrono } from './backup.js';
 
 export type BancoDados = Database.Database;
+
+/** Gancho chamado com a lista de migrações pendentes, ANTES de aplicá-las
+ *  (doc 10 §1) — a produção usa isso para um snapshot pré-migração. Só ligado
+ *  por `banco()`; os testes chamam `abrirBanco` sem ele e não escrevem arquivos. */
+export type AntesDeMigrar = (db: BancoDados, pendentes: string[]) => void;
 
 const dirMigrations = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 
@@ -14,16 +20,29 @@ let instancia: BancoDados | null = null;
 
 /** Abre (ou devolve) o banco da aplicação, com migrações aplicadas. */
 export function banco(): BancoDados {
-  if (!instancia) instancia = abrirBanco(caminhoBanco());
+  if (!instancia) instancia = abrirBanco(caminhoBanco(), { antesDeMigrar: backupPreMigracao });
   return instancia;
 }
 
+// Snapshot síncrono do estado exato de antes da migração (protege contra uma
+// migração ruim, que um backup pós-migração não pegaria). Só para banco de
+// arquivo; nunca derruba o boot se falhar.
+function backupPreMigracao(db: BancoDados, pendentes: string[]): void {
+  if (db.memory) return;
+  try {
+    const destino = fazerBackupSincrono(db, 'pre-migracao');
+    console.log(`[dao-tale] backup pré-migração (${pendentes.length} pendente(s)): ${destino}`);
+  } catch (e) {
+    console.error('[dao-tale] falha no backup pré-migração:', (e as Error).message);
+  }
+}
+
 /** Abre um banco em qualquer caminho (':memory:' nos testes) e aplica as migrações. */
-export function abrirBanco(caminho: string): BancoDados {
+export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMigrar } = {}): BancoDados {
   const db = new Database(caminho);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
-  migrar(db);
+  migrar(db, opcoes.antesDeMigrar);
   semearPromptPadrao(db);
   migrarPadraoParaNucleo(db);
   // Lotes de uma sessão anterior não sobrevivem ao processo (doc 09 §5).
@@ -71,7 +90,7 @@ function migrarPadraoParaNucleo(db: BancoDados): void {
   ).run();
 }
 
-function migrar(db: BancoDados): void {
+function migrar(db: BancoDados, antesDeMigrar?: AntesDeMigrar): void {
   db.exec('CREATE TABLE IF NOT EXISTS migracoes (nome TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)');
   const aplicadas = new Set(
     (db.prepare('SELECT nome FROM migracoes').all() as { nome: string }[]).map((m) => m.nome),
@@ -82,6 +101,9 @@ function migrar(db: BancoDados): void {
     .sort();
   const pendentes = arquivos.filter((a) => !aplicadas.has(a));
   if (pendentes.length === 0) return;
+
+  // Snapshot do estado de antes da migração, se pedido (doc 10 §1).
+  antesDeMigrar?.(db, pendentes);
 
   // FKs desligadas durante migrações (padrão SQLite para recriar tabelas sem
   // disparar cascatas); a integridade é conferida ao final com foreign_key_check.

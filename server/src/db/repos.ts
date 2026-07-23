@@ -446,38 +446,41 @@ export const reposFrases = {
     return this.obter(db, id);
   },
 
-  /** Ocorrências de um termo nas traduções da obra (ou de um capítulo dela). */
-  contarTermo(
-    db: BancoDados,
-    opcoes: { obraId: number; capituloId?: number; de: string },
-  ): { frases: number; capitulos: number } {
-    return db
-      .prepare(
-        `SELECT COUNT(*) AS frases, COUNT(DISTINCT f.capitulo_id) AS capitulos
-         FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
-         WHERE c.obra_id = ? AND (? IS NULL OR f.capitulo_id = ?) AND instr(f.texto_pt, ?) > 0`,
-      )
-      .get(opcoes.obraId, opcoes.capituloId ?? null, opcoes.capituloId ?? null, opcoes.de) as {
-      frases: number;
-      capitulos: number;
-    };
-  },
-
-  /** Correção rápida: troca o termo em todas as traduções do escopo, marcando-as
-      como editadas manualmente (mesma semântica de editarTexto). */
+  /** Correção rápida (usada pelo EditorCapitulo): troca o termo nas traduções do
+      escopo, marcando as frases como editadas manualmente. A3: troca por PALAVRA
+      (fronteira Unicode, como substituirTermoGlossario) — nunca dentro de outra
+      palavra ("Rio" em "Riordan"). Com `previa`, só conta as frases REALMENTE
+      afetadas por essa regra, batendo com o que a aplicação de fato muda (a
+      prévia antiga contava frases por substring e subestimava/superestimava). */
   substituirTermo(
     db: BancoDados,
-    opcoes: { obraId: number; capituloId?: number; de: string; para: string },
+    opcoes: { obraId: number; capituloId?: number; de: string; para: string; previa?: boolean },
   ): { frases: number; capitulos: number } {
-    return db.transaction(() => {
-      const afetadas = this.contarTermo(db, opcoes);
-      db.prepare(
-        `UPDATE frases SET texto_pt = replace(texto_pt, ?, ?), editado_manualmente = 1
-         WHERE instr(texto_pt, ?) > 0
-           AND capitulo_id IN (SELECT id FROM capitulos WHERE obra_id = ? AND (? IS NULL OR id = ?))`,
-      ).run(opcoes.de, opcoes.para, opcoes.de, opcoes.obraId, opcoes.capituloId ?? null, opcoes.capituloId ?? null);
-      return afetadas;
-    })();
+    const candidatas = db
+      .prepare(
+        `SELECT f.id, f.texto_pt, f.capitulo_id FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
+         WHERE c.obra_id = ? AND (? IS NULL OR f.capitulo_id = ?) AND instr(f.texto_pt, ?) > 0`,
+      )
+      .all(opcoes.obraId, opcoes.capituloId ?? null, opcoes.capituloId ?? null, opcoes.de) as {
+      id: number;
+      texto_pt: string;
+      capitulo_id: number;
+    }[];
+
+    const afetadas: { id: number; texto: string; capitulo_id: number }[] = [];
+    for (const f of candidatas) {
+      const novo = trocaPorPalavra(f.texto_pt, opcoes.de, opcoes.para);
+      if (novo !== f.texto_pt) afetadas.push({ id: f.id, texto: novo, capitulo_id: f.capitulo_id });
+    }
+    const capitulos = new Set(afetadas.map((a) => a.capitulo_id)).size;
+
+    if (!opcoes.previa && afetadas.length > 0) {
+      const upd = db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?');
+      db.transaction(() => {
+        for (const a of afetadas) upd.run(a.texto, a.id);
+      })();
+    }
+    return { frases: afetadas.length, capitulos };
   },
 
   /** Troca a tradução de um termo do glossário nas frases JÁ traduzidas, com duas

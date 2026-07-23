@@ -26,3 +26,11 @@ export function caminhoBanco(): string {
 
 export const PORTA = Number(process.env.DAO_TALE_PORTA ?? 8317);
 export const HOST = '127.0.0.1';
+export const PORTA_PADRAO = 8317;
+
+/** Instância "real": sem redirecionamento de dados e na porta padrão. Quando
+ *  false, a UI mostra a tarja de instância de teste (doc 10 §2) — o histórico de
+ *  8317/8399/8412 já confundiu o usuário sobre qual instância estava rodando. */
+export function ehInstanciaCanonica(): boolean {
+  return !process.env.DAO_TALE_DIR && !process.env.DAO_TALE_BANCO && PORTA === PORTA_PADRAO;
+}

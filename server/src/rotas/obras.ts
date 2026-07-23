@@ -9,6 +9,7 @@ import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote }
 import { checkpointDaObra } from '../traducao/checkpoint.js';
 import { comporPromptMae, extrairCamadas } from '../db/promptPadraoInicial.js';
 import { exportarObra, importarObra } from '../db/portabilidade.js';
+import { backupSeArquivo } from '../db/backup.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { obterChave } from '../credenciais/index.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
@@ -252,6 +253,8 @@ export function rotasObras(db: BancoDados): Hono {
   app.post('/obras/importar', async (c) => {
     const dados = await c.req.json().catch(() => null);
     if (!dados) return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Envie o JSON exportado.' } }, 400);
+    // Snapshot antes de uma escrita em massa (doc 10 §1).
+    backupSeArquivo(db, 'pre-import');
     const resultado = importarObra(db, dados);
     if ('erro' in resultado) {
       return c.json({ erro: { codigo: 'import-invalido', mensagem: resultado.erro } }, 400);

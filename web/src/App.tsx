@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { CATEGORIAS_GLOSSARIO, type CategoriaGlossario } from '@dao-tale/shared';
+import { useQuery } from '@tanstack/react-query';
+import { CATEGORIAS_GLOSSARIO, type CategoriaGlossario, type EstadoSaude } from '@dao-tale/shared';
+import { api } from './api';
 
 // ── Tema (claro/escuro) ─────────────────────────────────────────────────────
 // Persiste a escolha explícita; sem escolha, segue o SO (prefers-color-scheme).
@@ -37,6 +39,37 @@ function BotaoTema() {
   );
 }
 
+/** Tarja de instância (doc 10 §2): mostra a porta e, quando NÃO é a instância
+    real (porta padrão + pasta canônica), avisa em destaque qual pasta está no ar
+    — resolve a confusão histórica entre 8317 (real) e 8399/8412 (testes). */
+function TarjaInstancia() {
+  const { data } = useQuery({
+    queryKey: ['saude'],
+    queryFn: () => api<EstadoSaude>('GET', '/saude'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  if (!data) return null;
+  if (data.canonico) {
+    return (
+      <span
+        className="hidden rounded-full border border-linha px-2 py-0.5 text-xs text-tinta-2 sm:inline"
+        title={`Pasta de dados: ${data.caminho_dados}`}
+      >
+        :{data.porta}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="rounded-full border border-selo bg-selo-tint px-2 py-0.5 text-xs font-medium text-selo-forte"
+      title={`Instância de teste — pasta de dados: ${data.caminho_dados}`}
+    >
+      instância de teste · :{data.porta}
+    </span>
+  );
+}
+
 export function Casca() {
   return (
     <div className="min-h-screen bg-papel text-tinta">
@@ -50,6 +83,7 @@ export function Casca() {
               道
             </span>
             <span className="font-display text-xl font-semibold tracking-tight">Dao Tale</span>
+            <TarjaInstancia />
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             <NavLink

@@ -770,3 +770,26 @@ describe('fluxo completo com provedor mock', () => {
     expect(v2.ativo).toBe(true);
   });
 });
+
+describe('operação e durabilidade (doc 10)', () => {
+  it('GET /saude expõe porta, pasta, canônico e resumo de backups', async () => {
+    const saude = await json(await chamar('GET', '/api/saude'));
+    expect(saude.ok).toBe(true);
+    expect(typeof saude.porta).toBe('number');
+    expect(typeof saude.caminho_dados).toBe('string');
+    // DAO_TALE_DIR está definido nos testes → não é a instância canônica.
+    expect(saude.canonico).toBe(false);
+    expect(saude.backups).toHaveProperty('total');
+  });
+
+  it('POST /sistema/backup cria um backup e o total sobe', async () => {
+    const antes = (await json(await chamar('GET', '/api/saude'))).backups.total as number;
+    const r = await chamar('POST', '/api/sistema/backup');
+    expect(r.status).toBe(200);
+    const corpo = await json(r);
+    expect(corpo.ok).toBe(true);
+    expect(corpo.backup.nome).toMatch(/^dao-tale-.*-manual\.db$/);
+    const depois = (await json(await chamar('GET', '/api/saude'))).backups.total as number;
+    expect(depois).toBeGreaterThan(antes);
+  });
+});

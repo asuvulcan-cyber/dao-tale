@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BancoDados } from './index.js';
-import { STATUS_CAPITULO, type Obra } from '@dao-tale/shared';
+import { FASES_TRADUCAO, STATUS_CAPITULO, type Obra } from '@dao-tale/shared';
 import { reposObras } from './repos.js';
 
 // Exportação/reimportação completa da obra (formato dao-tale-export v1, doc 03).
@@ -23,20 +23,29 @@ const exportSchema = z.object({
     capa_mime: z.string().nullable().default(null),
     provedor_padrao: z.string().nullable(),
     modelo_padrao: z.string().nullable(),
+    // default: compatibilidade com exports anteriores à migração 007. É uma
+    // decisão real do usuário (calibração × cruzeiro), então viaja no export.
+    fase_traducao: z.enum(FASES_TRADUCAO).default('calibracao'),
   }),
-  prompts: z.array(
-    z.object({
-      versao: z.string(),
-      conteudo: z.string(),
-      notas_versao: z.string().nullable(),
-      ativo: z.boolean(),
-      // default: compatibilidade com exports anteriores à migração 006.
-      // nucleo_id não viaja no export: é um id interno de outro banco — na
-      // reimportação o delta volta a compor com o núcleo ativo local.
-      tipo: z.enum(['completo', 'delta']).default('completo'),
-      criado_em: z.string(),
+  prompts: z
+    .array(
+      z.object({
+        versao: z.string(),
+        conteudo: z.string(),
+        notas_versao: z.string().nullable(),
+        ativo: z.boolean(),
+        // default: compatibilidade com exports anteriores à migração 006.
+        // nucleo_id não viaja no export: é um id interno de outro banco — na
+        // reimportação o delta volta a compor com o núcleo ativo local.
+        tipo: z.enum(['completo', 'delta']).default('completo'),
+        criado_em: z.string(),
+      }),
+    )
+    // B4: dois prompts ativos violariam o índice parcial (um ativo por obra) e
+    // virariam um 500 genérico — aqui vira um 400 amigável.
+    .refine((ps) => ps.filter((p) => p.ativo).length <= 1, {
+      message: 'Mais de um prompt marcado como ativo — só pode haver um por obra.',
     }),
-  ),
   capitulos: z.array(
     z.object({
       numero: z.number().int(),
@@ -134,6 +143,7 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
       capa_mime: capa?.mime ?? null,
       provedor_padrao: obra.provedor_padrao,
       modelo_padrao: obra.modelo_padrao,
+      fase_traducao: obra.fase_traducao,
     },
     prompts: prompts.map((p) => ({
       versao: p.versao,
@@ -220,8 +230,8 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
   return db.transaction((): Obra => {
     const infoObra = db
       .prepare(
-        `INSERT INTO obras (titulo, titulo_original, sinopse, tags, capa, capa_mime, provedor_padrao, modelo_padrao)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO obras (titulo, titulo_original, sinopse, tags, capa, capa_mime, provedor_padrao, modelo_padrao, fase_traducao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         dados.obra.titulo,
@@ -232,6 +242,7 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
         dados.obra.capa_mime,
         dados.obra.provedor_padrao,
         dados.obra.modelo_padrao,
+        dados.obra.fase_traducao,
       );
     const obraId = Number(infoObra.lastInsertRowid);
 

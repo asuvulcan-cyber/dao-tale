@@ -5,7 +5,8 @@ import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposUso } from '../db/repos.js';
 import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '../credenciais/index.js';
 import { listarProvedores, obterProvedor } from '../ia/fabrica.js';
-import { diretorioDados } from '../config.js';
+import { diretorioDados, ehInstanciaCanonica, PORTA } from '../config.js';
+import { fazerBackup, listarBackups } from '../db/backup.js';
 
 const configSchema = z.object({
   provedor_padrao: z.enum(PROVEDORES_IDS).optional(),
@@ -43,9 +44,30 @@ const configSchema = z.object({
 export function rotasSistema(db: BancoDados): Hono {
   const app = new Hono();
 
-  app.get('/saude', (c) =>
-    c.json({ ok: true, versao: '0.1.0', caminho_dados: diretorioDados() }),
-  );
+  // Estado da instância (doc 10 §2): alimenta a tarja "instância de teste" e a
+  // seção Dados. `canonico=false` avisa que não é a obra real na porta padrão.
+  app.get('/saude', (c) => {
+    const backups = listarBackups();
+    return c.json({
+      ok: true,
+      versao: '0.1.0',
+      porta: PORTA,
+      caminho_dados: diretorioDados(),
+      canonico: ehInstanciaCanonica(),
+      backups: { total: backups.length, ultimo: backups[0]?.em ?? null },
+    });
+  });
+
+  // Backup manual sob demanda (botão "Fazer backup agora").
+  app.post('/sistema/backup', async (c) => {
+    try {
+      const caminho = await fazerBackup(db, 'manual');
+      const info = listarBackups().find((b) => b.caminho === caminho) ?? null;
+      return c.json({ ok: true, backup: info });
+    } catch (e) {
+      return c.json({ erro: { codigo: 'backup', mensagem: (e as Error).message } }, 500);
+    }
+  });
 
   app.get('/configuracoes', async (c) => {
     const credenciais = await Promise.all(

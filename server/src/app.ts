@@ -9,6 +9,7 @@ import { rotasCapitulos } from './rotas/capitulos.js';
 import { rotasFrases } from './rotas/frases.js';
 import { rotasCuradoria } from './rotas/curadoria.js';
 import { rotasComparador } from './rotas/comparador.js';
+import { protecaoLocal } from './rotas/protecaoLocal.js';
 
 const dirWebDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 
@@ -25,6 +26,9 @@ const MIME: Record<string, string> = {
 
 export function criarApp(db: BancoDados): Hono {
   const app = new Hono();
+
+  // Proteção CSRF/DNS-rebinding da API local (doc 10 §3) — antes das rotas.
+  app.use('/api/*', protecaoLocal());
 
   app.route('/api', rotasSistema(db));
   app.route('/api', rotasObras(db));

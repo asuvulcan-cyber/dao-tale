@@ -330,6 +330,24 @@ export interface EstadoConfiguracoes {
   caminho_dados: string;
 }
 
+// GET /api/saude — estado da instância (doc 10 §2): porta, pasta de dados, se é a
+// instância canônica (real, porta padrão) e um resumo dos backups.
+export interface EstadoSaude {
+  ok: boolean;
+  versao: string;
+  porta: number;
+  caminho_dados: string;
+  canonico: boolean;
+  backups: { total: number; ultimo: string | null };
+}
+
+export interface InfoBackup {
+  nome: string;
+  caminho: string;
+  tamanho: number;
+  em: string;
+}
+
 // ── Protocolo de Revisão ───────────────────────────────────────────────────
 
 export interface RespostaRevisao {

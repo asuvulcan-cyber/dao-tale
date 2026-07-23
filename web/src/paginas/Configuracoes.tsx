@@ -1,8 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Configuracoes as Config, EstadoConfiguracoes, ProvedorId, UsoIaDia } from '@dao-tale/shared';
-import { api } from '../api';
+import type {
+  Configuracoes as Config,
+  EstadoConfiguracoes,
+  EstadoSaude,
+  InfoBackup,
+  ProvedorId,
+  UsoIaDia,
+} from '@dao-tale/shared';
+import { api, ErroApi } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
 import { IndicadorCota, NOME_CURTO } from '../componentes/IndicadorCota';
@@ -64,14 +71,73 @@ export function Configuracoes() {
 
       <UsoDeHoje />
 
-      <section className="cartao p-4 text-sm text-tinta-2">
-        <h2 className="olho mb-1">Dados</h2>
-        <p>
-          Banco de dados e arquivos do aplicativo: <code className="rounded bg-papel px-1">{estado.caminho_dados}</code>
-        </p>
-        <p className="mt-1">Para backup manual, copie esse diretório inteiro com o aplicativo fechado.</p>
-      </section>
+      <SecaoDados caminhoDados={estado.caminho_dados} />
     </div>
+  );
+}
+
+function SecaoDados({ caminhoDados }: { caminhoDados: string }) {
+  const clienteQuery = useQueryClient();
+  const { data: saude } = useQuery({
+    queryKey: ['saude'],
+    queryFn: () => api<EstadoSaude>('GET', '/saude'),
+  });
+
+  const backup = useMutation({
+    mutationFn: () => api<{ ok: boolean; backup: InfoBackup | null }>('POST', '/sistema/backup'),
+    onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['saude'] }),
+  });
+
+  const ultimo = saude?.backups.ultimo ? new Date(saude.backups.ultimo).toLocaleString() : null;
+
+  return (
+    <section className="cartao p-4 text-sm text-tinta-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="olho">Dados e backup</h2>
+        <Botao variante="secundario" onClick={() => backup.mutate()} disabled={backup.isPending}>
+          {backup.isPending ? 'Fazendo backup…' : 'Fazer backup agora'}
+        </Botao>
+      </div>
+
+      {saude && !saude.canonico && (
+        <Aviso tipo="info">
+          Esta é uma <strong>instância de teste</strong> (porta {saude.porta}), não a obra real na porta padrão.
+          Confira a pasta de dados abaixo antes de traduzir ou apagar algo.
+        </Aviso>
+      )}
+
+      <p>
+        Banco e arquivos do aplicativo: <code className="rounded bg-papel px-1">{caminhoDados}</code>
+        {saude && <> · porta <code className="rounded bg-papel px-1">{saude.porta}</code></>}
+      </p>
+
+      <p className="mt-1">
+        Backups automáticos em <code className="rounded bg-papel px-1">{caminhoDados}/backups</code> (no boot e antes
+        de lote/importação/migração; guardados os últimos 10).{' '}
+        {saude ? (
+          <>
+            {saude.backups.total} backup(s); {ultimo ? `último em ${ultimo}` : 'nenhum ainda'}.
+          </>
+        ) : null}
+      </p>
+
+      {backup.isSuccess && backup.data.backup && (
+        <Aviso tipo="ok">
+          Backup criado: <code className="rounded bg-papel px-1">{backup.data.backup.nome}</code>
+        </Aviso>
+      )}
+      {backup.isError && (
+        <Aviso tipo="erro">
+          Falha ao fazer backup: {backup.error instanceof ErroApi ? backup.error.message : 'erro inesperado'}
+        </Aviso>
+      )}
+
+      <p className="mt-2">
+        Para restaurar um backup, feche o aplicativo e rode <code className="rounded bg-papel px-1">npm run restaurar</code>{' '}
+        (lista os backups) ou <code className="rounded bg-papel px-1">npm run restaurar -- 0</code> (restaura o mais
+        recente). Uma cópia do banco atual é guardada antes de sobrescrever.
+      </p>
+    </section>
   );
 }
 

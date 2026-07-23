@@ -59,10 +59,13 @@ export function rotasFrases(db: BancoDados): Hono {
     if (!reposObras.obter(db, obraId)) {
       return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     }
-    const opcoes = { obraId, capituloId: corpo.data.capitulo_id, de: corpo.data.de, para: corpo.data.para };
-    const afetadas = corpo.data.previa
-      ? reposFrases.contarTermo(db, opcoes)
-      : reposFrases.substituirTermo(db, opcoes);
+    const afetadas = reposFrases.substituirTermo(db, {
+      obraId,
+      capituloId: corpo.data.capitulo_id,
+      de: corpo.data.de,
+      para: corpo.data.para,
+      previa: corpo.data.previa,
+    });
     return c.json(afetadas);
   });
 
