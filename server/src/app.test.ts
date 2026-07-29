@@ -753,6 +753,70 @@ describe('fluxo completo com provedor mock', () => {
     expect(mock.modelo).toBe('mock-v1');
   });
 
+  // Doc 11: telemetria de ponta a ponta com o provedor simulado — o consumo real
+  // de cada chamada precisa chegar ao painel sem gastar um centavo.
+  it('telemetria: traduzir grava tokens reais por capítulo e o painel os agrega', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'p'.repeat(400) } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。乙答。' }),
+    );
+    await chamar('POST', `/api/capitulos/${criado.capitulo.id}/traduzir`, { provedor: 'mock' });
+    for (let i = 0; i < 100; i++) {
+      const det = await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`));
+      if (!det.progresso.em_execucao && det.frases[0].status_traducao === 'traduzida') break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+
+    const t = await json(await chamar('GET', `/api/obras/${obra.id}/telemetria`));
+    expect(t.total.chamadas).toBeGreaterThanOrEqual(1);
+    expect(t.total.tokens_entrada).toBeGreaterThan(0);
+    expect(t.total.tokens_saida).toBeGreaterThan(0);
+    expect(t.por_papel.map((p: any) => p.papel)).toContain('traducao');
+    const cap = t.capitulos.find((c: any) => c.capitulo_id === criado.capitulo.id);
+    expect(cap.chamadas).toBeGreaterThanOrEqual(1);
+    // O simulado não tem preço cadastrado: custo desconhecido, nunca US$ 0,00.
+    expect(t.total.chamadas_sem_preco).toBe(t.total.chamadas);
+    expect(t.sem_preco).toEqual([{ provedor: 'mock', modelo: 'mock-v1', chamadas: t.total.chamadas }]);
+    expect(cap.custo_por_mil_frases).toBeNull();
+    // Qualidade na mesma linha do custo, vinda de onde já é computada.
+    expect(cap.frases_total).toBe(2);
+    expect(cap.frases_editadas).toBe(0);
+
+    const dia = await json(await chamar('GET', '/api/telemetria/dia'));
+    const mock = dia.provedores.find((p: any) => p.provedor === 'mock');
+    // Tentativas (cota) >= chamadas faturadas: a diferença é o desperdício.
+    expect(mock.tentativas).toBeGreaterThanOrEqual(mock.chamadas);
+  });
+
+  it('telemetria: cadastrar preço e recalcular preenche o custo do histórico', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'p'.repeat(400) } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。' }),
+    );
+    await chamar('POST', `/api/capitulos/${criado.capitulo.id}/traduzir`, { provedor: 'mock' });
+    for (let i = 0; i < 100; i++) {
+      const det = await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`));
+      if (!det.progresso.em_execucao && det.frases[0].status_traducao === 'traduzida') break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+
+    await chamar('PUT', '/api/configuracoes', {
+      precos_modelos: { 'mock:*': { entrada: 3, saida: 15 } },
+      taxa_usd_brl: 5.5,
+    });
+    const r = await json(await chamar('POST', '/api/telemetria/recalcular'));
+    expect(r.atualizados).toBeGreaterThanOrEqual(1);
+
+    const t = await json(await chamar('GET', `/api/obras/${obra.id}/telemetria`));
+    expect(t.total.chamadas_sem_preco).toBe(0);
+    expect(t.total.custo_usd).toBeGreaterThan(0);
+    expect(t.taxa_usd_brl).toBe(5.5);
+  });
+
   it('versionamento do prompt: só um ativo por vez', async () => {
     const obra = await json(
       await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'v1' } }),
@@ -782,14 +846,19 @@ describe('operação e durabilidade (doc 10)', () => {
     expect(saude.backups).toHaveProperty('total');
   });
 
-  it('POST /sistema/backup cria um backup e o total sobe', async () => {
+  it('POST /sistema/backup cria um backup e ele passa a ser o mais novo', async () => {
     const antes = (await json(await chamar('GET', '/api/saude'))).backups.total as number;
     const r = await chamar('POST', '/api/sistema/backup');
     expect(r.status).toBe(200);
     const corpo = await json(r);
     expect(corpo.ok).toBe(true);
     expect(corpo.backup.nome).toMatch(/^dao-tale-.*-manual\.db$/);
-    const depois = (await json(await chamar('GET', '/api/saude'))).backups.total as number;
-    expect(depois).toBeGreaterThan(antes);
+
+    const depois = await json(await chamar('GET', '/api/saude'));
+    // O total NÃO é asserção válida: a rotação (doc 10 §1) segura em 10, então a
+    // partir do 10º backup ele para de subir — o que a rota promete é que o
+    // backup novo existe e é o mais recente.
+    expect(depois.backups.total).toBeGreaterThanOrEqual(Math.min(antes + 1, 10));
+    expect(depois.backups.ultimo).toBe(corpo.backup.em);
   });
 });

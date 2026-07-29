@@ -36,6 +36,7 @@ import {
   CONTRATO_TRADUCAO,
   type Contrato,
 } from './contratos.js';
+import { usoDoClaude } from './uso.js';
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof Anthropic.APIError) {
@@ -134,7 +135,7 @@ export const provedorClaude: ProvedorIA = {
       }
       const bruto = extrairToolUse(resposta, CONTRATO_TRADUCAO.ferramenta);
       const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -156,7 +157,7 @@ export const provedorClaude: ProvedorIA = {
       });
       const bruto = extrairToolUse(resposta, CONTRATO_EXTRAIR_TERMOS.ferramenta);
       const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -178,7 +179,7 @@ export const provedorClaude: ProvedorIA = {
       });
       const bruto = extrairToolUse(resposta, CONTRATO_REVISAO.ferramenta);
       const dados = CONTRATO_REVISAO.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -200,7 +201,7 @@ export const provedorClaude: ProvedorIA = {
       });
       const bruto = extrairToolUse(resposta, CONTRATO_REFINAR_PROMPT.ferramenta);
       const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -225,7 +226,7 @@ export const provedorClaude: ProvedorIA = {
       }
       const bruto = extrairToolUse(resposta, CONTRATO_QA.ferramenta);
       const dados = CONTRATO_QA.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {

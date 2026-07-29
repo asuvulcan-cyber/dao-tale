@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { abrirBanco, type BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposObras } from '../db/repos.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco, type RespostaTraducaoBloco } from '../ia/provedor.js';
+import { USO_VAZIO } from '../ia/uso.js';
 import {
   _backoffsParaTeste,
   cancelarJob,
@@ -21,6 +22,7 @@ const respostaPadrao = (req: RequisicaoTraducaoBloco): RespostaTraducaoBloco => 
   traducoes: req.frases.map((f) => ({ ordem: f.ordem, texto_pt: `PT ${f.ordem}` })),
   termos_novos: [],
   bruta: '{}',
+  uso: USO_VAZIO,
 });
 
 // Chave assíncrona: reabre a janela da corrida C1 (checagem → await → registro)
@@ -258,7 +260,7 @@ describe('traduzirBlocoComRetry (M1)', () => {
   };
 
   it('transitório: tenta de novo e devolve ok', async () => {
-    const ok: RespostaTraducaoBloco = { traducoes: [], termos_novos: [], bruta: '{}' };
+    const ok: RespostaTraducaoBloco = { traducoes: [], termos_novos: [], bruta: '{}', uso: USO_VAZIO };
     const r = await traduzirBlocoComRetry(
       provedorQueFalha([new ErroProvedor('rede', 'transitorio')], ok),
       null,
@@ -286,7 +288,7 @@ describe('traduzirBlocoComRetry (M1)', () => {
 
   it('respeita Retry-After do provedor', async () => {
     const inicio = Date.now();
-    const ok: RespostaTraducaoBloco = { traducoes: [], termos_novos: [], bruta: '{}' };
+    const ok: RespostaTraducaoBloco = { traducoes: [], termos_novos: [], bruta: '{}', uso: USO_VAZIO };
     const r = await traduzirBlocoComRetry(
       provedorQueFalha([new ErroProvedor('429', 'limite', { retryAfterMs: 50 })], ok),
       null,

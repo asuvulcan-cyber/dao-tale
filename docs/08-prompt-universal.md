@@ -254,6 +254,13 @@ papel na revisão e o refinamento semiautomático.
 
 ## 10. Apêndice — medição de tokens antes/depois (obra real)
 
+> ⚠️ **Estes números são ESTIMATIVA.** Desde o Passo 5 (doc 11) o consumo real de cada
+> chamada é gravado, e a redução passou a ser **conferível**: rode
+> `npx tsx scripts/medir-prompt.ts <export.json> [capítulo] --real` para ver, ao lado da
+> estimativa, o acerto de cache medido em `revisao` e `extracao` — que é o mecanismo do
+> qual estas reduções dependem. Cache medido perto de 0% nesses papéis significa que a
+> economia abaixo **não está se realizando**.
+
 Script: `server/scripts/medir-prompt.ts` (roda com
 `npx tsx scripts/medir-prompt.ts <export.json> [capítulo]`). Fonte: export real de
 十日终焉 (capítulos 118 e 119; glossário com 125 termos). Contagem por estimativa

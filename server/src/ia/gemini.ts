@@ -35,6 +35,7 @@ import {
   CONTRATO_TRADUCAO,
   paraGemini,
 } from './contratos.js';
+import { usoDoGemini } from './uso.js';
 
 // Schemas no formato do Gemini (responseSchema), derivados da fonte única (M7).
 
@@ -143,7 +144,7 @@ export const provedorGemini: ProvedorIA = {
       }
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -167,7 +168,7 @@ export const provedorGemini: ProvedorIA = {
       });
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -191,7 +192,7 @@ export const provedorGemini: ProvedorIA = {
       });
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_REVISAO.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -215,7 +216,7 @@ export const provedorGemini: ProvedorIA = {
       });
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
@@ -242,7 +243,7 @@ export const provedorGemini: ProvedorIA = {
       }
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_QA.zod.parse(bruto);
-      return { ...dados, bruta: JSON.stringify(bruto) };
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata) };
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {

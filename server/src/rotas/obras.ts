@@ -14,6 +14,8 @@ import { obterProvedor } from '../ia/fabrica.js';
 import { obterChave } from '../credenciais/index.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { FraseParaTraduzir } from '../ia/provedor.js';
+import { registrarEvento } from '../telemetria/registrar.js';
+import { telemetriaDaObra } from '../telemetria/painel.js';
 
 const criarObraSchema = z.object({
   titulo: z.string().min(1),
@@ -160,6 +162,16 @@ export function rotasObras(db: BancoDados): Hono {
     const obra = reposObras.obter(db, id);
     if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     return c.json(checkpointDaObra(db, id, obra.fase_traducao, reposConfig.obterTodas(db)));
+  });
+
+  // Telemetria da obra (doc 11 §5): custo medido por capítulo lado a lado com a
+  // qualidade, e os veredictos de cache e de lote.
+  app.get('/obras/:id/telemetria', (c) => {
+    const id = Number(c.req.param('id'));
+    if (!reposObras.obter(db, id)) {
+      return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    }
+    return c.json(telemetriaDaObra(db, id));
   });
 
   app.put('/obras/:id/fase', async (c) => {
@@ -383,6 +395,14 @@ export function rotasObras(db: BancoDados): Hono {
         deltaAtual: prompt.prompt.tipo === 'delta' ? prompt.prompt.conteudo : (extrairCamadas(prompt.prompt.conteudo)?.delta ?? ''),
         casos,
       });
+      registrarEvento(db, {
+        obra_id: obraId,
+        capitulo_id: null,
+        papel: 'refinamento',
+        provedor: provedorId,
+        modelo,
+        uso: resposta.uso,
+      });
       return c.json({ propostas: resposta.propostas, recorrencias, provedor: provedorId, modelo });
     } catch (e) {
       return c.json({ erro: { codigo: 'provedor', mensagem: (e as Error).message } }, 502);
@@ -507,6 +527,16 @@ export function rotasObras(db: BancoDados): Hono {
         caudaAnterior: [],
         frases,
         proximas: [],
+      });
+      // No cadastro de obra nova ainda não existe obra_id: o gasto entra no total
+      // do dia (e na conta da cota) sem ser atribuível a uma obra.
+      registrarEvento(db, {
+        obra_id: obra?.id ?? null,
+        capitulo_id: null,
+        papel: 'titulo',
+        provedor: provedorId,
+        modelo,
+        uso: resposta.uso,
       });
       const porOrdem = new Map<number, string>();
       for (const t of resposta.traducoes) {

@@ -15,6 +15,7 @@ import { TermosSugeridos } from './paginas/TermosSugeridos';
 import { Configuracoes } from './paginas/Configuracoes';
 import { Docs } from './paginas/Docs';
 import { ComparadorModelos } from './paginas/ComparadorModelos';
+import { Telemetria } from './paginas/Telemetria';
 
 const clienteQuery = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -40,6 +41,7 @@ const rotas = createBrowserRouter([
           { path: 'testes', element: <BancoTestes /> },
           { path: 'termos', element: <TermosSugeridos /> },
           { path: 'comparar', element: <ComparadorModelos /> },
+          { path: 'custos', element: <Telemetria /> },
         ],
       },
     ],

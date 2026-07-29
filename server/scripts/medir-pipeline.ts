@@ -1,6 +1,10 @@
 // Medição de custo do pipeline em fases (doc 09 §12).
 //
-// Uso:  npx tsx scripts/medir-pipeline.ts [caminho-do-export.json] [numero-do-capitulo]
+// Uso:  npx tsx scripts/medir-pipeline.ts [caminho-do-export.json] [numero-do-capitulo] [--real]
+//
+// `--real` acrescenta a CONFERÊNCIA contra o que foi medido de verdade
+// (eventos_ia, doc 11): as projeções abaixo passam a ser conferíveis em vez de
+// aceitas por fé. Abre o banco somente para leitura.
 //
 // A pergunta que este script responde (premissa do doc 09 §1): a passada de QA
 // custa quanto por capítulo, e o lote compensa em dinheiro? A revisão humana é
@@ -28,9 +32,12 @@ import {
 } from '../src/ia/prompts.js';
 import { comporPromptMae, extrairCamadas } from '../src/db/promptPadraoInicial.js';
 import { obterChave } from '../src/credenciais/index.js';
+import { abrirSomenteLeitura, acertoDeCache, formatarUsd, medidoPorPapel } from './medido.js';
 
-const caminho = process.argv[2] ?? path.join(process.cwd(), '..', 'dez-dias-ate-o-fim-backup.json');
-const numeroCapitulo = process.argv[3] ? Number(process.argv[3]) : undefined;
+const modoReal = process.argv.includes('--real');
+const argumentos = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const caminho = argumentos[0] ?? path.join(process.cwd(), '..', 'dez-dias-ate-o-fim-backup.json');
+const numeroCapitulo = argumentos[1] ? Number(argumentos[1]) : undefined;
 
 const dados = JSON.parse(fs.readFileSync(caminho, 'utf-8'));
 const promptCompletoLegado: string = dados.prompts.find((p: any) => p.ativo)!.conteudo;
@@ -181,3 +188,57 @@ console.log(`     espera 30/60/120 s (ou o Retry-After), poupando as tentativas 
 console.log(`\nLeitura: a tradução em lote não fica mais cara por token; o QA é uma compra separada (~+${((100 * custoQa) / custoTrad).toFixed(0)}%),`);
 console.log(`ligável por capítulo. O ganho financeiro do lote vem de (a) cache quente entre capítulos emendados e`);
 console.log(`(b) surfar as cotas gratuitas via cadeia de failover ordenada por custo — ambos fora da métrica por token.`);
+
+// ── Conferência contra o medido (doc 11 §6) ────────────────────────────────
+// Tudo acima é ESTIMATIVA (proxy local ou count_tokens sobre o texto montado).
+// Daqui para baixo é MEDIDO: o que os provedores reportaram e foi gravado.
+
+if (modoReal) {
+  const db = abrirSomenteLeitura();
+  if (db) {
+    const linhas = medidoPorPapel(db, capitulo.numero);
+    console.log(`\n${'='.repeat(72)}`);
+    console.log(`CONFERÊNCIA CONTRA O MEDIDO — capítulo ${capitulo.numero} (eventos_ia, somente leitura)`);
+    if (linhas.length === 0) {
+      console.log('  Nenhuma chamada registrada para este capítulo ainda.');
+    } else {
+      for (const l of linhas) {
+        const entradaTotal = l.tokens_entrada + l.tokens_cache_leitura + l.tokens_cache_criacao;
+        const acerto = acertoDeCache(l);
+        console.log(
+          `  ${l.papel.padEnd(12)} ${String(l.chamadas).padStart(3)} chamada(s) · entrada ${entradaTotal} tok ` +
+            `(cache lido ${l.tokens_cache_leitura}${acerto !== null ? `, ${acerto.toFixed(0)}% de acerto` : ''}) · ` +
+            `saída ${l.tokens_saida} tok · ${formatarUsd(l.custo_usd, l.chamadas_sem_preco)}`,
+        );
+      }
+
+      const medTrad = linhas.find((l) => l.papel === 'traducao');
+      const medQa = linhas.find((l) => l.papel === 'qa');
+      if (medTrad) {
+        const entradaMedida = medTrad.tokens_entrada + medTrad.tokens_cache_leitura + medTrad.tokens_cache_criacao;
+        const desvio = (100 * (entradaMedida - custoTrad)) / custoTrad;
+        console.log(
+          `\n  Tradução: estimado ${custoTrad} tok (ponderado por cache) vs. medido ${entradaMedida} tok de entrada ` +
+            `→ ${desvio >= 0 ? '+' : ''}${desvio.toFixed(0)}% de desvio da estimativa.`,
+        );
+      }
+      if (medTrad && medQa) {
+        const entradaTrad = medTrad.tokens_entrada + medTrad.tokens_cache_leitura + medTrad.tokens_cache_criacao;
+        const entradaQa = medQa.tokens_entrada + medQa.tokens_cache_leitura + medQa.tokens_cache_criacao;
+        const overheadMedido = (100 * entradaQa) / entradaTrad;
+        console.log(
+          `  QA: overhead projetado +${((100 * custoQa) / custoTrad).toFixed(0)}% (doc 09 §15) vs. MEDIDO ` +
+            `+${overheadMedido.toFixed(0)}% sobre a tradução deste capítulo.`,
+        );
+      } else if (!medQa) {
+        console.log('\n  QA nunca rodou neste capítulo — o +140% do doc 09 §15 segue sendo projeção.');
+      }
+      console.log(
+        '  2ª passagem: segue PROJEÇÃO — a Etapa 5 não existe, não há nada medido para conferir.',
+      );
+    }
+    db.close();
+  }
+} else {
+  console.log('\n(rode com --real para conferir estes números contra o que foi medido de verdade — doc 11 §6)');
+}

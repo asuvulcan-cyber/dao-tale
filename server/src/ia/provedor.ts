@@ -1,5 +1,20 @@
 import type { EntradaGlossario, ModeloInfo, ProvedorId, RespostaRevisao } from '@dao-tale/shared';
 
+// ── Consumo real de uma chamada (telemetria, doc 11 §1) ────────────────────
+// Toda resposta de provedor carrega o `usage` que a API devolveu, normalizado:
+// `tokens_entrada` é sempre a entrada paga a PREÇO CHEIO (sem o que veio do
+// cache), independente de o provedor somar ou não o cache no prompt. `null`
+// significa "a API não expõe este campo" — diferente de 0, que é medição.
+
+export interface UsoChamada {
+  tokens_entrada: number | null;
+  tokens_saida: number | null;
+  /** Entrada servida do cache (~0,1× do preço de entrada). */
+  tokens_cache_leitura: number | null;
+  /** Entrada gravada no cache (~1,25× do preço de entrada). */
+  tokens_cache_criacao: number | null;
+}
+
 // ── Requisições montadas pela orquestração (independentes de provedor) ─────
 
 export interface FraseParaTraduzir {
@@ -47,6 +62,7 @@ export interface RespostaTraducaoBloco {
   termos_novos: TermoNovoDetectado[];
   /** JSON bruto retornado pelo provedor. */
   bruta: string;
+  uso: UsoChamada;
 }
 
 export interface RequisicaoRevisao {
@@ -64,6 +80,7 @@ export interface RequisicaoRevisao {
 
 export interface RespostaRevisaoProvedor extends RespostaRevisao {
   bruta: string;
+  uso: UsoChamada;
 }
 
 // ── Extração exaustiva de termos de uma frase (curadoria manual do glossário) ─
@@ -86,6 +103,7 @@ export interface RequisicaoExtrairTermos {
 export interface RespostaExtrairTermos {
   termos: TermoNovoDetectado[];
   bruta: string;
+  uso: UsoChamada;
 }
 
 // ── Refinamento do prompt da obra (versionamento semiautomático, doc 08 §7) ─
@@ -118,6 +136,7 @@ export interface PropostaRefinamento {
 export interface RespostaRefinarPrompt {
   propostas: PropostaRefinamento[];
   bruta: string;
+  uso: UsoChamada;
 }
 
 // ── QA por segunda IA (doc 09 §6) ──────────────────────────────────────────
@@ -156,6 +175,7 @@ export interface ApontamentoQa {
 export interface RespostaQa {
   apontamentos: ApontamentoQa[];
   bruta: string;
+  uso: UsoChamada;
 }
 
 // ── Erros classificados (doc 05 §2: transitório vs fatal; 'limite' é o 429 —

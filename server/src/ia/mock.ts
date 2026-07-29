@@ -6,7 +6,9 @@ import {
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type UsoChamada,
 } from './provedor.js';
+import { estimarTokens } from './uso.js';
 
 // Provedor simulado (decisão D4): permite desenvolver, demonstrar e testar todo o
 // fluxo do aplicativo sem chave de API e sem rede. Determinístico de propósito.
@@ -16,6 +18,42 @@ import {
 const latenciaMs = () => Number(process.env.DAO_TALE_MOCK_LATENCIA ?? 150);
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// ── Consumo simulado (doc 11 §1) ───────────────────────────────────────────
+// O mock reporta `uso` como um provedor real: tokens estimados pelo proxy local
+// e o CACHE SIMULADO por prefixo de sistema — 1ª chamada com aquele prompt mãe
+// escreve o cache, as seguintes leem. É o que permite verificar o painel de
+// custo de ponta a ponta sem gastar um centavo; o painel rotula linhas do
+// provedor simulado como tais e, sem preço cadastrado, elas não entram em
+// nenhum total de dinheiro.
+
+const prefixosVistos = new Set<string>();
+
+/** Somente para testes: zera o cache simulado entre casos. */
+export function _zerarCacheMock(): void {
+  prefixosVistos.clear();
+}
+
+function hash(texto: string): string {
+  let h = 5381;
+  for (let i = 0; i < texto.length; i++) h = ((h << 5) + h + texto.charCodeAt(i)) | 0;
+  return String(h);
+}
+
+function usoSimulado(papel: string, req: { promptMae?: string }, resposta: unknown): UsoChamada {
+  const sistema = estimarTokens(req.promptMae ?? '');
+  // O resto da requisição (glossário, frases, cauda) é a parte que nunca cacheia.
+  const usuario = Math.max(0, estimarTokens(JSON.stringify(req)) - sistema);
+  const chave = `${papel}:${hash(req.promptMae ?? '')}`;
+  const quente = prefixosVistos.has(chave);
+  prefixosVistos.add(chave);
+  return {
+    tokens_entrada: usuario,
+    tokens_saida: estimarTokens(JSON.stringify(resposta)),
+    tokens_cache_leitura: quente ? sistema : 0,
+    tokens_cache_criacao: quente ? 0 : sistema,
+  };
+}
 
 export const provedorMock: ProvedorIA = {
   id: 'mock',
@@ -57,7 +95,8 @@ export const provedorMock: ProvedorIA = {
             },
           ]
         : [];
-    return { traducoes, termos_novos, bruta: JSON.stringify({ traducoes, termos_novos }) };
+    const dados = { traducoes, termos_novos };
+    return { ...dados, bruta: JSON.stringify(dados), uso: usoSimulado('traducao', req, dados) };
   },
 
   async extrairTermos(_chave, req: RequisicaoExtrairTermos) {
@@ -75,7 +114,7 @@ export const provedorMock: ProvedorIA = {
         categoria: 'outro',
         contexto: 'Descrição simulada para curadoria do glossário.',
       }));
-    return { termos, bruta: JSON.stringify({ termos }) };
+    return { termos, bruta: JSON.stringify({ termos }), uso: usoSimulado('extracao', req, { termos }) };
   },
 
   async refinarPrompt(_chave, req: RequisicaoRefinarPrompt) {
@@ -87,7 +126,7 @@ export const provedorMock: ProvedorIA = {
       regra_proposta: `[regra simulada] Ao cair no caso "${secao}", aplique a correção validada pelo revisor.`,
       justificativa: `[simulado] ${req.casos.filter((c) => c.secao_regra === secao).length} casos recorrentes nesta seção.`,
     }));
-    return { propostas, bruta: JSON.stringify({ propostas }) };
+    return { propostas, bruta: JSON.stringify({ propostas }), uso: usoSimulado('refinamento', req, { propostas }) };
   },
 
   async analisarQa(_chave, req: RequisicaoQa) {
@@ -106,7 +145,7 @@ export const provedorMock: ProvedorIA = {
         observacao: '[simulado] Possível omissão de trecho na tradução — conferir.',
         sugestao: null,
       }));
-    return { apontamentos, bruta: JSON.stringify({ apontamentos }) };
+    return { apontamentos, bruta: JSON.stringify({ apontamentos }), uso: usoSimulado('qa', req, { apontamentos }) };
   },
 
   async revisarFrase(_chave, req: RequisicaoRevisao) {
@@ -129,6 +168,6 @@ export const provedorMock: ProvedorIA = {
           secao_regra: 'geral',
           correcao_proposta: null,
         };
-    return { ...dados, bruta: JSON.stringify(dados) };
+    return { ...dados, bruta: JSON.stringify(dados), uso: usoSimulado('revisao', req, dados) };
   },
 };

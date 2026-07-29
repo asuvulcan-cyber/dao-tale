@@ -7,6 +7,7 @@ import { obterProvedor } from '../ia/fabrica.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
+import { registrarEvento } from '../telemetria/registrar.js';
 
 const editarFraseSchema = z.object({ texto_pt: z.string() });
 
@@ -186,6 +187,14 @@ export function rotasFrases(db: BancoDados): Hono {
         },
         pergunta: corpo.data.pergunta,
       });
+      registrarEvento(db, {
+        obra_id: obra.id,
+        capitulo_id: frase.capitulo_id,
+        papel: 'revisao',
+        provedor: provedorId,
+        modelo,
+        uso: resposta.uso,
+      });
 
       const caso = reposTestes.criar(db, {
         frase_id: frase.id,
@@ -254,6 +263,14 @@ export function rotasFrases(db: BancoDados): Hono {
         glossario,
         glossarioNoUsuario: config.glossario_relevante,
         frase: { texto_zh: frase.texto_zh, texto_pt: frase.texto_pt },
+      });
+      registrarEvento(db, {
+        obra_id: obra.id,
+        capitulo_id: frase.capitulo_id,
+        papel: 'extracao',
+        provedor: provedorId,
+        modelo,
+        uso: resposta.uso,
       });
       // Rede de segurança: descarta o que já está catalogado ou já é sugestão
       // pendente (o modelo pode repetir apesar da instrução).

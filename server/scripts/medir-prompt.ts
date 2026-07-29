@@ -1,6 +1,10 @@
 // Medição de tokens antes/depois do prompt em camadas (doc 08 §8).
 //
-// Uso:  npx tsx scripts/medir-prompt.ts [caminho-do-export.json] [numero-do-capitulo]
+// Uso:  npx tsx scripts/medir-prompt.ts [caminho-do-export.json] [numero-do-capitulo] [--real]
+//
+// `--real` acrescenta a conferência contra o medido (eventos_ia, doc 11 §6): as
+// reduções abaixo dependiam do cache passar a acertar na revisão e na extração —
+// e isso agora é verificável em vez de presumido.
 //
 // Lê um export dao-tale (obra real), remonta os blocos como o job faria e compara:
 //   ANTES  = arquitetura anterior (revisão/extração com glossário no sistema, sem cache)
@@ -26,9 +30,12 @@ import {
 } from '../src/ia/prompts.js';
 import { comporPromptMae, extrairCamadas } from '../src/db/promptPadraoInicial.js';
 import { obterChave } from '../src/credenciais/index.js';
+import { abrirSomenteLeitura, acertoDeCache, formatarUsd, medidoPorPapel } from './medido.js';
 
-const caminho = process.argv[2] ?? path.join(process.cwd(), '..', 'dez-dias-ate-o-fim-backup.json');
-const numeroCapitulo = process.argv[3] ? Number(process.argv[3]) : undefined;
+const modoReal = process.argv.includes('--real');
+const argumentos = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const caminho = argumentos[0] ?? path.join(process.cwd(), '..', 'dez-dias-ate-o-fim-backup.json');
+const numeroCapitulo = argumentos[1] ? Number(argumentos[1]) : undefined;
 
 const dados = JSON.parse(fs.readFileSync(caminho, 'utf-8'));
 const promptCompletoLegado: string = dados.prompts.find((p: any) => p.ativo)!.conteudo;
@@ -215,3 +222,60 @@ const custoExtDepois = custoSequencia(extDepois, 'estavel');
 console.log(`  custo efetivo ANTES (glossário inteiro no sistema, sem cache, M2): ${custoExtAntes} tokens`);
 console.log(`  custo efetivo DEPOIS (só termos da frase; sistema cacheado):       ${custoExtDepois} tokens`);
 console.log(`  redução: ${(100 * (1 - custoExtDepois / custoExtAntes)).toFixed(1)}%`);
+
+// ── Conferência contra o medido (doc 11 §6) ────────────────────────────────
+// As reduções acima são ESTIMATIVA: elas valem porque o sistema passou a ser
+// estável e cacheável na revisão e na extração. Se o cache não estiver
+// acertando de verdade nesses papéis, a economia não existe — e é exatamente
+// isso que a conferência mostra.
+
+if (modoReal) {
+  const db = abrirSomenteLeitura();
+  if (db) {
+    const linhas = medidoPorPapel(db);
+    console.log(`\n${'='.repeat(72)}`);
+    console.log('CONFERÊNCIA CONTRA O MEDIDO (eventos_ia, todos os capítulos, somente leitura)');
+    if (linhas.length === 0) {
+      console.log('  Nenhuma chamada registrada ainda.');
+    } else {
+      for (const l of linhas) {
+        const acerto = acertoDeCache(l);
+        console.log(
+          `  ${l.papel.padEnd(12)} ${String(l.chamadas).padStart(4)} chamada(s) · ` +
+            `acerto de cache ${acerto === null ? 'n/d' : `${acerto.toFixed(0)}%`} · ` +
+            `escrita de cache ${l.tokens_cache_criacao} tok · ${formatarUsd(l.custo_usd, l.chamadas_sem_preco)}`,
+        );
+      }
+      for (const papel of ['revisao', 'extracao']) {
+        const l = linhas.find((x) => x.papel === papel);
+        if (!l) {
+          console.log(`\n  ${papel}: nenhuma chamada medida — a redução do doc 08 segue sendo estimativa.`);
+          continue;
+        }
+        const acerto = acertoDeCache(l);
+        const rotulo = papel === 'revisao' ? 'revisão (−68% estimado)' : 'extração (−82% estimado)';
+        if (l.chamadas < 2) {
+          // Uma chamada só sempre escreve sem ler: não houve anterior para
+          // aproveitar. Não é sintoma de nada — é amostra de tamanho 1.
+          console.log(
+            `\n  ${rotulo}: só ${l.chamadas} chamada medida — amostra insuficiente para julgar o cache ` +
+              '(a estreia de um prefixo sempre escreve sem ler).',
+          );
+        } else if (acerto === null || acerto < 20) {
+          console.log(
+            `\n  ${rotulo}: acerto de cache MEDIDO em ${acerto === null ? 'n/d' : `${acerto.toFixed(0)}%`} em ` +
+              `${l.chamadas} chamadas — a economia estimada NÃO está se realizando; investigue o prefixo estável.`,
+          );
+        } else {
+          console.log(
+            `\n  ${rotulo}: acerto de cache MEDIDO em ${acerto.toFixed(0)}% em ${l.chamadas} chamadas — ` +
+              'o mecanismo que sustenta a redução está funcionando.',
+          );
+        }
+      }
+    }
+    db.close();
+  }
+} else {
+  console.log('\n(rode com --real para conferir estes números contra o que foi medido de verdade — doc 11 §6)');
+}

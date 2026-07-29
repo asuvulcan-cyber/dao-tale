@@ -520,6 +520,14 @@ recusando par igual/sem-par e rodando sob `?forcar=1`).
 
 ## 15. Apêndice — custo por capítulo (obra real)
 
+> ⚠️ **Estes números são ESTIMATIVA.** Desde o Passo 5 (doc 11) cada chamada de IA é
+> gravada com o consumo que o provedor reportou. Rode
+> `npx tsx scripts/medir-pipeline.ts <export.json> [capítulo] --real` para ver a
+> **CONFERÊNCIA CONTRA O MEDIDO**: o overhead do QA projetado aqui (+140%) contra o
+> medido, e o desvio da estimativa de tradução. A aba **Custos** de cada obra mostra o
+> mesmo, sempre medido. A projeção da 2ª passagem (+80–95%) segue projeção — a Etapa 5
+> não existe, não há o que medir.
+
 Script: `server/scripts/medir-pipeline.ts` (roda com
 `npx tsx scripts/medir-pipeline.ts <export.json> [capítulo]`). Fonte: export real
 de 十日终焉 (capítulos 118 e 119; glossário com 125 termos). Contagem por

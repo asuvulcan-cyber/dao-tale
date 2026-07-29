@@ -7,6 +7,7 @@ import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 import { montarBloco } from './bloco.js';
 import { varrerConsistencia } from './consistencia.js';
+import { registrarEvento } from '../telemetria/registrar.js';
 
 // Orquestração da tradução em blocos (doc 05 §2, fases no doc 09).
 // O estado durável é frases.status_traducao — este módulo só mantém em memória
@@ -301,6 +302,17 @@ async function executarJob(
         emitir(capituloId, { tipo: 'progresso', dados: { ...job.progresso } });
         continue;
       }
+
+      // Consumo real da chamada (doc 11 §4), gravado antes de persistir a
+      // tradução: o que foi pago fica no livro-caixa mesmo se o resto falhar.
+      registrarEvento(db, {
+        obra_id: capitulo.obra_id,
+        capitulo_id: capituloId,
+        papel: 'traducao',
+        provedor: ctx.provedorId,
+        modelo: ctx.modelo,
+        uso: resultado.resposta.uso,
+      });
 
       // Título traduzido vem como ordem -1; se o modelo não devolver, tenta no próximo bloco.
       // Num job só de título (bloco vazio), qualquer tradução retornada só pode

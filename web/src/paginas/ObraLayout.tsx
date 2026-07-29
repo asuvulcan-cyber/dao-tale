@@ -24,6 +24,7 @@ export function ObraLayout() {
     { rota: `/obras/${obraId}/prompt`, texto: 'Prompt mãe' },
     { rota: `/obras/${obraId}/testes`, texto: 'Banco de testes' },
     { rota: `/obras/${obraId}/comparar`, texto: 'Comparar modelos' },
+    { rota: `/obras/${obraId}/custos`, texto: 'Custos' },
   ];
 
   return (

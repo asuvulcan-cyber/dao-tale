@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RequisicaoQa } from '../ia/provedor.js';
 import { abrirBanco, type BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposObras, reposQa } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposFrases, reposObras, reposQa, reposUso } from '../db/repos.js';
+import { reposEventos } from '../db/eventosIa.js';
 import { analisarCapitulo, resolverParQa } from './qa.js';
 
 // Bateria do QA (doc 09 §6): provedor-espião que devolve apontamentos
@@ -20,7 +21,12 @@ vi.mock('../ia/fabrica.js', () => ({
     modeloPadrao: `${id}-v1`,
     async analisarQa(_chave: string | null, req: RequisicaoQa) {
       reqRecebidas.push(req);
-      return { apontamentos: apontamentosResposta, bruta: '{}' };
+      return {
+        apontamentos: apontamentosResposta,
+        bruta: '{}',
+        // Consumo típico de um bloco de QA: entrada dobrada (zh + pt).
+        uso: { tokens_entrada: 1_000_000, tokens_saida: 40_000, tokens_cache_leitura: 0, tokens_cache_criacao: 0 },
+      };
     },
   }),
 }));
@@ -97,6 +103,46 @@ describe('analisarCapitulo', () => {
     expect(reposCapitulos.obter(db, cap.id)?.qa_em).not.toBeNull();
     // O QA não escreve na frase — só aponta.
     expect(reposFrases.obter(db, frases[1].id)?.texto_pt).toBe('PT 1');
+  });
+
+  // Doc 11 §4: o QA é a compra separada mais cara do pipeline (~+140% projetado
+  // no doc 09 §15). Cada bloco tem de entrar no livro-caixa com o papel certo,
+  // senão o custo do QA volta a ser invisível.
+  it('grava o consumo de cada bloco no livro-caixa, com papel "qa"', async () => {
+    const { obra, cap } = capituloTraduzido();
+    reposConfig.definir(db, {
+      provedor_qa: 'gemini',
+      modelo_qa: 'g',
+      precos_modelos: { 'gemini:g': { entrada: 3, saida: 15 } },
+    });
+    apontamentosResposta = [];
+    await analisarCapitulo(db, cap.id);
+
+    const eventos = reposEventos.listarTodos(db);
+    expect(eventos).toHaveLength(1);
+    expect(eventos[0]).toMatchObject({
+      papel: 'qa',
+      provedor: 'gemini',
+      modelo: 'g',
+      obra_id: obra.id,
+      capitulo_id: cap.id,
+      tokens_entrada: 1_000_000,
+    });
+    // US$ 3 de entrada + US$ 0,60 de saída (40k a 15/1M).
+    expect(eventos[0].custo_estimado).toBeCloseTo(3.6, 10);
+  });
+
+  // O QA consome cota do provedor como qualquer outra chamada. Antes do doc 11
+  // ele não era contado em uso_ia, então o indicador de cota subestimava o
+  // consumo — e o painel exibia "faturadas > tentativas", que é impossível.
+  it('conta cada bloco de QA na cota diária (tentativas >= chamadas faturadas)', async () => {
+    const { cap } = capituloTraduzido();
+    reposConfig.definir(db, { provedor_qa: 'gemini', modelo_qa: 'g' });
+    await analisarCapitulo(db, cap.id);
+
+    const tentativas = reposUso.hoje(db).find((u) => u.provedor === 'gemini' && u.modelo === 'g');
+    expect(tentativas?.requisicoes).toBe(1);
+    expect(tentativas!.requisicoes).toBeGreaterThanOrEqual(reposEventos.listarTodos(db).length);
   });
 
   it('nova passada substitui os pendentes, mas preserva os já triados', async () => {

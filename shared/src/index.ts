@@ -220,6 +220,128 @@ export interface ApontamentoQa {
   criado_em: string;
 }
 
+// ── Telemetria de custo e qualidade (doc 11) ───────────────────────────────
+
+/** Papel da chamada de IA — o "para quê" de cada token gasto. */
+export const PAPEIS_IA = [
+  'traducao',
+  'revisao',
+  'qa',
+  'extracao',
+  'refinamento',
+  'titulo',
+  'comparador',
+] as const;
+export type PapelIa = (typeof PAPEIS_IA)[number];
+
+/** Preço de um modelo em USD por 1 milhão de tokens. Sem `cache_*`, valem os
+ * padrões da indústria: leitura 0,1× e escrita 1,25× o preço de entrada. */
+export interface PrecoModelo {
+  entrada: number;
+  saida: number;
+  cache_leitura?: number;
+  cache_criacao?: number;
+}
+
+/** Chave `"<provedor>:<modelo>"`, com curinga `"<provedor>:*"` como fallback.
+ * Ausência = preço desconhecido (nunca "grátis"). */
+export type PrecosModelos = Record<string, PrecoModelo>;
+
+/** Soma de consumo e custo — usada em todos os níveis do painel. */
+export interface SomaUso {
+  chamadas: number;
+  tokens_entrada: number;
+  tokens_saida: number;
+  tokens_cache_leitura: number;
+  tokens_cache_criacao: number;
+  /** USD das chamadas COM preço cadastrado. */
+  custo_usd: number;
+  /** Chamadas sem preço cadastrado: custo desconhecido, nunca exibido como 0. */
+  chamadas_sem_preco: number;
+}
+
+export interface TelemetriaPapel extends SomaUso {
+  papel: PapelIa;
+}
+
+export interface TelemetriaModelo extends SomaUso {
+  provedor: string;
+  modelo: string;
+}
+
+export interface TelemetriaCapitulo extends SomaUso {
+  capitulo_id: number;
+  numero: number;
+  titulo_pt: string | null;
+  status: StatusCapitulo;
+  /** Passou por um lote — define os grupos da pergunta "o lote compensou?". */
+  em_lote: boolean;
+  // Qualidade: vem de onde já é computada (checkpoint.ts, consistencia.ts, qa.ts).
+  frases_total: number;
+  frases_editadas: number;
+  termos_sugeridos: number;
+  consistencia_violacoes: number | null;
+  qa_pendentes: number;
+  /** Torna capítulos de tamanhos diferentes comparáveis. */
+  custo_por_mil_frases: number | null;
+}
+
+/** (a) O prompt caching está acertando? */
+export interface VereditoCache {
+  estado: EstadoMetrica;
+  /** % da entrada total servida do cache. */
+  acerto_pct: number | null;
+  /** Quanto o cache poupou em dinheiro (vs. pagar tudo a preço de entrada). */
+  economia_usd: number | null;
+  /** Pares que pagam escrita de cache e nunca leem — patologia A4 da auditoria.
+   * Agrupado por papel, e não só por modelo: no A4 era a revisão que perdia a
+   * escrita enquanto a tradução no mesmo modelo lia normalmente. */
+  escrita_perdida: { provedor: string; modelo: string; papel: string; tokens: number }[];
+  detalhe: string;
+}
+
+/** (b) O lote compensou em dinheiro? */
+export interface VereditoLote {
+  estado: EstadoMetrica;
+  lote: { capitulos: number; custo_por_mil_frases: number | null };
+  sequencial: { capitulos: number; custo_por_mil_frases: number | null };
+  /** Negativa = lote mais barato por frase. */
+  diferenca_pct: number | null;
+  detalhe: string;
+}
+
+export interface TelemetriaObra {
+  obra_id: number;
+  total: SomaUso;
+  por_papel: TelemetriaPapel[];
+  por_modelo: TelemetriaModelo[];
+  capitulos: TelemetriaCapitulo[];
+  cache: VereditoCache;
+  lote: VereditoLote;
+  /** Pares sem preço cadastrado (alimenta o aviso do painel). */
+  sem_preco: { provedor: string; modelo: string; chamadas: number }[];
+  taxa_usd_brl: number;
+}
+
+/** (c) Consumo do dia por provedor — dinheiro e cota lado a lado. */
+export interface TelemetriaDiaProvedor extends SomaUso {
+  provedor: string;
+  /** Tentativas contadas em `uso_ia` (inclui retries e falhas). A diferença
+   * contra `chamadas` é o desperdício: 429, truncamento, retries. */
+  tentativas: number;
+  /** 0 = sem limite configurado. */
+  cota_diaria: number;
+  pct_cota: number | null;
+}
+
+export interface TelemetriaDia {
+  data: string;
+  provedores: TelemetriaDiaProvedor[];
+  total: SomaUso;
+  tentativas: number;
+  taxa_usd_brl: number;
+}
+
 // ── Configurações ──────────────────────────────────────────────────────────
 
 export interface Configuracoes {
@@ -266,6 +388,11 @@ export interface Configuracoes {
   /** QA automática ao fim de cada capítulo do lote. Padrão desligado: como a
    * revisão humana é integral, o QA é compra separada (feedback do usuário). */
   qa_automatica: boolean;
+  // ── Telemetria de custo (doc 11 §3) ──
+  /** Preços por modelo (USD/1M tokens) — sem isto não existe "custo em dinheiro". */
+  precos_modelos: PrecosModelos;
+  /** Cotação para exibir custo em reais no painel (0 = mostrar só em USD). */
+  taxa_usd_brl: number;
 }
 
 export const CONFIG_PADRAO: Configuracoes = {
@@ -294,6 +421,20 @@ export const CONFIG_PADRAO: Configuracoes = {
   provedor_qa: '',
   modelo_qa: '',
   qa_automatica: false,
+  // Só a família Claude vem de fábrica — são os preços que dá para afirmar sem
+  // inventar (USD/1M, jul/2026). Todo outro provedor começa SEM preço: o painel
+  // conta "N chamadas sem preço" em vez de exibir US$ 0,00 como se fosse grátis.
+  // Faixa gratuita se cadastra explicitamente com zeros. O Sonnet 5 tem preço
+  // promocional de 2/10 até 31/08/2026 — aqui fica o cheio (melhor superestimar
+  // custo que subestimar); ajuste em Configurações se quiser o promocional.
+  precos_modelos: {
+    'claude:claude-fable-5': { entrada: 10, saida: 50 },
+    'claude:claude-opus-5': { entrada: 5, saida: 25 },
+    'claude:claude-opus-4-8': { entrada: 5, saida: 25 },
+    'claude:claude-sonnet-5': { entrada: 3, saida: 15 },
+    'claude:claude-haiku-4-5': { entrada: 1, saida: 5 },
+  },
+  taxa_usd_brl: 0,
 };
 
 // ── Checkpoint de estabilidade (doc 09 §4) ─────────────────────────────────

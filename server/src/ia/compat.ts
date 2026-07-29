@@ -3,6 +3,7 @@ import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
+  type UsoChamada,
   type RequisicaoExtrairTermos,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
@@ -34,6 +35,7 @@ import {
   CONTRATO_TRADUCAO,
   instrucaoJson,
 } from './contratos.js';
+import { usoDoCompat } from './uso.js';
 
 // Provedor genérico para APIs compatíveis com OpenAI (chat completions):
 // DeepSeek, OpenRouter, Groq, Mistral etc. usam o mesmo protocolo — só mudam
@@ -60,6 +62,9 @@ interface RespostaChat {
   /** `reasoning`: modelos de raciocínio (gpt-oss etc.) podem devolver o conteúdo
    * útil separado — ou até só nele, quando o raciocínio consome o limite. */
   choices?: { message?: { content?: string | null; reasoning?: string | null }; finish_reason?: string | null }[];
+  /** Consumo real (doc 11 §1) — cada provedor compat preenche um subconjunto;
+   * a normalização fica em `usoDoCompat`. */
+  usage?: unknown;
   data?: { id: string; name?: string }[];
   error?: { message?: string };
 }
@@ -137,7 +142,13 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     return json;
   }
 
-  async function completar(chave: string | null, modelo: string, sistema: string, usuario: string): Promise<unknown> {
+  /** Uma chamada de chat: devolve o JSON já saneado e o consumo normalizado. */
+  async function completar(
+    chave: string | null,
+    modelo: string,
+    sistema: string,
+    usuario: string,
+  ): Promise<{ bruto: unknown; uso: UsoChamada }> {
     const json = await requisitar(exigirChave(chave, opts.nome), '/chat/completions', {
       model: modelo,
       messages: [
@@ -160,11 +171,13 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     // Fallback para `reasoning`: se o JSON final ficou lá, o saneamento o recorta.
     const conteudo = mensagem?.content?.trim() || mensagem?.reasoning?.trim();
     if (!conteudo) throw new ErroProvedor('O modelo não devolveu a resposta estruturada esperada.', 'transitorio');
+    let bruto: unknown;
     try {
-      return JSON.parse(sanearConteudo(conteudo));
+      bruto = JSON.parse(sanearConteudo(conteudo));
     } catch {
       throw new ErroProvedor('O modelo devolveu JSON inválido.', 'transitorio');
     }
+    return { bruto, uso: usoDoCompat(json.usage) };
   }
 
   return {
@@ -195,10 +208,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async traduzirBloco(chave, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco> {
       const sistema = `${sistemaTraducao(req)}\n\n${instrucaoJson(CONTRATO_TRADUCAO)}`;
-      const bruto = await completar(chave, req.modelo, sistema, usuarioTraducao(req));
+      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioTraducao(req));
       try {
         const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
-        return { ...dados, bruta: JSON.stringify(bruto) };
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
@@ -209,10 +222,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
       const sistema = `${sistemaExtrairTermos(req)}\n\n${instrucaoJson(CONTRATO_EXTRAIR_TERMOS)}`;
-      const bruto = await completar(chave, req.modelo, sistema, usuarioExtrairTermos(req));
+      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioExtrairTermos(req));
       try {
         const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
-        return { ...dados, bruta: JSON.stringify(bruto) };
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de extração de termos.', 'transitorio');
@@ -223,10 +236,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async revisarFrase(chave, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor> {
       const sistema = `${sistemaRevisao(req)}\n\n${instrucaoJson(CONTRATO_REVISAO)}`;
-      const bruto = await completar(chave, req.modelo, sistema, usuarioRevisao(req));
+      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioRevisao(req));
       try {
         const dados = CONTRATO_REVISAO.zod.parse(bruto);
-        return { ...dados, bruta: JSON.stringify(bruto) };
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato do Protocolo de Revisão.', 'transitorio');
@@ -237,10 +250,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async refinarPrompt(chave, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt> {
       const sistema = `${sistemaRefinarPrompt(req)}\n\n${instrucaoJson(CONTRATO_REFINAR_PROMPT)}`;
-      const bruto = await completar(chave, req.modelo, sistema, usuarioRefinarPrompt(req));
+      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioRefinarPrompt(req));
       try {
         const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
-        return { ...dados, bruta: JSON.stringify(bruto) };
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de refinamento do prompt.', 'transitorio');
@@ -251,10 +264,10 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async analisarQa(chave, req: RequisicaoQa): Promise<RespostaQa> {
       const sistema = `${sistemaQa(req)}\n\n${instrucaoJson(CONTRATO_QA)}`;
-      const bruto = await completar(chave, req.modelo, sistema, usuarioQa(req));
+      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioQa(req));
       try {
         const dados = CONTRATO_QA.zod.parse(bruto);
-        return { ...dados, bruta: JSON.stringify(bruto) };
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');

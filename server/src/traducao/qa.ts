@@ -1,10 +1,11 @@
 import type { ApontamentoQa, Configuracoes, ParProvedor, ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposPrompts, reposQa } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposPrompts, reposQa, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { ParParaQa, RequisicaoQa } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
+import { registrarEvento } from '../telemetria/registrar.js';
 
 // Passada de QA por segunda IA (doc 09 §6). A IA só aponta; nada é escrito nas
 // frases sem decisão humana. Roda sob demanda (rota) ou ao fim de um capítulo
@@ -98,7 +99,21 @@ export async function analisarCapitulo(
       pares,
     };
 
+    // Cada bloco de QA é uma requisição que o provedor debita da cota diária —
+    // faltava contá-la (o indicador de cota subestimava o consumo quando o QA
+    // rodava). Contada ANTES da chamada, como nos outros papéis.
+    reposUso.registrar(db, par.provedor, par.modelo);
     const resposta = await provedor.analisarQa(chave, req);
+    // Doc 11 §4: o QA é a compra separada mais cara do pipeline (~+140% projetado
+    // no doc 09 §15) — cada bloco entra no livro-caixa para o número virar real.
+    registrarEvento(db, {
+      obra_id: capitulo.obra_id,
+      capitulo_id: capituloId,
+      papel: 'qa',
+      provedor: par.provedor,
+      modelo: par.modelo,
+      uso: resposta.uso,
+    });
     for (const a of resposta.apontamentos) {
       const frase = porOrdem.get(a.ordem);
       coletados.push({

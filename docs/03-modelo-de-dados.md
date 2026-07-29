@@ -151,8 +151,30 @@ CREATE TABLE configuracoes (                       -- (+) tabela nova, chave-val
   valor TEXT NOT NULL
 );
 -- Guarda: provedor/modelo padrão globais, tamanho do bloco de tradução, nº de frases
--- vizinhas na revisão, cauda de contexto entre blocos, modo de guarda de chaves.
+-- vizinhas na revisão, cauda de contexto entre blocos, modo de guarda de chaves,
+-- e a tabela de preços por modelo (precos_modelos, doc 11 §3).
 -- CHAVES DE API NÃO FICAM AQUI (ver 05-fluxos-ia.md §6).
+
+-- Livro-caixa das chamadas de IA (doc 11, migração 010): uma linha por chamada que
+-- devolveu `usage`. Complementa uso_ia, que conta TENTATIVAS por dia — a diferença
+-- entre as duas é o desperdício (retries, 429, truncamento).
+CREATE TABLE eventos_ia (
+  id                   INTEGER PRIMARY KEY,
+  em                   TEXT NOT NULL DEFAULT (datetime('now')),   -- UTC
+  data                 TEXT NOT NULL,                             -- dia LOCAL, como uso_ia
+  obra_id              INTEGER REFERENCES obras(id)     ON DELETE SET NULL,
+  capitulo_id          INTEGER REFERENCES capitulos(id) ON DELETE SET NULL,
+  papel                TEXT NOT NULL,   -- traducao|revisao|qa|extracao|refinamento|titulo|comparador
+  provedor             TEXT NOT NULL,
+  modelo               TEXT NOT NULL,
+  tokens_entrada       INTEGER,         -- NULL = a API não expõe o campo (≠ 0)
+  tokens_saida         INTEGER,
+  tokens_cache_leitura INTEGER,
+  tokens_cache_criacao INTEGER,
+  custo_estimado       REAL             -- USD; NULL = modelo sem preço cadastrado
+);
+-- SET NULL e não CASCADE de propósito: apagar um capítulo não desfaz o dinheiro que
+-- ele custou — a linha só deixa de ser atribuível a ele.
 ```
 
 ## Regras de integridade que ficam na aplicação (não no banco)

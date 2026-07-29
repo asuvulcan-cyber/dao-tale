@@ -7,6 +7,8 @@ import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '..
 import { listarProvedores, obterProvedor } from '../ia/fabrica.js';
 import { diretorioDados, ehInstanciaCanonica, PORTA } from '../config.js';
 import { fazerBackup, listarBackups } from '../db/backup.js';
+import { telemetriaDoDia } from '../telemetria/painel.js';
+import { recalcularCustos } from '../telemetria/registrar.js';
 
 const configSchema = z.object({
   provedor_padrao: z.enum(PROVEDORES_IDS).optional(),
@@ -39,6 +41,21 @@ const configSchema = z.object({
   provedor_qa: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
   modelo_qa: z.string().max(120).optional(),
   qa_automatica: z.boolean().optional(),
+  // Telemetria (doc 11 §3): preços em USD por 1M tokens, chave "provedor:modelo"
+  // (curinga "provedor:*" aceito). Teto alto o bastante para qualquer modelo de
+  // ponta e baixo o bastante para pegar dedo trocado (preço por 1k em vez de 1M).
+  precos_modelos: z
+    .record(
+      z.string().max(140),
+      z.object({
+        entrada: z.number().min(0).max(1000),
+        saida: z.number().min(0).max(1000),
+        cache_leitura: z.number().min(0).max(1000).optional(),
+        cache_criacao: z.number().min(0).max(1000).optional(),
+      }),
+    )
+    .optional(),
+  taxa_usd_brl: z.number().min(0).max(1000).optional(),
 });
 
 export function rotasSistema(db: BancoDados): Hono {
@@ -92,6 +109,13 @@ export function rotasSistema(db: BancoDados): Hono {
 
   // Requisições de hoje por provedor/modelo — alimenta o indicador de cota gratuita.
   app.get('/uso/hoje', (c) => c.json(reposUso.hoje(db)));
+
+  // Consumo do dia com dinheiro e cota lado a lado (doc 11 §5, pergunta (c)).
+  app.get('/telemetria/dia', (c) => c.json(telemetriaDoDia(db)));
+
+  // Recalcula o custo do histórico com a tabela de preços vigente. Explícito de
+  // propósito: cadastrar preço não reescreve o passado sozinho (doc 11 §2).
+  app.post('/telemetria/recalcular', (c) => c.json(recalcularCustos(db)));
 
   app.get('/provedores', (c) =>
     c.json(

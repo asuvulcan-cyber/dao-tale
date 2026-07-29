@@ -81,6 +81,14 @@ API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (
 | `POST /termos-sugeridos/:id/aceitar` | Insere no glossário (`origem='sugerido-ia'`), permite ajustar termo/categoria no corpo |
 | `POST /termos-sugeridos/:id/rejeitar` | |
 
+### Telemetria de custo (doc 11)
+
+| Método e rota | Descrição |
+|---|---|
+| `GET /obras/:id/telemetria` | Painel da obra: total, por papel, por modelo, por capítulo (custo × qualidade na mesma linha) e os veredictos de cache e de lote |
+| `GET /telemetria/dia` | Consumo do dia por provedor: tentativas (`uso_ia`) vs. chamadas faturadas, tokens, custo e % da cota |
+| `POST /telemetria/recalcular` | Recalcula `custo_estimado` de todo o histórico com a tabela de preços vigente; devolve `{ atualizados, total }` |
+
 ## Notas de desenho
 
 1. **Tradução é o único fluxo assíncrono.** Todo o resto é request/response simples — segmentação, CRUD e até a revisão (uma única chamada de IA, alguns segundos, a interface mostra spinner no painel).

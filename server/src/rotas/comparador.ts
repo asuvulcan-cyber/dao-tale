@@ -8,6 +8,7 @@ import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 import { segmentar } from '../segmentacao/segmentar.js';
+import { registrarEvento } from '../telemetria/registrar.js';
 
 // Comparador de modelos: o mesmo trecho passa por vários provedores/modelos em
 // paralelo, com o prompt mãe e o glossário reais da obra — para escolher modelo
@@ -88,6 +89,14 @@ export function rotasComparador(db: BancoDados): Hono {
           }
           reposUso.registrar(db, alvo.provedor, modelo);
           const resposta = await provedor.traduzirBloco(chave, { ...base, modelo });
+          registrarEvento(db, {
+            obra_id: obraId,
+            capitulo_id: null,
+            papel: 'comparador',
+            provedor: alvo.provedor,
+            modelo,
+            uso: resposta.uso,
+          });
           // Reconstrói parágrafos: frases do mesmo parágrafo juntas, parágrafos separados.
           const porOrdem = new Map(resposta.traducoes.map((t) => [t.ordem, t.texto_pt.trim()]));
           const paragrafos = new Map<number, string[]>();

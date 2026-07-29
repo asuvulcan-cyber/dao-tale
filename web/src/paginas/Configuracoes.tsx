@@ -6,8 +6,9 @@ import type {
   EstadoConfiguracoes,
   EstadoSaude,
   InfoBackup,
+  PrecosModelos,
   ProvedorId,
-  UsoIaDia,
+  TelemetriaDia,
 } from '@dao-tale/shared';
 import { api, ErroApi } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
@@ -70,6 +71,12 @@ export function Configuracoes() {
       />
 
       <UsoDeHoje />
+
+      <TabelaPrecos
+        config={estado.configuracoes}
+        provedores={provedores}
+        aoSalvar={() => clienteQuery.invalidateQueries({ queryKey: ['configuracoes'] })}
+      />
 
       <SecaoDados caminhoDados={estado.caminho_dados} />
     </div>
@@ -142,38 +149,254 @@ function SecaoDados({ caminhoDados }: { caminhoDados: string }) {
 }
 
 function UsoDeHoje() {
-  const { data: uso } = useQuery({
-    queryKey: ['uso-hoje'],
-    queryFn: () => api<UsoIaDia[]>('GET', '/uso/hoje'),
+  // Doc 11 §5, pergunta (c): dinheiro e cota lado a lado. `tentativas` vem de
+  // uso_ia (conta retries e falhas — é o que o provedor debita) e `chamadas` do
+  // livro-caixa: a diferença entre as duas É o desperdício.
+  const { data: dia } = useQuery({
+    queryKey: ['telemetria-dia'],
+    queryFn: () => api<TelemetriaDia>('GET', '/telemetria/dia'),
     refetchInterval: 60_000,
   });
+
+  const linhas = (dia?.provedores ?? []).filter((p) => p.provedor !== 'mock');
 
   return (
     <section className="cartao p-4">
       <h2 className="olho mb-1">Uso de hoje</h2>
       <p className="mb-3 text-sm text-tinta-2">
-        Requisições de tradução e revisão contadas neste computador — os provedores não informam o consumo pela API,
-        então a contagem zera à meia-noite local e não enxerga uso feito fora do aplicativo.
+        Tentativas contadas neste computador (os provedores não informam consumo pela API, então a contagem zera à
+        meia-noite local) e, ao lado, os tokens e o custo que as respostas realmente reportaram.
       </p>
       <IndicadorCota />
-      {uso && uso.filter((u) => u.provedor !== 'mock').length > 0 ? (
-        <table className="mt-3 text-sm">
-          <tbody>
-            {uso
-              .filter((u) => u.provedor !== 'mock')
-              .map((u) => (
-                <tr key={`${u.provedor}/${u.modelo}`}>
-                  <td className="pr-4 text-tinta-2">
-                    {u.provedor} · {u.modelo}
+      {linhas.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="mt-3 w-full text-sm">
+            <thead>
+              <tr>
+                <th className="olho border-b border-linha px-2 py-1.5 text-left">Provedor</th>
+                <th className="olho border-b border-linha px-2 py-1.5 text-right" title="Inclui retries e chamadas que falharam — é o que conta na cota">
+                  Tentativas
+                </th>
+                <th className="olho border-b border-linha px-2 py-1.5 text-right" title="Chamadas que devolveram consumo">
+                  Faturadas
+                </th>
+                <th className="olho border-b border-linha px-2 py-1.5 text-right">Entrada</th>
+                <th className="olho border-b border-linha px-2 py-1.5 text-right">Saída</th>
+                <th className="olho border-b border-linha px-2 py-1.5 text-right">Custo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((p) => (
+                <tr key={p.provedor} className="border-b border-linha/50 last:border-b-0">
+                  <td className="px-2 py-1.5">
+                    {NOME_CURTO[p.provedor] ?? p.provedor}
+                    {p.cota_diaria > 0 && (
+                      <span className="ml-1 text-xs text-tinta-2">
+                        ({p.tentativas}/{p.cota_diaria} da cota)
+                      </span>
+                    )}
                   </td>
-                  <td className="tabular-nums">{u.requisicoes} requisições</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{p.tentativas}</td>
+                  <td
+                    className={`px-2 py-1.5 text-right tabular-nums ${p.tentativas > p.chamadas ? 'text-ocre-forte' : ''}`}
+                    title={
+                      p.tentativas > p.chamadas
+                        ? `${p.tentativas - p.chamadas} tentativa(s) não devolveram consumo: retries, 429 ou truncamento.`
+                        : undefined
+                    }
+                  >
+                    {p.chamadas}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{p.tokens_entrada.toLocaleString('pt-BR')}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{p.tokens_saida.toLocaleString('pt-BR')}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {p.chamadas_sem_preco > 0 && p.custo_usd === 0
+                      ? '—'
+                      : `US$ ${p.custo_usd.toLocaleString('pt-BR', {
+                          minimumFractionDigits: p.custo_usd > 0 && p.custo_usd < 0.01 ? 5 : 2,
+                          maximumFractionDigits: p.custo_usd > 0 && p.custo_usd < 0.01 ? 5 : 2,
+                        })}`}
+                    {p.chamadas_sem_preco > 0 && (
+                      <span className="ml-1 text-ocre-forte" title={`${p.chamadas_sem_preco} chamada(s) sem preço cadastrado`}>
+                        +?
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       ) : (
         <p className="mt-2 text-sm text-tinta-2">Nenhuma requisição a provedores reais hoje.</p>
       )}
+    </section>
+  );
+}
+
+/** Tabela de preços (doc 11 §3): sem ela não existe "custo em dinheiro". */
+function TabelaPrecos({
+  config,
+  provedores,
+  aoSalvar,
+}: {
+  config: Config;
+  provedores: ProvedorInfo[];
+  aoSalvar: () => void;
+}) {
+  const [precos, setPrecos] = useState<PrecosModelos>(config.precos_modelos);
+  const [taxa, setTaxa] = useState(config.taxa_usd_brl);
+  const [novoProvedor, setNovoProvedor] = useState<ProvedorId>(provedores[0]?.id ?? 'claude');
+  const [novoModelo, setNovoModelo] = useState('');
+  const [salvo, setSalvo] = useState(false);
+
+  const salvar = useMutation({
+    mutationFn: () => api('PUT', '/configuracoes', { precos_modelos: precos, taxa_usd_brl: taxa }),
+    onSuccess: () => {
+      setSalvo(true);
+      aoSalvar();
+      setTimeout(() => setSalvo(false), 3000);
+    },
+  });
+
+  const recalcular = useMutation({
+    mutationFn: () => api<{ atualizados: number; total: number }>('POST', '/telemetria/recalcular'),
+  });
+
+  const chaves = Object.keys(precos).sort();
+
+  const definir = (chave: string, campo: 'entrada' | 'saida', valor: number) =>
+    setPrecos({ ...precos, [chave]: { ...precos[chave], [campo]: valor } });
+
+  return (
+    <section className="cartao p-4" id="precos">
+      <h2 className="olho mb-1">Preços dos modelos</h2>
+      <p className="mb-3 text-sm text-tinta-2">
+        Em dólares por 1 milhão de tokens, como os provedores publicam. Sem preço cadastrado, o painel de custos conta a
+        chamada como <strong>desconhecida</strong> — nunca como grátis. Faixa gratuita se cadastra com <strong>0</strong>{' '}
+        nos dois campos. Leitura de cache é cobrada a 0,1× a entrada e escrita a 1,25×; só a família Claude vem
+        preenchida de fábrica.
+      </p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className="olho border-b border-linha px-2 py-1.5 text-left">Provedor · modelo</th>
+              <th className="olho border-b border-linha px-2 py-1.5 text-right">Entrada US$/1M</th>
+              <th className="olho border-b border-linha px-2 py-1.5 text-right">Saída US$/1M</th>
+              <th className="olho border-b border-linha px-2 py-1.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {chaves.map((chave) => (
+              <tr key={chave} className="border-b border-linha/50 last:border-b-0">
+                <td className="px-2 py-1.5">
+                  <code className="rounded bg-papel px-1">{chave}</code>
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={precos[chave].entrada}
+                    onChange={(e) => definir(chave, 'entrada', Number(e.target.value))}
+                    className="entrada w-24 text-right text-sm tabular-nums"
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={precos[chave].saida}
+                    onChange={(e) => definir(chave, 'saida', Number(e.target.value))}
+                    className="entrada w-24 text-right text-sm tabular-nums"
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <button
+                    type="button"
+                    onClick={() => setPrecos(Object.fromEntries(Object.entries(precos).filter(([k]) => k !== chave)))}
+                    className="text-tinta-2 hover:text-erro"
+                    title="Remover preço (o custo volta a desconhecido)"
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="block text-sm">
+          Provedor
+          <select
+            value={novoProvedor}
+            onChange={(e) => setNovoProvedor(e.target.value as ProvedorId)}
+            className="entrada mt-1 block"
+          >
+            {provedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Modelo (ou <code>*</code> para todos do provedor)
+          <input
+            value={novoModelo}
+            onChange={(e) => setNovoModelo(e.target.value)}
+            placeholder="*"
+            className="entrada mt-1 block w-56"
+          />
+        </label>
+        <Botao
+          variante="secundario"
+          onClick={() => {
+            const chave = `${novoProvedor}:${novoModelo.trim() || '*'}`;
+            if (precos[chave]) return;
+            setPrecos({ ...precos, [chave]: { entrada: 0, saida: 0 } });
+            setNovoModelo('');
+          }}
+        >
+          + Adicionar modelo
+        </Botao>
+      </div>
+
+      <label className="mt-4 block text-sm">
+        Cotação do dólar (para mostrar em reais; 0 = só em US$)
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={taxa}
+          onChange={(e) => setTaxa(Number(e.target.value))}
+          className="entrada mt-1 block w-32 tabular-nums"
+        />
+      </label>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+          Salvar preços
+        </Botao>
+        <Botao variante="secundario" onClick={() => recalcular.mutate()} disabled={recalcular.isPending}>
+          Recalcular custos do histórico
+        </Botao>
+        {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
+        {recalcular.isSuccess && (
+          <span className="text-sm text-jade-forte">
+            {recalcular.data.atualizados} de {recalcular.data.total} chamada(s) recalculada(s).
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-sm text-tinta-2">
+        Salvar preço novo não reescreve o passado sozinho — use “Recalcular” para aplicar a tabela vigente ao histórico
+        já gravado.
+      </p>
     </section>
   );
 }

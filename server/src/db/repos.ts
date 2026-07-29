@@ -24,6 +24,8 @@ import type {
   ProvedorId,
   ApontamentoQa,
   StatusApontamentoQa,
+  PrecoModelo,
+  PrecosModelos,
 } from '@dao-tale/shared';
 import { CONFIG_PADRAO } from '@dao-tale/shared';
 import { comporPromptMae } from './promptPadraoInicial.js';
@@ -1023,6 +1025,8 @@ export const reposConfig = {
       provedor_qa: (mapa.provedor_qa as Configuracoes['provedor_qa']) ?? CONFIG_PADRAO.provedor_qa,
       modelo_qa: mapa.modelo_qa ?? CONFIG_PADRAO.modelo_qa,
       qa_automatica: mapa.qa_automatica ? mapa.qa_automatica === 'true' : CONFIG_PADRAO.qa_automatica,
+      precos_modelos: lerPrecos(mapa),
+      taxa_usd_brl: numeroConfig(mapa.taxa_usd_brl, CONFIG_PADRAO.taxa_usd_brl),
     };
   },
 
@@ -1061,6 +1065,32 @@ function lerFailover(mapa: Record<string, string>): ParProvedor[] {
   }
 }
 
+/** Tabela de preços (JSON de `"provedor:modelo"` → USD/1M). Entrada malformada é
+ * DESCARTADA em vez de virar 0 — um preço zero silencioso mentiria dizendo que o
+ * modelo é grátis (doc 11 §3). Valor corrompido cai nos padrões de fábrica. */
+function lerPrecos(mapa: Record<string, string>): PrecosModelos {
+  if (!mapa.precos_modelos) return { ...CONFIG_PADRAO.precos_modelos };
+  try {
+    const bruto = JSON.parse(mapa.precos_modelos) as Record<string, unknown>;
+    if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return {};
+    const precos: PrecosModelos = {};
+    for (const [chave, valor] of Object.entries(bruto)) {
+      const p = valor as Partial<PrecoModelo> | null;
+      if (!p || typeof p !== 'object') continue;
+      if (!Number.isFinite(p.entrada) || !Number.isFinite(p.saida)) continue;
+      precos[chave] = {
+        entrada: p.entrada!,
+        saida: p.saida!,
+        ...(Number.isFinite(p.cache_leitura) ? { cache_leitura: p.cache_leitura! } : {}),
+        ...(Number.isFinite(p.cache_criacao) ? { cache_criacao: p.cache_criacao! } : {}),
+      };
+    }
+    return precos;
+  } catch {
+    return { ...CONFIG_PADRAO.precos_modelos };
+  }
+}
+
 /** Cotas por provedor (JSON) com migração das chaves antigas cota_diaria_gemini/claude. */
 function lerCotasDiarias(mapa: Record<string, string>): Record<string, number> {
   if (mapa.cotas_diarias) {
@@ -1078,8 +1108,10 @@ function lerCotasDiarias(mapa: Record<string, string>): Record<string, number> {
 
 // ── Uso de IA (indicador de cota gratuita) ─────────────────────────────────
 
-/** Data local YYYY-MM-DD — cotas diárias dos provedores renovam por dia-calendário. */
-function dataLocalHoje(): string {
+/** Data local YYYY-MM-DD — cotas diárias dos provedores renovam por dia-calendário.
+ * Fonte única da chave de dia: `uso_ia` e `eventos_ia` precisam concordar para o
+ * painel comparar tentativas com chamadas faturadas (doc 11 §2). */
+export function dataLocalHoje(): string {
   return new Date().toLocaleDateString('sv');
 }
 
@@ -1110,6 +1142,21 @@ interface LinhaLote {
 }
 
 export const reposLotes = {
+  /** Capítulos da obra que em algum momento passaram por um lote — define os dois
+   * grupos da pergunta "o lote compensou em dinheiro?" (doc 11 §5) sem precisar
+   * de coluna nova em capitulos. */
+  capituloIdsEmLote(db: BancoDados, obraId: number): number[] {
+    return (
+      db
+        .prepare(
+          `SELECT DISTINCT lc.capitulo_id FROM lote_capitulos lc
+             JOIN lotes l ON l.id = lc.lote_id
+           WHERE l.obra_id = ?`,
+        )
+        .all(obraId) as { capitulo_id: number }[]
+    ).map((l) => l.capitulo_id);
+  },
+
   /** Lote atual (executando) ou o último encerrado da obra, com seus capítulos. */
   atual(db: BancoDados, obraId: number): Lote | undefined {
     const linha = db
