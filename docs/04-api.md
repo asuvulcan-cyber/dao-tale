@@ -25,6 +25,12 @@ API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (
 | `GET /obras/:id` · `PUT /obras/:id` · `DELETE /obras/:id` | Delete retorna antes a contagem do que cai em cascata quando chamado com `?simular=1`; PUT também aceita `sinopse` e `tags` |
 | `GET /obras/:id/capa` · `PUT /obras/:id/capa` · `DELETE /obras/:id/capa` | Capa da obra: PUT recebe a imagem como corpo binário (JPEG/PNG/WebP/GIF, até 2 MB); GET serve com o mime original |
 | `GET /obras/:id/exportar?formato=json` | Download do export completo (`dao-tale-export-v1`, inclui capa em base64) |
+| `GET /obras/:id/epub` | **Livro da obra** em EPUB 3.3 (doc 12): capa, rosto, sumário e um XHTML por capítulo |
+| `GET /obras/:id/markdown` | Obra inteira em um `.md`; `?formato=bilingue` intercala chinês e português |
+
+Escopo de `epub`/`markdown` (doc 12 §5), sempre pela numeração real: `status` (padrão
+`traduzido,revisado,finalizado`), `de`/`ate` (intervalo inclusivo) e `numeros` (lista
+explícita, vence o intervalo). Escopo sem capítulo nenhum → `400 escopo-vazio`.
 
 ### Prompt mãe (versionamento)
 

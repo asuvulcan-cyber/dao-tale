@@ -444,9 +444,16 @@ export function EditorCapitulo() {
                   Traduzir título
                 </Botao>
               )}
-              <MenuMais titulo="Mais ações: downloads, retraduzir, provedor">
+              <MenuMais titulo="Mais ações: ler, downloads, retraduzir, provedor">
                 {frases.some((f) => f.status_traducao === 'traduzida') && (
                   <>
+                    <Link
+                      to={`/ler/${obraId}/${capitulo.numero}`}
+                      className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                      title="Modo leitura: este capítulo sem as ferramentas da bancada"
+                    >
+                      Ler este capítulo
+                    </Link>
                     <a
                       href={`/api/capitulos/${capitulo.id}/baixar?formato=md`}
                       download

@@ -16,12 +16,17 @@ import { Configuracoes } from './paginas/Configuracoes';
 import { Docs } from './paginas/Docs';
 import { ComparadorModelos } from './paginas/ComparadorModelos';
 import { Telemetria } from './paginas/Telemetria';
+import { Leitor } from './paginas/Leitor';
 
 const clienteQuery = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
 const rotas = createBrowserRouter([
+  // Modo leitura FORA da casca de trabalho (doc 12 §7): sem cabeçalho global nem
+  // abas de bancada — o leitor tem a barra dele.
+  { path: '/ler/:obraId', element: <Leitor /> },
+  { path: '/ler/:obraId/:numero', element: <Leitor /> },
   {
     path: '/',
     element: <Casca />,

@@ -38,6 +38,7 @@ const criarObraSchema = z.object({
 const atualizarObraSchema = z.object({
   titulo: z.string().min(1).optional(),
   titulo_original: z.string().nullable().optional(),
+  autor: z.string().nullable().optional(),
   sinopse: z.string().nullable().optional(),
   tags: z.array(z.string().min(1)).max(20).optional(),
   provedor_padrao: z.enum(PROVEDORES_IDS).nullable().optional(),

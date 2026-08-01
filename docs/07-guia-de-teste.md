@@ -33,6 +33,16 @@ Roteiro para o primeiro uso real, com soluções para os tropeços mais prováve
 
 **Passo 8 — Curadoria.** Veja a aba "Termos sugeridos" (a IA deve ter reportado termos novos), aceite/rejeite alguns e confira o glossário. No editor, rode o botão "Consistência".
 
+**Passo 9 — O livro (doc 12).** Na obra, clique em **"Exportar livro"**: escolha EPUB, confira a
+contagem ("N capítulos · capítulos 118–129") e baixe. Abra o `.epub` no seu leitor (celular,
+Kobo, Calibre) e verifique capa, sumário, autor e acentuação. Se quiser o texto cru, os mesmos
+filtros geram o Markdown da obra inteira, em PT ou bilíngue.
+
+**Passo 10 — Modo leitura.** Botão **"Ler"** (na obra ou no menu da estante). É a página
+read-only: `A−/A+` muda o corpo, `largura` a medida, `中` liga o bilíngue, `☰` abre o sumário e
+as setas ←/→ viram capítulo. As preferências ficam salvas no navegador. **Anote se algum
+parágrafo aparecer colado ou fora de ordem** — é o mesmo agrupamento que o EPUB usa.
+
 ## Problemas prováveis e soluções
 
 | Sintoma | Causa e solução |

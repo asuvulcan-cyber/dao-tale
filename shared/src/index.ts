@@ -1,5 +1,13 @@
 // Tipos de domínio e contratos da API — fonte única de verdade entre server e web.
 
+// Tokens de pigmento/tipografia como dado, para o alvo EPUB (doc 12 §6).
+export * from './pigmentos.js';
+// Formatação inline da tradução (*itálico*, **negrito**), usada pelo editor, pelo
+// modo leitura e pelo XHTML do EPUB.
+export * from './inline.js';
+// Regras do livro: remontagem de parágrafos, cabeçalho e escopo de exportação.
+export * from './livro.js';
+
 // ── Domínio ────────────────────────────────────────────────────────────────
 
 export const PROVEDORES_IDS = ['claude', 'gemini', 'deepseek', 'openrouter', 'groq', 'mistral', 'mock'] as const;
@@ -25,6 +33,8 @@ export interface Obra {
   id: number;
   titulo: string;
   titulo_original: string | null;
+  /** Autor do original (dc:creator no EPUB, doc 12 §4). */
+  autor: string | null;
   sinopse: string | null;
   tags: string[];
   /** true quando a obra tem imagem de capa (o binário é servido em GET /obras/:id/capa). */

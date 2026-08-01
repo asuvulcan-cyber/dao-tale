@@ -127,7 +127,22 @@ export function ListaObras() {
               </div>
             </div>
             <div className="absolute top-3 right-3">
-              <MenuMais titulo="Exportar ou excluir">
+              <MenuMais titulo="Ler, exportar ou excluir">
+                <Link
+                  to={`/ler/${obra.id}`}
+                  className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                  title="Modo leitura: só o texto traduzido"
+                >
+                  Ler
+                </Link>
+                <a
+                  href={`/api/obras/${obra.id}/epub`}
+                  download
+                  className="rounded px-2 py-1.5 text-sm text-tinta hover:bg-papel-fundo"
+                  title="EPUB dos capítulos prontos — para escolher o intervalo, use “Exportar livro” dentro da obra"
+                >
+                  Baixar EPUB
+                </a>
                 <a
                   href={`/api/obras/${obra.id}/exportar`}
                   download

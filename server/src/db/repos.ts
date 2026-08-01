@@ -49,7 +49,7 @@ function paraFrase(l: any): Frase {
 // ── Obras ──────────────────────────────────────────────────────────────────
 
 // Colunas sem o BLOB da capa (pesado e sem lugar em JSON); tem_capa o resume.
-const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.sinopse, o.tags, o.provedor_padrao,
+const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.autor, o.sinopse, o.tags, o.provedor_padrao,
   o.modelo_padrao, o.fase_traducao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
 
 function paraObra<T extends { tags: unknown; tem_capa: unknown }>(linha: T): T & { tags: string[]; tem_capa: boolean } {
@@ -107,16 +107,19 @@ export const reposObras = {
   atualizar(
     db: BancoDados,
     id: number,
-    campos: Partial<Pick<Obra, 'titulo' | 'titulo_original' | 'sinopse' | 'tags' | 'provedor_padrao' | 'modelo_padrao'>>,
+    campos: Partial<
+      Pick<Obra, 'titulo' | 'titulo_original' | 'autor' | 'sinopse' | 'tags' | 'provedor_padrao' | 'modelo_padrao'>
+    >,
   ): Obra | undefined {
     const atual = this.obter(db, id);
     if (!atual) return undefined;
     db.prepare(
-      `UPDATE obras SET titulo = ?, titulo_original = ?, sinopse = ?, tags = ?, provedor_padrao = ?, modelo_padrao = ?,
+      `UPDATE obras SET titulo = ?, titulo_original = ?, autor = ?, sinopse = ?, tags = ?, provedor_padrao = ?, modelo_padrao = ?,
         atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
     ).run(
       campos.titulo ?? atual.titulo,
       campos.titulo_original !== undefined ? campos.titulo_original : atual.titulo_original,
+      campos.autor !== undefined ? campos.autor : atual.autor,
       campos.sinopse !== undefined ? campos.sinopse : atual.sinopse,
       JSON.stringify(campos.tags !== undefined ? campos.tags : atual.tags),
       campos.provedor_padrao !== undefined ? campos.provedor_padrao : atual.provedor_padrao,

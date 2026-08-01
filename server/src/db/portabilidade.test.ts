@@ -20,6 +20,7 @@ function fixture(): ExportObra {
     obra: {
       titulo: 'Dez Dias Até o Fim',
       titulo_original: '十日终焉',
+      autor: '杀虫队队员',
       sinopse: 'Sinopse de teste.',
       tags: ['xianxia', 'sombrio'],
       capa_base64: null,
@@ -131,6 +132,7 @@ describe('portabilidade — round-trip com schema novo', () => {
     const exp1 = exportarObra(db, importado.id)!;
     // Campos novos preservados.
     expect(exp1.obra.fase_traducao).toBe('cruzeiro');
+    expect(exp1.obra.autor).toBe('杀虫队队员'); // migração 011 (doc 12 §4)
     expect(exp1.capitulos[0].status).toBe('parcial');
     expect(exp1.prompts.find((p) => p.ativo)?.tipo).toBe('delta');
 

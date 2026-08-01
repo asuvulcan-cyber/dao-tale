@@ -5,6 +5,7 @@ import { PROVEDORES_IDS, STATUS_CAPITULO, type EventoTraducao } from '@dao-tale/
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposFrases, reposGlossario, reposObras, reposQa } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
+import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
 import { analisarCapitulo } from '../traducao/qa.js';
 import {
@@ -100,48 +101,17 @@ export function rotasCapitulos(db: BancoDados): Hono {
   });
 
   // ── Download do capítulo traduzido (produto final do fluxo) ──────────────
-  // Reconstrói o texto com as quebras de parágrafo originais (frases.paragrafo).
-  // formato=txt: só a tradução; formato=bilingue: pares chinês/português.
+  // A remontagem do texto vive em exportacao/texto.ts, compartilhada com o EPUB
+  // e o Markdown da obra inteira (doc 12 §5).
 
   app.get('/capitulos/:id/baixar', (c) => {
     const id = Number(c.req.param('id'));
     const capitulo = reposCapitulos.obter(db, id);
     if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
     const param = c.req.query('formato');
-    const formato: 'txt' | 'md' | 'bilingue' = param === 'bilingue' ? 'bilingue' : param === 'md' ? 'md' : 'txt';
+    const formato: FormatoTexto = param === 'bilingue' ? 'bilingue' : param === 'md' ? 'md' : 'txt';
 
-    const frases = reposFrases.listarPorCapitulo(db, id);
-    const porParagrafo = new Map<number, typeof frases>();
-    for (const f of frases) {
-      const lista = porParagrafo.get(f.paragrafo) ?? [];
-      lista.push(f);
-      porParagrafo.set(f.paragrafo, lista);
-    }
-    const paragrafos = [...porParagrafo.entries()].sort(([a], [b]) => a - b).map(([, fs]) => fs);
-
-    const tituloPt = capitulo.titulo_pt || capitulo.titulo;
-    const cabecalhoPt = tituloPt ? `Capítulo ${capitulo.numero} — ${tituloPt}` : `Capítulo ${capitulo.numero}`;
-
-    let conteudo: string;
-    if (formato === 'bilingue') {
-      const cabecalho = capitulo.titulo && capitulo.titulo_pt ? `${capitulo.titulo}\n${cabecalhoPt}` : cabecalhoPt;
-      conteudo =
-        `${cabecalho}\n\n` +
-        paragrafos
-          .map((fs) => {
-            const zh = fs.map((f) => f.texto_zh).join('');
-            const pt = fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' ');
-            return `${zh}\n${pt || '(pendente de tradução)'}`;
-          })
-          .join('\n\n');
-    } else {
-      // md preserva a formatação (itálico/negrito) que a tradução usar; txt é texto puro.
-      const corpo = paragrafos
-        .map((fs) => fs.map((f) => f.texto_pt.trim()).filter(Boolean).join(' '))
-        .filter(Boolean)
-        .join('\n\n');
-      conteudo = formato === 'md' ? `# ${cabecalhoPt}\n\n${corpo}` : `${cabecalhoPt}\n\n${corpo}`;
-    }
+    const conteudo = textoCapitulo(capitulo, reposFrases.listarPorCapitulo(db, id), formato);
 
     const sufixo = formato === 'bilingue' ? '-bilingue' : '';
     const extensao = formato === 'md' ? 'md' : 'txt';

@@ -15,12 +15,14 @@ import type {
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
+import { PainelExportacao } from '../componentes/ExportarObra';
 
 export function Capitulos() {
   const { obraId } = useParams();
   const navegar = useNavigate();
   const clienteQuery = useQueryClient();
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarExportacao, setMostrarExportacao] = useState(false);
   const [erro, setErro] = useState('');
   const [avisosSegmentacao, setAvisosSegmentacao] = useState<string[]>([]);
 
@@ -100,10 +102,28 @@ export function Capitulos() {
             : undefined
         }
       >
+        <Link
+          to={`/ler/${obraId}`}
+          className="ferramenta"
+          title="Abrir o modo leitura — só o texto traduzido, fora da bancada"
+        >
+          Ler
+        </Link>
+        <button
+          type="button"
+          className="ferramenta"
+          aria-pressed={mostrarExportacao}
+          onClick={() => setMostrarExportacao((v) => !v)}
+          title="Gerar EPUB ou Markdown da obra inteira"
+        >
+          Exportar livro
+        </button>
         <Botao onClick={() => setMostrarFormulario((v) => !v)}>
           {mostrarFormulario ? 'Cancelar' : 'Novo capítulo'}
         </Botao>
       </CabecalhoPagina>
+
+      {mostrarExportacao && <PainelExportacao obraId={obraId!} capitulos={capitulos ?? []} />}
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {avisosSegmentacao.length > 0 && (
@@ -467,6 +487,7 @@ function FichaObra() {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
+              {obra.autor && <p className="mb-1 text-sm text-tinta-2">{obra.autor}</p>}
               <p className="olho mb-1">Sinopse</p>
               <p className="max-w-[62ch] text-sm">
                 {obra.sinopse ?? <span className="text-tinta-2 italic">sem sinopse — clique em ✎ para escrever</span>}
@@ -530,10 +551,12 @@ function DetalhesObra() {
 
   const [titulo, setTitulo] = useState<string | null>(null);
   const [tituloOriginal, setTituloOriginal] = useState<string | null>(null);
+  const [autor, setAutor] = useState<string | null>(null);
   const [sinopse, setSinopse] = useState<string | null>(null);
   const [tags, setTags] = useState<string | null>(null);
   const tituloAtual = titulo ?? obra?.titulo ?? '';
   const tituloOriginalAtual = tituloOriginal ?? obra?.titulo_original ?? '';
+  const autorAtual = autor ?? obra?.autor ?? '';
   const sinopseAtual = sinopse ?? obra?.sinopse ?? '';
   const tagsAtual = tags ?? obra?.tags.join(', ') ?? '';
 
@@ -548,6 +571,7 @@ function DetalhesObra() {
         // Título é obrigatório no banco: só envia se preenchido (vazio mantém o atual).
         ...(tituloAtual.trim() ? { titulo: tituloAtual.trim() } : {}),
         titulo_original: tituloOriginalAtual.trim() || null,
+        autor: autorAtual.trim() || null,
         sinopse: sinopseAtual.trim() || null,
         tags: tagsAtual.split(',').map((t) => t.trim()).filter(Boolean),
       }),
@@ -665,6 +689,15 @@ function DetalhesObra() {
               />
             </label>
           </div>
+          <label className="block text-sm">
+            Autor do original
+            <input
+              value={autorAtual}
+              onChange={(e) => setAutor(e.target.value)}
+              className="entrada mt-1 w-full"
+              placeholder="Nome do autor — vira o autor do EPUB"
+            />
+          </label>
           <label className="block text-sm">
             Sinopse
             <textarea

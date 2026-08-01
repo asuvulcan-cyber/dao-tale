@@ -41,6 +41,12 @@
   --txt-cap: .72rem; --txt-sm: .84rem; --txt-base: 1rem; --txt-lead: 1.18rem;
   --txt-h3: 1.35rem; --txt-h2: 2rem;   --txt-h1: 3rem;
 
+  /* — Modo leitura (doc 12 §7): passos de corpo e medida, escolhidos pelo leitor — */
+  --leitor-txt-1: 1rem;    --leitor-txt-2: 1.09rem; --leitor-txt-3: 1.18rem;
+  --leitor-txt-4: 1.32rem; --leitor-txt-5: 1.5rem;
+  --leitor-medida-1: 54ch; --leitor-medida-2: 64ch; --leitor-medida-3: 76ch;
+  --leitor-entrelinha: 1.75;
+
   /* — Espaçamento e raio — */
   --esp-1:.25rem; --esp-2:.5rem; --esp-3:.75rem; --esp-4:1rem;
   --esp-5:1.5rem; --esp-6:2.5rem; --esp-7:4rem; --esp-8:6rem;
@@ -256,6 +262,39 @@ body {
 .frase-lava--confirmada { border-left-color: var(--cor-ok); }
 .frase-lava--regra,
 .frase-lava--erro { border-left-color: var(--cor-erro); }
+
+/* ── Modo leitura (doc 12 §7) ───────────────────────────────────────────────
+   Aqui a identidade fala mais alto: uma folha contínua, serifada, medida curta,
+   parágrafo separado por respiro (sem recuo, convenção de tradução PT-BR). O
+   corpo e a medida vêm dos tokens --leitor-*, escolhidos pelo próprio leitor. */
+.leitor-folha {
+  font-family: var(--fonte-corpo);
+  line-height: var(--leitor-entrelinha);
+  margin-inline: auto;
+  max-width: var(--leitor-medida, var(--leitor-medida-2));
+  font-size: var(--leitor-corpo, var(--leitor-txt-3));
+  text-align: left;
+}
+/* O respiro vive no BLOCO, não no <p>: no modo bilíngue um bloco tem duas linhas
+   (zh + pt) que devem ficar juntas, com o ar entre blocos. */
+.leitor-folha p { margin: 0; }
+.leitor-folha .leitor-bloco + .leitor-bloco { margin-top: var(--esp-4); }
+
+/* Chinês como apoio na leitura bilíngue: menor, esmaecido, acima do português. */
+.leitor-zh {
+  font-family: var(--fonte-zh);
+  color: var(--cor-tinta-2);
+  font-size: 0.88em;
+  line-height: 1.8;
+  margin-bottom: var(--esp-1);
+}
+
+/* Filete de jade sob o título do capítulo — a assinatura, igual à do EPUB. */
+.leitor-ornamento {
+  border-top: 1px solid var(--cor-jade);
+  width: 3em;
+  margin: var(--esp-3) 0 var(--esp-5);
+}
 
 /* Etiqueta pequena do estado, no fim da frase. */
 .chip-estado {

@@ -63,6 +63,12 @@ Trocar a intenção (ex.: mudar "ação" de selo p/ jade) é editar um token só
 | Tamanho txt | `--txt-`    | `--txt-cap`, `--txt-sm`, `--txt-base`, `--txt-lead`, `--txt-h3`, `--txt-h2`, `--txt-h1` |
 | Espaçamento | `--esp-`    | `--esp-1`…`--esp-8` (escala 4/8/12/16/24/40/64/96px) |
 | Raio        | `--raio-`   | `--raio-1`, `--raio-2`, `--raio-selo`, `--raio-pill` |
+| Leitura     | `--leitor-` | `--leitor-txt-1`…`--leitor-txt-5`, `--leitor-medida-1`…`-3`, `--leitor-entrelinha` |
+
+> A família `--leitor-` existe porque o modo leitura (doc 12 §7) deixa o **leitor** escolher
+> corpo e medida: os controles `A−/A+` e `largura` trocam qual token o componente usa
+> (`var(--leitor-txt-4)`), em vez de calcular px. O EPUB é o mesmo sistema em outro alvo:
+> `shared/src/pigmentos.ts` leva a camada de pigmento para fora do navegador.
 
 ## Ponte com o Tailwind v4
 

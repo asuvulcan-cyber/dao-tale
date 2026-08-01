@@ -19,7 +19,9 @@ function aplicarTema(tema: Tema) {
   document.documentElement.setAttribute('data-theme', tema === 'escuro' ? 'dark' : 'light');
 }
 
-function BotaoTema() {
+/** Alterna claro/escuro. Exportado porque o modo leitura (doc 12 §7) tem barra
+    própria, fora da casca, e reaproveita este controle em vez de duplicá-lo. */
+export function BotaoTema() {
   const [tema, setTema] = useState<Tema>(() => temaEfetivo());
   useEffect(() => {
     aplicarTema(tema);

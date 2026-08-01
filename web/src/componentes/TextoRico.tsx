@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import type { EntradaGlossario } from '@dao-tale/shared';
+import { partirInline, type EntradaGlossario } from '@dao-tale/shared';
 
 // ── Marcação de termos do glossário no texto (item 13 do backlog) ───────────
 
@@ -54,8 +54,8 @@ export function TextoMarcadoZh({ texto, marcador }: { texto: string; marcador: M
 // ── Markdown inline (itálico/negrito) na tradução ───────────────────────────
 // A IA usa *itálico* e **negrito** (que o download .md preserva); aqui eles
 // ficam visíveis no editor. Só formatação inline — parágrafos são as frases.
-
-const RE_MD_INLINE = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g;
+// A gramática vem de shared/src/inline.ts: o mesmo conversor que gera o XHTML do
+// EPUB e alimenta o modo leitura (doc 12 §3).
 
 export function TextoTraduzido({
   texto,
@@ -67,18 +67,12 @@ export function TextoTraduzido({
   const decorar = (t: string): ReactNode =>
     marcador ? marcarTermos(t, marcador.regexPt, (x) => marcador.glosaPt.get(x.toLowerCase())) : t;
   if (!texto) return null;
-  const partes = texto.split(RE_MD_INLINE);
-  if (partes.length === 1) return <>{decorar(texto)}</>;
   return (
     <>
-      {partes.map((parte, i) => {
-        if (parte.startsWith('**') && parte.endsWith('**') && parte.length > 4) {
-          return <strong key={i}>{decorar(parte.slice(2, -2))}</strong>;
-        }
-        if (parte.startsWith('*') && parte.endsWith('*') && parte.length > 2) {
-          return <em key={i}>{decorar(parte.slice(1, -1))}</em>;
-        }
-        return <Fragment key={i}>{decorar(parte)}</Fragment>;
+      {partirInline(texto).map((segmento, i) => {
+        if (segmento.tipo === 'negrito') return <strong key={i}>{decorar(segmento.texto)}</strong>;
+        if (segmento.tipo === 'italico') return <em key={i}>{decorar(segmento.texto)}</em>;
+        return <Fragment key={i}>{decorar(segmento.texto)}</Fragment>;
       })}
     </>
   );
