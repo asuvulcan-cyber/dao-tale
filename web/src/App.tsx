@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { CATEGORIAS_GLOSSARIO, type CategoriaGlossario, type EstadoSaude } from '@dao-tale/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CATEGORIAS_GLOSSARIO, type CategoriaGlossario, type EstadoSaude, type EstadoSessao } from '@dao-tale/shared';
 import { api } from './api';
+import { CHAVE_SESSAO, usarSessao } from './sessao';
 
 // ── Tema (claro/escuro) ─────────────────────────────────────────────────────
 // Persiste a escolha explícita; sem escolha, segue o SO (prefers-color-scheme).
@@ -72,11 +73,42 @@ function TarjaInstancia() {
   );
 }
 
+/** Sair da sessão (doc 13 §7). Só existe em modo hospedado — no desktop local
+    não há sessão para encerrar. */
+export function BotaoSair() {
+  const cliente = useQueryClient();
+  const { data } = usarSessao();
+  const [saindo, setSaindo] = useState(false);
+  if (data?.modo !== 'hospedado') return null;
+
+  return (
+    <button
+      type="button"
+      disabled={saindo}
+      onClick={async () => {
+        setSaindo(true);
+        try {
+          await api('DELETE', '/sessao');
+        } finally {
+          cliente.clear();
+          cliente.setQueryData<EstadoSessao>(CHAVE_SESSAO, { ...data, autenticado: false });
+        }
+      }}
+      className="text-tinta-2 hover:text-tinta"
+      title="Encerrar a sessão neste aparelho"
+    >
+      Sair
+    </button>
+  );
+}
+
 export function Casca() {
   return (
     <div className="min-h-screen bg-papel text-tinta">
       <header className="border-b border-linha bg-papel-alto">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+        {/* flex-wrap: no celular a navegação desce para a segunda linha em vez
+            de espremer o título até sumir (doc 13 §7). */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
           <Link to="/" className="flex items-center gap-2.5">
             <span
               className="grid size-8 place-items-center rounded-selo bg-selo font-zh text-lg leading-none text-papel-alto"
@@ -87,7 +119,7 @@ export function Casca() {
             <span className="font-display text-xl font-semibold tracking-tight">Dao Tale</span>
             <TarjaInstancia />
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
+          <nav className="flex items-center gap-3 whitespace-nowrap text-sm sm:gap-4">
             <NavLink
               to="/"
               end
@@ -121,6 +153,7 @@ export function Casca() {
             >
               Configurações
             </NavLink>
+            <BotaoSair />
             <BotaoTema />
           </nav>
         </div>

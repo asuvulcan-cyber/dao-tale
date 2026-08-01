@@ -10,7 +10,9 @@ import { rotasFrases } from './rotas/frases.js';
 import { rotasCuradoria } from './rotas/curadoria.js';
 import { rotasComparador } from './rotas/comparador.js';
 import { rotasExportacao } from './rotas/exportacao.js';
-import { protecaoLocal } from './rotas/protecaoLocal.js';
+import { protecaoOrigem } from './rotas/protecaoOrigem.js';
+import { exigirSessao, rotasSessao } from './rotas/sessao.js';
+import type { OpcoesLimite } from './auth/limite.js';
 
 const dirWebDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 
@@ -25,11 +27,36 @@ const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
 };
 
-export function criarApp(db: BancoDados): Hono {
+export interface OpcoesApp {
+  /** Ajuste do freio de login — os testes zeram o atraso progressivo. */
+  limiteLogin?: OpcoesLimite;
+}
+
+export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
   const app = new Hono();
 
-  // Proteção CSRF/DNS-rebinding da API local (doc 10 §3) — antes das rotas.
-  app.use('/api/*', protecaoLocal());
+  // Cabeçalhos de segurança em tudo (doc 13 §4): não dependem do proxy, então
+  // valem igual no modo local.
+  app.use('*', async (c, next) => {
+    await next();
+    try {
+      c.res.headers.set('X-Content-Type-Options', 'nosniff');
+      c.res.headers.set('Referrer-Policy', 'same-origin');
+      c.res.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+    } catch {
+      /* resposta congelada — sem cabeçalho extra, sem quebrar a requisição */
+    }
+  });
+
+  // Origem permitida: loopback no modo local, allowlist do domínio no hospedado
+  // (doc 10 §3 → doc 13 §1). Antes de qualquer rota.
+  app.use('/api/*', protecaoOrigem());
+
+  // Login/logout/status ficam ANTES da guarda — são a porta, não o cômodo.
+  app.route('/api', rotasSessao(opcoes.limiteLogin));
+
+  // Daqui para baixo, em modo hospedado, tudo exige sessão (doc 13 §3).
+  app.use('/api/*', exigirSessao());
 
   app.route('/api', rotasSistema(db));
   app.route('/api', rotasObras(db));

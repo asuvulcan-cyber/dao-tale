@@ -1,0 +1,56 @@
+# Dao Tale — serviço headless em modo hospedado (doc 13 §5).
+#
+#     sudo cp deploy/dao-tale.service /etc/systemd/system/
+#     sudo systemctl daemon-reload && sudo systemctl enable --now dao-tale
+#
+# Backup automático, rotação, integrity_check, lockfile de instância única e
+# shutdown limpo vêm do Passo 4 (doc 10) — o KillSignal abaixo é o que dispara
+# o checkpoint do WAL antes de o processo morrer.
+
+[Unit]
+Description=Dao Tale — tradução assistida (modo hospedado)
+Documentation=file:/opt/dao-tale/docs/13-hospedagem-fase-b.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daotale
+Group=daotale
+WorkingDirectory=/opt/dao-tale
+
+# Segredos e configuração ficam fora do repositório, em arquivo 0600.
+EnvironmentFile=/etc/dao-tale/dao-tale.env
+
+ExecStart=/usr/bin/npm --silent -w server run start
+
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=20s
+
+# /var/lib/dao-tale (banco, backups, credenciais.json, auth.json, sessao.chave)
+StateDirectory=dao-tale
+StateDirectoryMode=0700
+
+# ── Endurecimento (doc 13 §6) ───────────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dao-tale
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# MemoryDenyWriteExecute fica DESLIGADO de propósito: o JIT do V8 precisa de
+# páginas graváveis e executáveis, e ligar isso derruba o Node na subida.
+
+[Install]
+WantedBy=multi-user.target

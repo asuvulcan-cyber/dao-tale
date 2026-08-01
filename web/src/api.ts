@@ -11,6 +11,11 @@ export class ErroApi extends Error {
   }
 }
 
+/** Modo hospedado (doc 13 §3): a sessão venceu (ou o serviço reiniciou com
+    senha nova) enquanto a aba estava aberta. Quem escuta é o PortaoSessao, que
+    troca o app pela tela de login sem perder a rota atual. */
+export const EVENTO_SESSAO_EXPIRADA = 'dao-tale:sessao-expirada';
+
 export async function api<T>(metodo: string, rota: string, corpo?: unknown): Promise<T> {
   const resposta = await fetch(`/api${rota}`, {
     method: metodo,
@@ -20,6 +25,9 @@ export async function api<T>(metodo: string, rota: string, corpo?: unknown): Pro
   const texto = await resposta.text();
   const dados = texto ? JSON.parse(texto) : null;
   if (!resposta.ok) {
+    if (resposta.status === 401 && dados?.erro?.codigo === 'nao-autenticado') {
+      window.dispatchEvent(new CustomEvent(EVENTO_SESSAO_EXPIRADA));
+    }
     throw new ErroApi(
       dados?.erro?.mensagem ?? `Erro ${resposta.status}`,
       resposta.status,

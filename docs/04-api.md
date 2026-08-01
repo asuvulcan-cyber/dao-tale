@@ -2,6 +2,8 @@
 
 API REST em `http://127.0.0.1:8317/api`, JSON, validada com Zod nos dois lados (schemas em `shared/`). Erros seguem o formato `{ erro: { codigo, mensagem, detalhes? } }` com status HTTP adequado. Como o app é single-user local, não há autenticação — a superfície de segurança é o bind em `127.0.0.1`.
 
+Em **modo hospedado** (`DAO_TALE_MODO=hospedado`, doc 13) isso muda: toda rota abaixo passa a exigir cookie de sessão (`401 nao-autenticado` sem ele) e Host/Origin na allowlist do domínio (`403 origem-bloqueada`). No modo local, padrão, nada disso entra em ação.
+
 ## Recursos
 
 ### Saúde e configurações
@@ -94,6 +96,14 @@ explícita, vence o intervalo). Escopo sem capítulo nenhum → `400 escopo-vazi
 | `GET /obras/:id/telemetria` | Painel da obra: total, por papel, por modelo, por capítulo (custo × qualidade na mesma linha) e os veredictos de cache e de lote |
 | `GET /telemetria/dia` | Consumo do dia por provedor: tentativas (`uso_ia`) vs. chamadas faturadas, tokens, custo e % da cota |
 | `POST /telemetria/recalcular` | Recalcula `custo_estimado` de todo o histórico com a tabela de preços vigente; devolve `{ atualizados, total }` |
+
+### Sessão (só no modo hospedado, doc 13)
+
+| Método e rota | Descrição |
+|---|---|
+| `GET /sessao` | Única rota pública: `{ modo, autenticado, senha_definida }` — é o que a interface consulta para decidir entre login e app |
+| `POST /sessao` | Login `{ senha }` → cookie `HttpOnly; Secure; SameSite=Lax`. Rate-limited (`429 muitas-tentativas` com `Retry-After`); em modo local devolve `400 sem-autenticacao` |
+| `DELETE /sessao` | Logout: expira o cookie |
 
 ## Notas de desenho
 

@@ -1,18 +1,19 @@
 import path from 'node:path';
 import readline from 'node:readline';
-import { HOST, PORTA, caminhoBanco, diretorioDados } from '../config.js';
+import { caminhoBanco, diretorioDados } from '../config.js';
+import { lerLock, processoVivo, type Lock } from '../instancia.js';
 import { caminhoBackups, listarBackups, restaurarDe } from './backup.js';
 
 // CLI de restauração (doc 10 §1). Uso: `npm run restaurar` (lista) ou
 // `npm run restaurar -- <índice|nome>` (restaura). Recusa se o app estiver no ar.
 
-async function appNoAr(): Promise<boolean> {
-  try {
-    const r = await fetch(`http://${HOST}:${PORTA}/api/saude`, { signal: AbortSignal.timeout(1500) });
-    return r.ok;
-  } catch {
-    return false;
-  }
+/** Quem responde "o app está rodando?" é o lockfile do Passo 4, não o HTTP.
+ *  Em modo hospedado (doc 13 §3) `/api/saude` passou a exigir sessão e devolve
+ *  401 — o teste antigo (`r.ok`) concluiria "não está no ar" e restauraria o
+ *  banco por baixo de um servidor vivo. O lock é do processo, não da rota. */
+function appNoAr(): Lock | null {
+  const lock = lerLock();
+  return lock && processoVivo(lock.pid) ? lock : null;
 }
 
 function confirmar(pergunta: string): Promise<boolean> {
@@ -32,9 +33,10 @@ async function main(): Promise<void> {
   const destino = caminhoBanco();
   const lista = listarBackups(dir);
 
-  if (await appNoAr()) {
+  const noAr = appNoAr();
+  if (noAr) {
     console.error(
-      `O Dao Tale parece estar rodando em http://${HOST}:${PORTA}. ` +
+      `O Dao Tale está rodando nesta pasta (PID ${noAr.pid}, porta ${noAr.porta}). ` +
         `Feche-o antes de restaurar (o banco não pode ser trocado com o app aberto).`,
     );
     process.exit(1);

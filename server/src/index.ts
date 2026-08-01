@@ -4,7 +4,8 @@ import { banco } from './db/index.js';
 import { checkpointWal, fazerBackup, listarBackups, verificarIntegridade } from './db/backup.js';
 import { criarApp } from './app.js';
 import { adquirirLock } from './instancia.js';
-import { HOST, PORTA, caminhoBanco, diretorioDados } from './config.js';
+import { avisosDeHospedagem, problemasDeHospedagem } from './auth/boot.js';
+import { ehHospedado, enderecoBind, hostsPublicos, PORTA, caminhoBanco, diretorioDados } from './config.js';
 
 // C2 (cinto de segurança): promessa órfã de um job nunca deve derrubar o
 // servidor no meio de uma tradução — loga e segue (o estado durável das
@@ -12,6 +13,18 @@ import { HOST, PORTA, caminhoBanco, diretorioDados } from './config.js';
 process.on('unhandledRejection', (motivo) => {
   console.error('[dao-tale] promessa rejeitada sem tratamento:', motivo);
 });
+
+// Guarda de hospedagem (doc 13 §2): fail-closed. Faltando senha, domínio ou
+// segredo, o processo NÃO sobe — nunca pode existir um Dao Tale na internet sem
+// autenticação, com chaves de API dentro.
+const problemas = problemasDeHospedagem();
+if (problemas.length > 0) {
+  console.error(`[dao-tale] DAO_TALE_MODO=hospedado, mas a configuração de segurança está incompleta:`);
+  for (const p of problemas) console.error(`           • ${p}`);
+  console.error(`           Nada foi servido. Veja docs/13-hospedagem-fase-b.md.`);
+  process.exit(1);
+}
+for (const aviso of avisosDeHospedagem()) console.warn(`[dao-tale] atenção: ${aviso}`);
 
 // Instância única por pasta de dados (doc 10 §2).
 const lock = adquirirLock(PORTA);
@@ -48,9 +61,12 @@ if (ultimo && Date.now() - new Date(ultimo.em).getTime() < INTERVALO_BOOT_MS) {
 
 const app = criarApp(db);
 
-const servidor = serve({ fetch: app.fetch, hostname: HOST, port: PORTA }, (info) => {
-  const url = `http://${HOST}:${info.port}`;
+const servidor = serve({ fetch: app.fetch, hostname: enderecoBind(), port: PORTA }, (info) => {
+  const url = `http://${enderecoBind()}:${info.port}`;
   console.log(`Dao Tale rodando em ${url}`);
+  if (ehHospedado()) {
+    console.log(`Modo hospedado — acesso por https://${hostsPublicos().join(', https://')} (TLS no proxy)`);
+  }
   console.log(`Banco de dados: ${caminhoBanco()}`);
 
   if (process.env.DAO_TALE_ABRIR === '1') {

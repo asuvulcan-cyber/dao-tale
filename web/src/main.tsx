@@ -17,6 +17,7 @@ import { Docs } from './paginas/Docs';
 import { ComparadorModelos } from './paginas/ComparadorModelos';
 import { Telemetria } from './paginas/Telemetria';
 import { Leitor } from './paginas/Leitor';
+import { PortaoSessao } from './componentes/PortaoSessao';
 
 const clienteQuery = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -56,7 +57,10 @@ const rotas = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('raiz')!).render(
   <React.StrictMode>
     <QueryClientProvider client={clienteQuery}>
-      <RouterProvider router={rotas} />
+      {/* Em modo hospedado (doc 13 §3), nada do app é montado sem sessão. */}
+      <PortaoSessao>
+        <RouterProvider router={rotas} />
+      </PortaoSessao>
     </QueryClientProvider>
   </React.StrictMode>,
 );

@@ -21,6 +21,12 @@ Sem chave de API dá para usar tudo com o provedor **Simulado**. Chaves reais (C
 
 Desenvolvimento: `npm run dev` (servidor + Vite com reload) · testes: `npm test` · tipos: `npm run typecheck` · atalho de área de trabalho: `npm run atalho`.
 
+### Acesso remoto (opcional)
+
+Por padrão o Dao Tale é local: escuta em `127.0.0.1`, sem senha, exatamente como sempre foi. Quem quiser acessar a própria instância de fora (celular) pode subir o **modo hospedado** num servidor: `DAO_TALE_MODO=hospedado` liga autenticação por senha em toda a API, allowlist de domínio e cookie de sessão, e o app passa a exigir TLS por um proxy (Caddy). É de **um usuário só** — não há contas, cadastro nem catálogo público.
+
+Passo a passo, arquivos de deploy (`deploy/`) e checklist de segurança em [`docs/13-hospedagem-fase-b.md`](docs/13-hospedagem-fase-b.md). A senha é definida com `npm run senha` e guardada com hash; nunca em arquivo de configuração.
+
 ## Documentação de projeto
 
 A especificação completa está em `docs/`, na ordem de leitura:

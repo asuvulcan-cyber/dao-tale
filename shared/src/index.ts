@@ -492,6 +492,14 @@ export interface EstadoSaude {
   backups: { total: number; ultimo: string | null };
 }
 
+// GET /api/sessao — única rota pública em modo hospedado (doc 13 §3). Diz só o
+// necessário para a interface escolher entre login e app.
+export interface EstadoSessao {
+  modo: 'local' | 'hospedado';
+  autenticado: boolean;
+  senha_definida: boolean;
+}
+
 export interface InfoBackup {
   nome: string;
   caminho: string;

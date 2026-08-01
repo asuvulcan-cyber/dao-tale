@@ -108,6 +108,12 @@ Middleware `app.use('/api/*', …)` em `criarApp`, antes das rotas. Regra (basea
 `Origin` público → 403; `Origin` loopback → 200; `GET`/`POST` com `Host` não-loopback →
 403; fluxo existente (sem `Origin`, `Host: localhost`) → intacto.
 
+> **Atualização (Passo 7, doc 13 §1):** o módulo virou `rotas/protecaoOrigem.ts` e ganhou
+> um segundo modo. A regra descrita acima continua valendo palavra por palavra no **modo
+> local** (o padrão); em **modo hospedado** o loopback dá lugar à allowlist do domínio, o
+> `Origin` passa a ser obrigatório nos métodos mutantes, e quem autentica de verdade é a
+> sessão. Os testes desta seção seguem verdes, sem alteração.
+
 ---
 
 ## 4. Export/import redondo com o schema novo

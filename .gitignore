@@ -8,3 +8,8 @@ dist/
 .dados-dev/
 # Backups de obra (dados do usuário, não versionar — auditoria B6)
 *-backup.json
+# Segredos da hospedagem (doc 13 §6) — nunca versionar
+auth.json
+sessao.chave
+credenciais.json
+dao-tale.env

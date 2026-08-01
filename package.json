@@ -13,6 +13,7 @@
     "build": "npm -w web run build",
     "start": "node scripts/start.mjs",
     "restaurar": "npm -w server run restaurar",
+    "senha": "npm -w server run senha",
     "atalho": "node scripts/criar-atalho.mjs",
     "test": "npm -w server run test",
     "typecheck": "npm -w server run typecheck && npm -w web run typecheck"

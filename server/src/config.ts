@@ -28,9 +28,56 @@ export const PORTA = Number(process.env.DAO_TALE_PORTA ?? 8317);
 export const HOST = '127.0.0.1';
 export const PORTA_PADRAO = 8317;
 
+// ── Modo de operação (doc 13 §2) ────────────────────────────────────────────
+// `local` (padrão) = a máquina é do usuário, loopback é confiança suficiente —
+// exatamente o comportamento de sempre. `hospedado` = atrás de um domínio, onde
+// quem autentica é a sessão, não o endereço. Funções (não constantes) porque os
+// testes trocam o ambiente entre casos.
+
+export type ModoOperacao = 'local' | 'hospedado';
+
+export function modoOperacao(): ModoOperacao {
+  return process.env.DAO_TALE_MODO === 'hospedado' ? 'hospedado' : 'local';
+}
+
+export function ehHospedado(): boolean {
+  return modoOperacao() === 'hospedado';
+}
+
+/** Hostnames públicos aceitos em modo hospedado (`DAO_TALE_HOST_PUBLICO`, lista
+ *  separada por vírgula). Aceita URL colada ("https://tale.exemplo.com/") e
+ *  host com porta — guarda só o hostname, minúsculo. */
+export function hostsPublicos(): string[] {
+  return (process.env.DAO_TALE_HOST_PUBLICO ?? '')
+    .split(',')
+    .map((bruto) => hostnameDe(bruto.trim()))
+    .filter((h): h is string => !!h);
+}
+
+function hostnameDe(valor: string): string | null {
+  if (!valor) return null;
+  const comEsquema = /^[a-z]+:\/\//i.test(valor) ? valor : `http://${valor}`;
+  try {
+    const h = new URL(comEsquema).hostname.toLowerCase();
+    return h || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Endereço de escuta. O padrão é loopback nos dois modos: hospedado, quem fala
+ *  com a internet é o proxy TLS (doc 13 §4). `DAO_TALE_BIND` existe só para o
+ *  caso de o proxy estar em outro container. */
+export function enderecoBind(): string {
+  return process.env.DAO_TALE_BIND ?? HOST;
+}
+
 /** Instância "real": sem redirecionamento de dados e na porta padrão. Quando
  *  false, a UI mostra a tarja de instância de teste (doc 10 §2) — o histórico de
- *  8317/8399/8412 já confundiu o usuário sobre qual instância estava rodando. */
+ *  8317/8399/8412 já confundiu o usuário sobre qual instância estava rodando.
+ *  Em modo hospedado a pasta do serviço (`/var/lib/dao-tale`) É a real, então a
+ *  tarja não faz sentido — senão ficaria acesa para sempre no VPS. */
 export function ehInstanciaCanonica(): boolean {
+  if (ehHospedado()) return true;
   return !process.env.DAO_TALE_DIR && !process.env.DAO_TALE_BANCO && PORTA === PORTA_PADRAO;
 }

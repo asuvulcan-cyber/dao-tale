@@ -13,7 +13,7 @@ import {
   type Obra,
 } from '@dao-tale/shared';
 import { api } from '../api';
-import { BotaoTema } from '../App';
+import { BotaoTema, MenuMais } from '../App';
 
 // Modo leitura (doc 12 §7): o payoff da máquina de tradução. Página read-only,
 // FORA da casca de trabalho — nenhuma aba de bancada, nenhuma ação que escreva no
@@ -129,32 +129,27 @@ export function Leitor() {
           >
             ☰
           </button>
-          <div className="seg shrink-0">
-            <button type="button" onClick={() => setCorpo((v) => Math.max(1, v - 1))} title="Diminuir a letra">
-              A−
-            </button>
-            <button type="button" onClick={() => setCorpo((v) => Math.min(CORPOS.length, v + 1))} title="Aumentar a letra">
-              A+
-            </button>
+          {/* No celular (uso principal do leitor, doc 13 §7) os ajustes vão para
+              um menu: sete controles em linha espremiam o título do capítulo até
+              sobrar nada. No desktop continuam todos à mostra. */}
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+            <AjustesLeitura
+              setCorpo={setCorpo}
+              setMedida={setMedida}
+              bilingue={bilingue}
+              setBilingue={setBilingue}
+            />
           </div>
-          <button
-            type="button"
-            className="ferramenta shrink-0"
-            onClick={() => setMedida((v) => (v % MEDIDAS.length) + 1)}
-            title="Largura da coluna de texto"
-          >
-            largura
-          </button>
-          <button
-            type="button"
-            className="ferramenta shrink-0 font-zh"
-            aria-pressed={bilingue}
-            onClick={() => setBilingue((v) => !v)}
-            title="Leitura bilíngue: chinês acima do português"
-          >
-            中
-          </button>
-          <BotaoTema />
+          <div className="shrink-0 sm:hidden">
+            <MenuMais titulo="Ajustes de leitura" rotulo="Aa">
+              <AjustesLeitura
+                setCorpo={setCorpo}
+                setMedida={setMedida}
+                bilingue={bilingue}
+                setBilingue={setBilingue}
+              />
+            </MenuMais>
+          </div>
         </div>
       </header>
 
@@ -222,6 +217,54 @@ export function Leitor() {
         )}
       </main>
     </div>
+  );
+}
+
+/** Corpo da letra, largura da coluna, bilíngue e tema. Os mesmos controles
+    servem à barra do desktop e ao menu do celular; `data-manter` impede que o
+    menu feche a cada ajuste (é para experimentar até ficar confortável). */
+function AjustesLeitura({
+  setCorpo,
+  setMedida,
+  bilingue,
+  setBilingue,
+}: {
+  setCorpo: React.Dispatch<React.SetStateAction<number>>;
+  setMedida: React.Dispatch<React.SetStateAction<number>>;
+  bilingue: boolean;
+  setBilingue: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  return (
+    <>
+      <div className="seg shrink-0" data-manter>
+        <button type="button" onClick={() => setCorpo((v) => Math.max(1, v - 1))} title="Diminuir a letra">
+          A−
+        </button>
+        <button type="button" onClick={() => setCorpo((v) => Math.min(CORPOS.length, v + 1))} title="Aumentar a letra">
+          A+
+        </button>
+      </div>
+      <button
+        type="button"
+        className="ferramenta shrink-0"
+        data-manter
+        onClick={() => setMedida((v) => (v % MEDIDAS.length) + 1)}
+        title="Largura da coluna de texto"
+      >
+        largura
+      </button>
+      <button
+        type="button"
+        className="ferramenta shrink-0 font-zh"
+        data-manter
+        aria-pressed={bilingue}
+        onClick={() => setBilingue((v) => !v)}
+        title="Leitura bilíngue: chinês acima do português"
+      >
+        中
+      </button>
+      <BotaoTema />
+    </>
   );
 }
 

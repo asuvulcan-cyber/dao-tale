@@ -1,0 +1,23 @@
+# Dao Tale — terminação TLS (doc 13 §4).
+#
+# Instale em /etc/caddy/Caddyfile, troque o domínio e recarregue:
+#     sudo caddy validate --config /etc/caddy/Caddyfile
+#     sudo systemctl reload caddy
+#
+# O Caddy resolve o certificado Let's Encrypt sozinho na primeira requisição,
+# renova sozinho, redireciona 80 → 443 e manda HSTS por padrão. O Dao Tale só
+# escuta em 127.0.0.1 — não existe caminho em claro para ele.
+
+tale.exemplo.com {
+	encode zstd gzip
+
+	# Preserva o Host original (é o que a allowlist do DAO_TALE_HOST_PUBLICO
+	# confere) e acrescenta X-Forwarded-For, usado no freio do login.
+	reverse_proxy 127.0.0.1:8317
+
+	log {
+		output file /var/log/caddy/dao-tale.log
+		# A senha viaja no corpo do POST /api/sessao, que não é logado; ainda
+		# assim, nada de gravar corpo de requisição aqui.
+	}
+}
