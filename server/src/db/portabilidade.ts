@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BancoDados } from './index.js';
-import { FASES_TRADUCAO, STATUS_CAPITULO, type Obra } from '@dao-tale/shared';
+import { FASES_TRADUCAO, STATUS_CAPITULO, normalizarPreferencias, type Obra } from '@dao-tale/shared';
 import { reposObras } from './repos.js';
 
 // Exportação/reimportação completa da obra (formato dao-tale-export v1, doc 03).
@@ -40,6 +40,11 @@ const exportSchema = z.object({
         // nucleo_id não viaja no export: é um id interno de outro banco — na
         // reimportação o delta volta a compor com o núcleo ativo local.
         tipo: z.enum(['completo', 'delta']).default('completo'),
+        // Preferências de estilo da versão (doc 08 §12). Ausentes (export antigo)
+        // = padrões do aplicativo, que é o comportamento com que o export foi
+        // gerado. Viaja como JSON opaco: `normalizarPreferencias` valida na leitura,
+        // então um export adulterado não consegue produzir prompt sem regra de diálogo.
+        preferencias: z.unknown().optional(),
         criado_em: z.string(),
       }),
     )
@@ -154,6 +159,7 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
       notas_versao: p.notas_versao,
       ativo: !!p.ativo,
       tipo: (p.tipo ?? 'completo') as 'completo' | 'delta',
+      preferencias: p.preferencias ? normalizarPreferencias(p.preferencias) : undefined,
       criado_em: p.criado_em,
     })),
     capitulos: capitulos.map((cap) => ({
@@ -254,9 +260,18 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
     for (const p of dados.prompts) {
       const info = db
         .prepare(
-          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, tipo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, tipo, preferencias, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(obraId, p.versao, p.conteudo, p.notas_versao, p.ativo ? 1 : 0, p.tipo, p.criado_em);
+        .run(
+          obraId,
+          p.versao,
+          p.conteudo,
+          p.notas_versao,
+          p.ativo ? 1 : 0,
+          p.tipo,
+          p.preferencias ? JSON.stringify(normalizarPreferencias(p.preferencias)) : null,
+          p.criado_em,
+        );
       promptIdPorVersao.set(p.versao, Number(info.lastInsertRowid));
     }
 

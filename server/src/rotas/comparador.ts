@@ -5,6 +5,7 @@ import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposGlossario, reposObras, reposPrompts, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
+import { metricasEstilo, type MetricasEstilo } from '../ia/metricasEstilo.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 import { segmentar } from '../segmentacao/segmentar.js';
@@ -17,7 +18,15 @@ import { registrarEvento } from '../telemetria/registrar.js';
 const compararSchema = z.object({
   texto_zh: z.string().trim().min(1).max(6000),
   alvos: z
-    .array(z.object({ provedor: z.enum(PROVEDORES_IDS), modelo: z.string().max(120).optional() }))
+    .array(
+      z.object({
+        provedor: z.enum(PROVEDORES_IDS),
+        modelo: z.string().max(120).optional(),
+        // Portão A/B do núcleo (doc 08 §12): o mesmo modelo roda o mesmo trecho
+        // com duas versões do núcleo. Ausente = o núcleo ativo, como sempre.
+        nucleo_id: z.number().int().positive().optional(),
+      }),
+    )
     .min(1)
     .max(8),
 });
@@ -25,8 +34,11 @@ const compararSchema = z.object({
 export interface ResultadoComparacao {
   provedor: string;
   modelo: string;
+  /** Versão do núcleo usada, quando o alvo pediu uma específica. */
+  nucleo_versao?: string;
   ok: boolean;
   texto_pt?: string;
+  metricas?: MetricasEstilo;
   erro?: string;
   ms: number;
 }
@@ -68,8 +80,7 @@ export function rotasComparador(db: BancoDados): Hono {
       ? incluirPrincipais(filtrarGlossarioRelevante(glossarioTodo, [corpo.data.texto_zh]), glossarioTodo)
       : glossarioTodo;
 
-    const base: Omit<RequisicaoTraducaoBloco, 'modelo'> = {
-      promptMae: prompt.texto,
+    const base: Omit<RequisicaoTraducaoBloco, 'modelo' | 'promptMae'> = {
       glossario,
       glossarioNoUsuario: config.glossario_relevante,
       caudaAnterior: [],
@@ -80,15 +91,24 @@ export function rotasComparador(db: BancoDados): Hono {
     const resultados = await Promise.all(
       corpo.data.alvos.map(async (alvo): Promise<ResultadoComparacao> => {
         const inicio = Date.now();
+        // Fora do try: uma falha do provedor ainda precisa dizer de qual núcleo
+        // era o alvo, senão o A/B fica sem saber qual lado caiu.
+        let nucleo_versao: string | undefined;
         try {
           const provedor = obterProvedor(alvo.provedor);
           const modelo = alvo.modelo?.trim() || provedor.modeloPadrao;
+          // Núcleo pedido pelo alvo (A/B) ou o ativo, já composto no início.
+          const composto = alvo.nucleo_id != null ? reposPrompts.composto(db, obraId, alvo.nucleo_id) : prompt;
+          if (!composto?.nucleo && alvo.nucleo_id != null) {
+            return { provedor: alvo.provedor, modelo, ok: false, erro: 'Versão de núcleo não encontrada.', ms: 0 };
+          }
+          nucleo_versao = alvo.nucleo_id != null ? composto!.nucleo!.versao : undefined;
           const chave = provedor.precisaChave ? await obterChave(alvo.provedor) : null;
           if (provedor.precisaChave && !chave) {
-            return { provedor: alvo.provedor, modelo, ok: false, erro: 'Nenhuma chave de API configurada.', ms: 0 };
+            return { provedor: alvo.provedor, modelo, nucleo_versao, ok: false, erro: 'Nenhuma chave de API configurada.', ms: 0 };
           }
           reposUso.registrar(db, alvo.provedor, modelo);
-          const resposta = await provedor.traduzirBloco(chave, { ...base, modelo });
+          const resposta = await provedor.traduzirBloco(chave, { ...base, promptMae: composto!.texto, modelo });
           registrarEvento(db, {
             obra_id: obraId,
             capitulo_id: null,
@@ -106,12 +126,21 @@ export function rotasComparador(db: BancoDados): Hono {
             paragrafos.set(f.paragrafo, lista);
           });
           const texto_pt = [...paragrafos.values()].map((l) => l.join(' ')).join('\n\n');
-          return { provedor: alvo.provedor, modelo, ok: true, texto_pt, ms: Date.now() - inicio };
+          return {
+            provedor: alvo.provedor,
+            modelo,
+            nucleo_versao,
+            ok: true,
+            texto_pt,
+            metricas: metricasEstilo(texto_pt, { glossario: glossarioTodo, textoZh: corpo.data.texto_zh }),
+            ms: Date.now() - inicio,
+          };
         } catch (e) {
           const mensagem = e instanceof ErroProvedor ? e.message : String((e as Error).message ?? e);
           return {
             provedor: alvo.provedor,
             modelo: alvo.modelo?.trim() || '(padrão)',
+            nucleo_versao,
             ok: false,
             erro: mensagem,
             ms: Date.now() - inicio,

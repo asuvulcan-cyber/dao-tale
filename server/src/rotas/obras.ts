@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   FASES_TRADUCAO,
   PROVEDORES_IDS,
+  normalizarPreferencias,
   type Configuracoes,
   type EventoLote,
   type ParProvedor,
@@ -84,6 +85,20 @@ const criarPromptSchema = z.object({
   notas_versao: z.string().optional(),
   ativar: z.boolean().default(true),
   tipo: z.enum(['completo', 'delta']).optional(),
+  // Preferências de estilo (doc 08 §12). Omitidas, a nova versão HERDA as da
+  // ativa — editar o texto do delta não pode virar acidentalmente a chave do
+  // diálogo de volta para o padrão.
+  preferencias: z
+    .object({
+      dialogo: z.enum(['aspas', 'travessao']).optional(),
+      pensamento_marca: z.enum(['italico', 'aspas']).optional(),
+      pensamento_tempo: z.enum(['presente', 'original']).optional(),
+      mais_que_perfeito: z.enum(['evitar', 'permitir']).optional(),
+      notas_tradutor: z.enum(['permitir', 'proibir']).optional(),
+      onomatopeia: z.enum(['adaptar', 'manter']).optional(),
+      registro: z.string().trim().min(1).max(200).optional(),
+    })
+    .optional(),
 });
 
 const criarPromptPadraoSchema = z.object({
@@ -298,9 +313,10 @@ export function rotasObras(db: BancoDados): Hono {
     const corpo = criarPromptSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const obraId = Number(c.req.param('id'));
+    const ativo = reposPrompts.ativo(db, obraId);
     // Sem tipo explícito, a nova versão herda o tipo da ativa (delta continua
     // delta; prompt completo legado continua completo).
-    const tipo = corpo.data.tipo ?? reposPrompts.ativo(db, obraId)?.tipo ?? 'completo';
+    const tipo = corpo.data.tipo ?? ativo?.tipo ?? 'completo';
     if (tipo === 'completo' && corpo.data.conteudo.trim().length === 0) {
       return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Um prompt completo não pode ser vazio.' } }, 400);
     }
@@ -310,6 +326,7 @@ export function rotasObras(db: BancoDados): Hono {
           ...corpo.data,
           tipo,
           nucleo_id: tipo === 'delta' ? (reposPromptPadrao.ativo(db)?.id ?? null) : null,
+          preferencias: normalizarPreferencias({ ...(ativo?.preferencias ?? {}), ...(corpo.data.preferencias ?? {}) }),
         }),
         201,
       );

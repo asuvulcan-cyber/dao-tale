@@ -336,3 +336,125 @@ barato** da obra, escolhido para volume.
    vazio = comportamento de hoje. É a aplicação mais barata do §5 — 1 chamada por
    obra, então o melhor modelo disponível custa frações de centavo e a premissa
    financeira do lote (doc 09) não é arranhada.
+
+## 12. Núcleo enxuto e preferências de estilo (2026-08-02)
+
+O núcleo v2.0 misturava dois trabalhos: **compreensão e de-calque zh→pt**, que é
+objetivo e vale para qualquer obra, e **escolhas estéticas de casa** (aspas ou
+travessão, itálico no pensamento, "fizera", nota do tradutor, onomatopeia,
+público-alvo), que não são universais nem particularidades de uma obra — são
+configuração. E era prescritivo além da conta: 18 proibições em tabela repetindo o
+corpo, uma árvore de decisão de 6 passos para demonstrativos, uma tabela de 9
+partículas. Prompt longo e redundante ensina menos que prompt curto e hierárquico.
+
+### 12.1 A terceira camada
+
+O núcleo passa a reservar **dois** marcadores, ambos no fim (o v2.0 punha o do delta
+no meio, com a Seção 7 depois — conteúdo volátil antes de conteúdo estável, o oposto
+do §1):
+
+```
+núcleo (global, byte-idêntico entre obras)   ← prefixo de cache
+  {{PREFERENCIAS_OBRA}}  → ## 5. PREFERÊNCIAS DE ESTILO DESTA OBRA (gerada de chaves)
+  {{DELTA_OBRA}}         → ## 6. DIRETRIZES ESPECÍFICAS DA OBRA (texto livre)
+```
+
+A Seção 6 continua sendo a 6 — `extrairCamadas`, o refinamento por IA e o vocabulário
+da UI não mudam de sentido. `renderizarPreferencias` (em `shared/`, para o servidor
+compor e a UI pré-visualizar sem ida ao servidor) é **pura e determinística**: mesmas
+chaves ⇒ mesmos bytes, que é o pré-requisito do prompt caching do §1.
+
+### 12.2 As chaves e seus padrões
+
+| Chave | Opções | Padrão |
+|---|---|---|
+| `dialogo` | aspas · travessão | **aspas** |
+| `pensamento_marca` | itálico · aspas | **itálico** |
+| `pensamento_tempo` | presente · do original | **presente** |
+| `mais_que_perfeito` | evitar · permitir | **evitar** |
+| `notas_tradutor` | permitir · proibir | **permitir** |
+| `onomatopeia` | adaptar · manter em pinyin | **adaptar** |
+| `registro` | 3 presets ou texto livre | **jovem adulto (30–40)** |
+
+**Regra de ouro: padrão = comportamento de hoje.** Uma obra existente, sem ninguém
+tocar em nada, recebe exatamente as regras que o núcleo antigo lhe dava.
+
+Três decisões que a implementação fixa:
+
+- **Cada chave carrega o bloco inteiro da sua convenção, nunca meia-regra.** O modo
+  travessão muda também o mapeamento de `「」` (fala → travessão; citação → aspas):
+  levar só metade produziria texto híbrido. O bloco do travessão traz a regra-mestra
+  — minúscula depois do travessão = verbo de elocução e o ponto da fala cai;
+  maiúscula = ação independente e a fala mantém o ponto.
+- **Pensamento é independente do diálogo.** O pensamento é inline, nunca aberto por
+  travessão, então a pontuação do *sentiendi* segue sempre a regra "ponto → vírgula".
+- **Parágrafo não é escolha do modelo.** `segmentar.ts` fixa o `paragrafo` de cada
+  frase e o pipeline devolve uma PT por ZH numerada. Das duas variações editoriais
+  brasileiras, só a **pontuação do inciso** é fixável pelo prompt; "ação inline vs.
+  parágrafo próprio" virou uma linha de guarda ("não invente quebras").
+
+### 12.3 Onde as preferências moram
+
+Na **versão do prompt da obra** (`prompts.preferencias`, JSON, migração 012), não na
+obra. Virar uma chave é criar uma versão nova e imutável, com notas e diff — e
+`capitulos.prompt_id`, que já existe, grava a proveniência. Sem isso, um capítulo
+traduzido em aspas ficaria indistinguível de um traduzido em travessão. Reusa versão,
+ativação, histórico e export/import; nenhuma máquina nova.
+
+`NULL` (toda linha anterior à migração) = padrões. E o bloco **só é renderizado se o
+núcleo ativo declarar `{{PREFERENCIAS_OBRA}}`**: com o núcleo antigo ativo, as chaves
+ficam guardadas mas inertes, e a UI avisa. É o que torna a volta atrás gratuita.
+
+### 12.4 O que saiu do núcleo (e para onde foi)
+
+| Saiu | Destino |
+|---|---|
+| Seção 7 (tabela de 18 proibições) | dissolvida: 12 já estavam no corpo, 3 viraram os "inegociáveis" do cabeçalho (não dramatizar · não explicar ambiguidade aberta · não maquiar a voz), 3 viraram chave |
+| Seção 5 (tabela de 9 partículas) | vira **princípio** de uma linha no §4 ("identifique a função antes de traduzir"); a tabela segue disponível no histórico do núcleo v2.0 para colar num delta que precise dela |
+| Árvore de 6 passos dos demonstrativos | substituída pelo **teste da deleção** + **linha dura do "aquele"** (longe **e** fora de cena) + carve-out de intensidade (这么/那么/这样/那样 → "tão/assim") + a linha do lugar da cena + 1 exemplo contrastivo |
+| Diálogo, pensamento, notas, onomatopeia, mais-que-perfeito, público-alvo | Seção 5 (chaves) |
+
+Resultado: 138 → 71 linhas, 8 838 → 4 374 caracteres.
+
+### 12.5 Portão A/B — o que a medição real disse
+
+O comparador (`POST /obras/:id/comparar`) aceita `nucleo_id` por alvo: o mesmo modelo
+traduz o mesmo trecho com duas versões do núcleo, lado a lado. Cada saída vem com
+`metricasEstilo` — contagens de "aquele", demonstrativos, decalques nomeados,
+advérbios em "-mente" e aderência do glossário —, para que a comparação não seja só
+impressão. O custo entra na aba Custos pelo `registrarEvento` que a rota já fazia.
+
+Medição de 2026-08-02 (obra real 十日终焉 convertida para camadas, caps. 118 e 119,
+`gemini-flash-latest`, chamadas reais):
+
+| cap | núcleo | "aquele" | demonstrativos | -mente | glossário |
+|---|---|---:|---:|---:|---|
+| 118 | v1.0 (antigo) | 7 / 8 / 10 | 23 / 20 / 24 | 9 / 8 / 3 | 18/20 |
+| 118 | v3.0 (enxuto) | 9 / 10 | 21 / 23 | 6 / 5 | 18/20 |
+| 119 | v1.0 (antigo) | 2 | 18 | 13 | 22/23 |
+| 119 | v3.0 (enxuto) | 2 | 22 | 22 | 21/23 |
+
+**Custo (telemetria real, tokens de entrada por chamada):** 4 864 → 4 126 no cap. 118 e
+4 693 → 3 955 no cap. 119 — **−738 tokens fixos, ≈−15%**, em toda chamada de toda obra.
+
+**Leitura honesta:**
+
+- **Qualidade: empate dentro da variância.** A dispersão entre execuções do *mesmo*
+  núcleo (o antigo foi de 7 a 10 "aquele" no mesmo trecho) é do tamanho da diferença
+  entre os dois. Nenhum ganho medível em demonstrativos — que era o alvo declarado da
+  reescrita da Seção 3.
+- **Um sinal contrário, pequeno mas concreto.** No caso "o lugar onde a cena acontece
+  é *este*", o núcleo antigo acertou em 2 de 3 amostras ("fugir **deste** lugar
+  bizarro") e o enxuto errou em 2 de 2 ("escapar **daquele** lugar bizarro") —
+  **apesar** de o enxuto trazer a regra. A hipótese é de forma, não de conteúdo: no
+  antigo ela era um passo de decisão com pergunta ("o evento ocorreu no mesmo local
+  físico?"), no enxuto é uma afirmação solta depois de outras duas regras. Antes de um
+  próximo A/B, vale reescrevê-la como teste, não como aviso.
+- **Confundidor registrado:** o delta real de 十日终焉 cita "Seção 3, Passo 1", que não
+  existe mais no enxuto. A regra (o tique de 那样 do Kim Wonhun) sobrevive porque o
+  enxuto tem o mesmo carve-out de intensidade, mas a referência cruzada envelheceu.
+
+**Decisão:** o enxuto é semeado **sempre inativo**, em banco novo e em banco em uso.
+O gate era "só ativar se segurar a qualidade"; ele segurou, não melhorou — e o ganho
+real (−15% de tokens, e as chaves, que só funcionam com ele) é bom, mas é decisão do
+usuário, com um clique em "Núcleo universal", e reversível com outro.

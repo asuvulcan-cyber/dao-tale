@@ -43,6 +43,8 @@ CREATE TABLE prompts (
   conteudo     TEXT NOT NULL,
   notas_versao TEXT,                              -- (+) "o que mudou e por quê" (tela 4.6 do briefing)
   ativo        INTEGER NOT NULL DEFAULT 0,
+  preferencias TEXT,                              -- (+) migração 012: preferências de estilo em JSON (doc 08 §12);
+                                                  --     NULL = padrões do app = comportamento de sempre
   criado_em    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   UNIQUE (obra_id, versao)
 );

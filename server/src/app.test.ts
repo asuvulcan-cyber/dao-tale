@@ -341,15 +341,18 @@ describe('fluxo completo com provedor mock', () => {
   });
 
   it('prompt padrão: vem semeado, versiona e pode ser adotado explicitamente', async () => {
-    // Semeado na criação do banco, com uma versão ativa.
+    // Semeados na criação do banco (doc 08 §12): o núcleo em uso, ativo, e o
+    // enxuto, INATIVO — ativar é decisão do usuário depois do portão A/B.
     const versoes = await json(await chamar('GET', '/api/prompt-padrao'));
-    expect(versoes).toHaveLength(1);
-    expect(versoes[0].ativo).toBe(true);
+    expect(versoes).toHaveLength(2);
+    expect(versoes.filter((v: any) => v.ativo)).toHaveLength(1);
+    expect(versoes.find((v: any) => v.ativo).conteudo).not.toContain('{{PREFERENCIAS_OBRA}}');
+    expect(versoes.find((v: any) => !v.ativo).conteudo).toContain('## 3. DEMONSTRATIVOS');
 
     // Nova versão ativa; só uma fica ativa por vez.
     await chamar('POST', '/api/prompt-padrao', { versao: '1.1', conteudo: 'Regras revisadas.', ativar: true });
     const depois = await json(await chamar('GET', '/api/prompt-padrao'));
-    expect(depois).toHaveLength(2);
+    expect(depois).toHaveLength(3);
     expect(depois.filter((v: any) => v.ativo)).toHaveLength(1);
     expect(depois.find((v: any) => v.ativo).versao).toBe('1.1');
 

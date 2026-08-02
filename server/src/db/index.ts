@@ -3,7 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { caminhoBanco } from '../config.js';
-import { PROMPT_PADRAO_INICIAL, VERSAO_PROMPT_PADRAO_INICIAL, extrairCamadas } from './promptPadraoInicial.js';
+import {
+  NUCLEO_ENXUTO,
+  PROMPT_PADRAO_INICIAL,
+  VERSAO_PROMPT_PADRAO_INICIAL,
+  extrairCamadas,
+} from './promptPadraoInicial.js';
 import { reposLotes } from './repos.js';
 import { fazerBackupSincrono } from './backup.js';
 
@@ -45,6 +50,7 @@ export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMig
   migrar(db, opcoes.antesDeMigrar);
   semearPromptPadrao(db);
   migrarPadraoParaNucleo(db);
+  semearNucleoEnxuto(db);
   // Lotes de uma sessão anterior não sobrevivem ao processo (doc 09 §5).
   reposLotes.marcarInterrompidosNoBoot(db);
   return db;
@@ -88,6 +94,37 @@ function migrarPadraoParaNucleo(db: BancoDados): void {
   db.prepare(
     "INSERT INTO configuracoes (chave, valor) VALUES ('nucleo_migrado', '1') ON CONFLICT (chave) DO UPDATE SET valor = '1'",
   ).run();
+}
+
+// Doc 08 §12 — o núcleo enxuto entra como versão NOVA e SEMPRE INATIVA, nunca por
+// cima do que está ativo. Ativar é decisão do usuário depois de comparar as duas
+// versões no comparador (portão A/B): a medição de 2026-08-02 mostrou empate de
+// qualidade dentro da variância do modelo, com −15% de tokens de entrada — ganho
+// real, mas não o "segurou a qualidade e melhorou" que justificaria virar a chave
+// por conta própria. Guardado por flag, como a migração para camadas.
+function semearNucleoEnxuto(db: BancoDados): void {
+  const flag = db.prepare("SELECT valor FROM configuracoes WHERE chave = 'nucleo_enxuto_semeado'").get();
+  if (flag) return;
+  db.transaction(() => {
+    db.prepare('INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, 0)').run(
+      proximaVersaoNucleo(db),
+      NUCLEO_ENXUTO,
+      'Núcleo enxuto, INATIVO: só o universal zh→pt-BR, com diálogo, pensamento, notas, onomatopeia e registro movidos para as preferências de estilo da obra (Seção 5). Compare com o núcleo em uso pelo comparador antes de ativar.',
+    );
+    db.prepare(
+      "INSERT INTO configuracoes (chave, valor) VALUES ('nucleo_enxuto_semeado', '1') ON CONFLICT (chave) DO UPDATE SET valor = '1'",
+    ).run();
+  })();
+}
+
+// `prompt_padrao.versao` é UNIQUE: pegar o próximo inteiro acima do maior evita
+// colidir com uma versão que o usuário tenha criado à mão.
+function proximaVersaoNucleo(db: BancoDados): string {
+  const versoes = (db.prepare('SELECT versao FROM prompt_padrao').all() as { versao: string }[]).map((v) => v.versao);
+  const maior = Math.max(0, ...versoes.map((v) => parseFloat(v)).filter((n) => !Number.isNaN(n)));
+  let candidato = Math.floor(maior) + 1;
+  while (versoes.includes(`${candidato}.0`)) candidato += 1;
+  return `${candidato}.0`;
 }
 
 function migrar(db: BancoDados, antesDeMigrar?: AntesDeMigrar): void {

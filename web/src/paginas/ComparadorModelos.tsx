@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { EstadoConfiguracoes, ProvedorId } from '@dao-tale/shared';
+import type { EstadoConfiguracoes, PromptPadrao, ProvedorId } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
@@ -22,19 +22,57 @@ interface Alvo {
   chave: number;
   provedor: ProvedorId;
   modelo: string;
+  /** '' = núcleo ativo. Preenchido, roda o portão A/B (doc 08 §12). */
+  nucleo: string;
+}
+
+interface MetricasEstilo {
+  palavras: number;
+  aquele: number;
+  demonstrativos: number;
+  decalques: number;
+  mente: number;
+  glossario_esperados: number;
+  glossario_aplicados: number;
 }
 
 interface ResultadoComparacao {
   provedor: string;
   modelo: string;
+  nucleo_versao?: string;
   ok: boolean;
   texto_pt?: string;
+  metricas?: MetricasEstilo;
   erro?: string;
   ms: number;
 }
 
 const CHAVE_TEXTO = 'dao-tale-comparador-texto';
 let proximaChave = 1;
+
+/** Contagens objetivas da saída (doc 08 §12). Não são nota — são o que impede a
+    comparação entre dois núcleos de virar só impressão: menos "aquele" e menos
+    decalque é exatamente o que o núcleo enxuto promete entregar. */
+function PlacarEstilo({ m }: { m: MetricasEstilo }) {
+  const itens: [string, string][] = [
+    ['"aquele"', String(m.aquele)],
+    ['demonstrativos', String(m.demonstrativos)],
+    ['decalques', String(m.decalques)],
+    ['-mente', String(m.mente)],
+    ['glossário', `${m.glossario_aplicados}/${m.glossario_esperados}`],
+    ['palavras', String(m.palavras)],
+  ];
+  return (
+    <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-linha/50 pt-2 text-xs text-tinta-2">
+      {itens.map(([rotulo, valor]) => (
+        <div key={rotulo} className="flex gap-1">
+          <dt>{rotulo}:</dt>
+          <dd className="font-mono font-semibold text-tinta">{valor}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export function ComparadorModelos() {
   const { obraId } = useParams();
@@ -55,6 +93,13 @@ export function ComparadorModelos() {
     queryFn: () => api<EstadoConfiguracoes>('GET', '/configuracoes'),
   });
 
+  // Versões do núcleo: com mais de uma, o comparador vira também o portão A/B —
+  // mesmo modelo, mesmo trecho, núcleos diferentes.
+  const { data: nucleos } = useQuery({
+    queryKey: ['prompt-padrao'],
+    queryFn: () => api<PromptPadrao[]>('GET', '/prompt-padrao'),
+  });
+
   // Pré-preenche uma linha por provedor com chave configurada (modelo padrão).
   useEffect(() => {
     if (alvos.length > 0 || !estado || !provedores) return;
@@ -62,7 +107,7 @@ export function ComparadorModelos() {
       (p) => p.precisa_chave && estado.credenciais.some((c) => c.provedor === p.id && c.configurada),
     );
     const iniciais = (configurados.length > 0 ? configurados : provedores.filter((p) => p.id === 'mock')).map(
-      (p): Alvo => ({ chave: proximaChave++, provedor: p.id, modelo: '' }),
+      (p): Alvo => ({ chave: proximaChave++, provedor: p.id, modelo: '', nucleo: '' }),
     );
     setAlvos(iniciais);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,7 +117,11 @@ export function ComparadorModelos() {
     mutationFn: () =>
       api<{ frases_total: number; resultados: ResultadoComparacao[] }>('POST', `/obras/${obraId}/comparar`, {
         texto_zh: texto,
-        alvos: alvos.map((a) => ({ provedor: a.provedor, ...(a.modelo ? { modelo: a.modelo } : {}) })),
+        alvos: alvos.map((a) => ({
+          provedor: a.provedor,
+          ...(a.modelo ? { modelo: a.modelo } : {}),
+          ...(a.nucleo ? { nucleo_id: Number(a.nucleo) } : {}),
+        })),
       }),
     onSuccess: (r) => {
       setResultados(r.resultados);
@@ -88,7 +137,7 @@ export function ComparadorModelos() {
     <div className="max-w-4xl">
       <CabecalhoPagina
         titulo="Comparar modelos"
-        descricao="Cole um trecho em chinês e veja a tradução de vários modelos lado a lado, usando o prompt mãe e o glossário desta obra. Cada execução gasta 1 requisição por modelo."
+        descricao="Cole um trecho em chinês e veja a tradução de vários modelos lado a lado, usando o prompt mãe e o glossário desta obra. Com mais de uma versão do núcleo, dá para repetir o mesmo modelo em núcleos diferentes e comparar as duas — é o portão A/B. Cada execução gasta 1 requisição por alvo."
       />
 
       <div className="cartao space-y-3 p-4">
@@ -137,6 +186,24 @@ export function ComparadorModelos() {
                       modeloPadraoProvedor={info?.modelo_padrao}
                     />
                   </div>
+                  {(nucleos?.length ?? 0) >= 2 && (
+                    <select
+                      value={alvo.nucleo}
+                      onChange={(e) =>
+                        setAlvos((l) => l.map((a) => (a.chave === alvo.chave ? { ...a, nucleo: e.target.value } : a)))
+                      }
+                      className="entrada w-40 text-sm"
+                      title="Versão do núcleo universal a usar neste alvo"
+                    >
+                      <option value="">núcleo ativo</option>
+                      {nucleos!.map((n) => (
+                        <option key={n.id} value={String(n.id)}>
+                          núcleo v{n.versao}
+                          {n.ativo ? ' (ativo)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {semChave && <Etiqueta cor="selo">sem chave</Etiqueta>}
                   <button
                     type="button"
@@ -153,7 +220,9 @@ export function ComparadorModelos() {
           <div className="mt-2 flex items-center gap-3">
             <Botao
               variante="secundario"
-              onClick={() => setAlvos((l) => [...l, { chave: proximaChave++, provedor: provedores[0].id, modelo: '' }])}
+              onClick={() =>
+                setAlvos((l) => [...l, { chave: proximaChave++, provedor: provedores[0].id, modelo: '', nucleo: '' }])
+              }
               disabled={alvos.length >= 8}
             >
               + Adicionar modelo
@@ -185,6 +254,7 @@ export function ComparadorModelos() {
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className="font-medium">{NOME_CURTO[r.provedor] ?? r.provedor}</span>
                 <code className="rounded bg-papel-fundo px-1.5 py-0.5 text-xs text-tinta-2">{r.modelo}</code>
+                {r.nucleo_versao && <Etiqueta cor="indigo">núcleo v{r.nucleo_versao}</Etiqueta>}
                 {r.ok ? (
                   <Etiqueta cor="jade">{(r.ms / 1000).toFixed(1)}s</Etiqueta>
                 ) : (
@@ -196,6 +266,7 @@ export function ComparadorModelos() {
               ) : (
                 <p className="text-sm text-erro">{r.erro}</p>
               )}
+              {r.metricas && <PlacarEstilo m={r.metricas} />}
             </div>
           ))}
         </div>

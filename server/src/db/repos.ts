@@ -26,8 +26,9 @@ import type {
   StatusApontamentoQa,
   PrecoModelo,
   PrecosModelos,
+  PreferenciasEstilo,
 } from '@dao-tale/shared';
-import { CONFIG_PADRAO } from '@dao-tale/shared';
+import { CONFIG_PADRAO, normalizarPreferencias } from '@dao-tale/shared';
 import { comporPromptMae } from './promptPadraoInicial.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
@@ -40,7 +41,11 @@ function trocaPorPalavra(texto: string, de: string, para: string): string {
 
 // Linhas cruas do SQLite (booleanos como 0/1) → tipos do domínio.
 function paraPrompt(l: any): PromptMae {
-  return { ...l, ativo: !!l.ativo };
+  const prompt = { ...l, ativo: !!l.ativo };
+  // Só linhas de `prompts` têm preferências; as de `prompt_padrao` (núcleo) não —
+  // e um PromptPadrao não deve ganhar o campo do nada.
+  if ('preferencias' in l) prompt.preferencias = normalizarPreferencias(l.preferencias);
+  return prompt;
 }
 function paraFrase(l: any): Frase {
   return { ...l, editado_manualmente: !!l.editado_manualmente };
@@ -203,6 +208,7 @@ export const reposPrompts = {
       ativar: boolean;
       tipo?: TipoPrompt;
       nucleo_id?: number | null;
+      preferencias?: PreferenciasEstilo;
     },
   ): PromptMae {
     return db.transaction(() => {
@@ -211,7 +217,7 @@ export const reposPrompts = {
       }
       const info = db
         .prepare(
-          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, tipo, nucleo_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO prompts (obra_id, versao, conteudo, notas_versao, ativo, tipo, nucleo_id, preferencias) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           obraId,
@@ -221,6 +227,9 @@ export const reposPrompts = {
           dados.ativar ? 1 : 0,
           dados.tipo ?? 'completo',
           dados.nucleo_id ?? null,
+          // NULL quando nada foi escolhido: a leitura resolve para os padrões, e o
+          // banco continua dizendo a verdade sobre o que o usuário decidiu.
+          dados.preferencias ? JSON.stringify(dados.preferencias) : null,
         );
       return this.obter(db, Number(info.lastInsertRowid))!;
     })();
@@ -263,15 +272,21 @@ export const reposPrompts = {
 
   /** Prompt mãe efetivo da obra: 'completo' legado vai como está; 'delta' é
       composto com o núcleo ATIVO no momento (melhorias do núcleo fluem para
-      todas as obras; a proveniência exata fica registrada no capítulo). */
-  composto(db: BancoDados, obraId: number): PromptComposto | undefined {
+      todas as obras; a proveniência exata fica registrada no capítulo).
+      `nucleoId` força uma versão específica do núcleo — usado pelo portão A/B do
+      comparador, nunca pelo pipeline. */
+  composto(db: BancoDados, obraId: number, nucleoId?: number): PromptComposto | undefined {
     const prompt = this.ativoOuAdotado(db, obraId);
     if (!prompt) return undefined;
     if (prompt.tipo !== 'delta') return { texto: prompt.conteudo, prompt, nucleo: null };
-    const nucleo = reposPromptPadrao.ativo(db);
+    const nucleo = nucleoId != null ? reposPromptPadrao.obter(db, nucleoId) : reposPromptPadrao.ativo(db);
     // Sem núcleo ativo (estado excepcional), o delta sozinho é o que há.
-    if (!nucleo) return { texto: comporPromptMae('', prompt.conteudo), prompt, nucleo: null };
-    return { texto: comporPromptMae(nucleo.conteudo, prompt.conteudo), prompt, nucleo };
+    if (!nucleo) return { texto: comporPromptMae('', prompt.conteudo, prompt.preferencias), prompt, nucleo: null };
+    return {
+      texto: comporPromptMae(nucleo.conteudo, prompt.conteudo, prompt.preferencias),
+      prompt,
+      nucleo,
+    };
   },
 };
 

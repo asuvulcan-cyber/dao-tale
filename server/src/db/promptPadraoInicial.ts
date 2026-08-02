@@ -7,15 +7,29 @@
 // protocolo de revisão) também NÃO entram aqui — são anexadas pelo servidor em
 // server/src/ia/prompts.ts; incluí-las no prompt causaria duplicação.
 
+import {
+  MARCADOR_PREFERENCIAS,
+  PREFERENCIAS_PADRAO,
+  renderizarPreferencias,
+  type PreferenciasEstilo,
+} from '@dao-tale/shared';
+
+export { MARCADOR_PREFERENCIAS };
+
 export const VERSAO_PROMPT_PADRAO_INICIAL = '1.0';
 
 /** Ponto onde a composição insere a Seção 6 (delta da obra). Se o usuário
     remover o marcador ao editar o núcleo, o delta é anexado ao final. */
 export const MARCADOR_DELTA = '{{DELTA_OBRA}}';
 
-/** Núcleo ativo + delta da obra → prompt mãe completo, determinístico
-    (mesmas versões ⇒ mesmos bytes — pré-requisito do prompt caching). */
-export function comporPromptMae(nucleoConteudo: string, deltaConteudo: string): string {
+/** Núcleo ativo + preferências + delta da obra → prompt mãe completo,
+    determinístico (mesmas versões ⇒ mesmos bytes — pré-requisito do prompt
+    caching). `preferencias` ausente = padrões do aplicativo. */
+export function comporPromptMae(
+  nucleoConteudo: string,
+  deltaConteudo: string,
+  preferencias?: PreferenciasEstilo,
+): string {
   const delta = deltaConteudo.trim();
   const secao = delta
     ? [
@@ -27,14 +41,22 @@ export function comporPromptMae(nucleoConteudo: string, deltaConteudo: string): 
       ].join('\n')
     : '';
   const nucleo = nucleoConteudo.trimEnd();
-  const composto = nucleo.includes(MARCADOR_DELTA)
-    ? nucleo.replace(MARCADOR_DELTA, secao ? `${secao}\n\n---` : '')
+  const comPreferencias = nucleo.includes(MARCADOR_PREFERENCIAS)
+    ? nucleo.replace(MARCADOR_PREFERENCIAS, renderizarPreferencias(preferencias ?? PREFERENCIAS_PADRAO))
+    : nucleo;
+  const composto = comPreferencias.includes(MARCADOR_DELTA)
+    ? comPreferencias.replace(MARCADOR_DELTA, secao ? `${secao}\n\n---` : '')
     : secao
-      ? `${nucleo}\n\n---\n\n${secao}`
-      : nucleo;
+      ? `${comPreferencias}\n\n---\n\n${secao}`
+      : comPreferencias;
   // Sem delta, o marcador deixa linhas em branco sobrando; normalizar mantém a
-  // saída idêntica entre chamadas (não muda a semântica do markdown).
-  return composto.replace(/\n{3,}/g, '\n\n').trimEnd();
+  // saída idêntica entre chamadas (não muda a semântica do markdown). O `---` no
+  // fim sobra quando o marcador do delta é a última coisa do núcleo (v3.0) —
+  // separador sem nada para separar.
+  return composto
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd()
+    .replace(/(\n+-{3,})+$/, '');
 }
 
 /** Separa um prompt completo legado em núcleo (com marcador no lugar da Seção 6)
@@ -194,4 +216,91 @@ ${MARCADOR_DELTA}
 | Empilhar advérbios em "-mente" | Reescrever incorporando a qualidade |
 | Tradução automática de partícula sem checar função (Seções 3 e 5) | Função antes de forma, sempre |
 | Acumular duas funções na mesma palavra | Uma função por ocorrência |
+`;
+
+// ── Núcleo enxuto (doc 08 §12) ─────────────────────────────────────────────
+// O núcleo acima misturava dois trabalhos: compreensão e de-calque zh→pt (que é
+// objetivo e universal) e escolhas estéticas de casa (que são de cada obra). Ele
+// também era prescritivo além da conta — 18 proibições em tabela repetindo o
+// corpo, uma árvore de decisão de 6 passos para demonstrativos, uma tabela de 9
+// partículas —, e prompt longo e redundante ensina menos do que prompt curto e
+// hierárquico.
+//
+// O enxuto fica só com o universal. As escolhas estéticas viram a Seção 5
+// (preferências, geradas de chaves) e a particularidade da obra segue na Seção 6
+// (delta). É uma versão NOVA do núcleo, não uma edição: a v2.0 continua no banco,
+// imutável, e obras antigas seguem na versão que as traduziu até alguém ativar
+// esta.
+
+export const NUCLEO_ENXUTO = `# Prompt de Tradução — Núcleo Universal zh→pt-BR
+
+Você é um tradutor literário: traduz webnovels do chinês direto para português brasileiro, em prosa publicável. Nada de invenção, resumo ou embelezamento. 100% em PT-BR.
+
+**Hierarquia:** Conteúdo > Glossário (lei suprema) > Forma natural. A fidelidade é à intenção e ao fluxo do português — não à palavra nem à pontuação do chinês.
+
+**Três inegociáveis:**
+- Não dramatize: a atmosfera é a da cena original, sem horror, ênfase ou emoção acrescentados.
+- Não explique: ambiguidade que o autor deixou aberta permanece aberta.
+- Não maquie a voz: o tom de cada fala e de cada pensamento é o do original — analítico, seco, exaltado, o que for.
+
+---
+
+## 1. PROSA, NÃO LEGENDA
+
+Esta é a regra da qual as outras são aplicação: traduza para um português que respira, não para um espelho do chinês.
+
+- **Fluxo acima da literalidade.** Junte, quebre e reordene cláusulas pelo que soa como narrativa em PT-BR; inverta livremente causa→ação quando a ordem chinesa ficar artificial. Não copie a pontuação nem a ordem do original.
+- **Nunca picote.** Uma frase longa e corrida em chinês vira prosa fluida — jamais uma fileira de declarativas curtas emendadas por conectivo ("Contudo, … Além disso, …"). Frases curtíssimas consecutivas podem ser fundidas quando isso ganha fluidez sem perder a tensão.
+- **Imagem viva.** Metáfora concreta continua concreta: 铁血气息 → "aura de sangue e ferro", não "aura implacável"; 尸山血海 → "montanhas de cadáveres e mares de sangue", não "muita morte".
+- **Sem variação elegante.** Nunca troque o nome do personagem por epíteto, apelido ou descrição ("o guerreiro", "o rapaz de olhos escuros"). Alterne apenas entre nome próprio, pronome e sujeito oculto.
+- **Foco narrativo.** Quando o chinês ancora algo na percepção de um personagem (眼前的, 在他看来), preserve esse ancoramento mesmo reformulando — a frase não pode flutuar entre narrador e personagem.
+- **Advérbios.** Não empilhe "-mente": reescreva a ação incorporando a qualidade — "cruzou apressado, nervoso", não "cruzou rapidamente e nervosamente".
+
+Teste: leia em voz alta. Se soa a legenda ou a relatório, reescreva.
+
+---
+
+## 2. GLOSSÁRIO E TERMOS NOVOS
+
+O glossário da obra é lei, inclusive nas flexões. Termo ausente: adote uma tradução e registre como termo novo.
+
+- **Locais exclusivos:** capitalizados, mantendo a sonoridade do original.
+- **Poderes e habilidades:** traduzidos pelo efeito ou elemento, capitalizados.
+- **Entidades divinas ou malignas:** sem artigo de familiaridade — "Nüwa", não "a Nüwa". Exceção: quando o termo funciona como cargo ou título dentro da história.
+- **Títulos e cargos exclusivos:** sempre capitalizados.
+
+---
+
+## 3. DEMONSTRATIVOS (这 / 那)
+
+O chinês aponta muito mais que o português. Traduzir 这/那 por "este/esse/aquele" a cada ocorrência é decalque — é a Seção 1 aplicada a uma palavra só.
+
+**Teste da deleção:** apague o demonstrativo e releia. Se a frase continua clara, deixe apagado. Só mantenha um "este/esse/aquele" quando removê-lo criar ambiguidade real sobre de quem ou do que se fala.
+
+**Linha dura do "aquele":** "aquele/aquela" só para o que está longe **e** fora de cena. Se a coisa ou a pessoa está presente na cena, nunca "aquele" — use "esse" ou omita.
+
+**Intensidade não é apontamento:** 这么, 那么, 这样, 那样 viram "tão", "assim", "desse tipo" — nunca uma palavra de apontar.
+
+**O lugar da cena é "aqui".** O espaço onde os personagens estão agora é "este/neste/aqui", mesmo quando o evento narrado se passou nele no passado.
+
+> Decalcado: "Aquele homem olhou para aquela espada e sentiu aquele frio subir pelas costas."
+> Natural: "O homem olhou para a espada e sentiu o frio subir pelas costas."
+
+---
+
+## 4. SEM DECALQUE DO CHINÊS
+
+- 对方 → o nome do personagem ou um pronome; nunca "a outra parte".
+- 开口 → "disse", ou omita; nunca "abriu a boca para falar".
+- **Chengyu e expressões idiomáticas** → sempre a expressão equivalente natural em português, nunca a tradução literal da imagem.
+- **Partículas polissêmicas** (总, 就, 才, 都, 还, 又, 一直, 实在, 一下 e afins) → identifique a **função** na frase antes de traduzir; nunca o equivalente "padrão" por reflexo. Muitas vezes a partícula não vira palavra nenhuma: resolve-se no tempo verbal, na ordem das palavras ou no tom.
+- **Gerundismo lusitano** ("estava a fazer") → gerúndio brasileiro ("estava fazendo").
+
+---
+
+${MARCADOR_PREFERENCIAS}
+
+---
+
+${MARCADOR_DELTA}
 `;

@@ -1,7 +1,16 @@
 import { useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PromptComposto, PromptPadrao, TipoPrompt } from '@dao-tale/shared';
+import type { PreferenciasEstilo, PromptComposto, PromptPadrao, TipoPrompt } from '@dao-tale/shared';
+import {
+  MARCADOR_PREFERENCIAS,
+  PREFERENCIAS_PADRAO,
+  ROTULOS_PREFERENCIAS,
+  REGISTROS_PREDEFINIDOS,
+  descreverMudancas,
+  normalizarPreferencias,
+  renderizarPreferencias,
+} from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta } from '../App';
 import { diffLinhas } from '../util/diff';
@@ -10,7 +19,11 @@ import { diffLinhas } from '../util/diff';
 // padrão global) — só mudam endpoints, estado vazio e os recursos de camadas
 // (prévia composta, conversão de legado, refinamento por IA), exclusivos da obra.
 
-type VersaoPrompt = PromptPadrao & { tipo?: TipoPrompt; nucleo_id?: number | null };
+type VersaoPrompt = PromptPadrao & {
+  tipo?: TipoPrompt;
+  nucleo_id?: number | null;
+  preferencias?: PreferenciasEstilo;
+};
 
 export function PromptMae() {
   const { obraId } = useParams();
@@ -95,7 +108,7 @@ function GerenciadorPrompts({
 }) {
   const clienteQuery = useQueryClient();
   const [selecionado, setSelecionado] = useState<number | null>(null);
-  const [painel, setPainel] = useState<'ver' | 'nova' | 'comparar' | 'converter' | 'refinar'>('ver');
+  const [painel, setPainel] = useState<'ver' | 'nova' | 'comparar' | 'converter' | 'refinar' | 'preferencias'>('ver');
   const [rascunhoInicial, setRascunhoInicial] = useState<string | null>(null);
   const [erro, setErro] = useState('');
 
@@ -113,8 +126,14 @@ function GerenciadorPrompts({
   });
 
   const criar = useMutation({
-    mutationFn: (dados: { versao: string; conteudo: string; notas_versao?: string; ativar: boolean; tipo?: TipoPrompt }) =>
-      api('POST', urlCriar, dados),
+    mutationFn: (dados: {
+      versao: string;
+      conteudo: string;
+      notas_versao?: string;
+      ativar: boolean;
+      tipo?: TipoPrompt;
+      preferencias?: PreferenciasEstilo;
+    }) => api('POST', urlCriar, dados),
     onSuccess: () => {
       invalidar();
       setPainel('ver');
@@ -137,6 +156,11 @@ function GerenciadorPrompts({
   return (
     <div>
       <CabecalhoPagina titulo={titulo} descricao={descricao}>
+        {obraId && ehDelta && (
+          <Botao variante="secundario" onClick={() => abrir('preferencias')}>
+            {painel === 'preferencias' ? 'Fechar preferências' : 'Preferências de estilo'}
+          </Botao>
+        )}
         {obraId && ehDelta && (
           <Botao variante="secundario" onClick={() => abrir('refinar')}>
             {painel === 'refinar' ? 'Fechar refinamento' : 'Refinar com IA'}
@@ -218,6 +242,24 @@ function GerenciadorPrompts({
               aoConverter={(d) => criar.mutate({ ...d, tipo: 'delta', ativar: true })}
               aoCancelar={() => setPainel('ver')}
             />
+          ) : painel === 'preferencias' && obraId && ativo ? (
+            <PainelPreferencias
+              obraId={obraId}
+              ativo={ativo}
+              versaoSugerida={sugerirVersao(versoes ?? [])}
+              enviando={criar.isPending}
+              aoSalvar={(preferencias, versao, notas) =>
+                criar.mutate({
+                  versao,
+                  // O texto do delta não muda: a versão nova existe para registrar
+                  // a chave virada, com a proveniência que o capítulo já grava.
+                  conteudo: ativo.conteudo,
+                  notas_versao: notas,
+                  ativar: true,
+                  preferencias,
+                })
+              }
+            />
           ) : painel === 'refinar' && obraId ? (
             <RefinadorIA
               obraId={obraId}
@@ -254,6 +296,162 @@ function GerenciadorPrompts({
             </div>
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Preferências de estilo da obra (doc 08 §12): as escolhas de casa que antes
+    estavam fixas no núcleo. Virar uma chave cria uma versão nova do prompt da
+    obra — é assim que a proveniência do capítulo continua dizendo a verdade. */
+function PainelPreferencias({
+  obraId,
+  ativo,
+  versaoSugerida,
+  enviando,
+  aoSalvar,
+}: {
+  obraId: string;
+  ativo: VersaoPrompt;
+  versaoSugerida: string;
+  enviando: boolean;
+  aoSalvar: (p: PreferenciasEstilo, versao: string, notas?: string) => void;
+}) {
+  const atuais = normalizarPreferencias(ativo.preferencias);
+  const [prefs, setPrefs] = useState<PreferenciasEstilo>(atuais);
+  const [versao, setVersao] = useState(versaoSugerida);
+  const [registroLivre, setRegistroLivre] = useState(!(prefs.registro in REGISTROS_PREDEFINIDOS));
+
+  // O bloco só entra no prompt se o núcleo ATIVO reservar o lugar dele; sem isso
+  // as chaves ficam guardadas, mas não valem — e o usuário precisa saber disso.
+  const { data: composto } = useQuery({
+    queryKey: ['prompt-composto', obraId],
+    queryFn: () => api<PromptComposto>('GET', `/obras/${obraId}/prompt-composto`),
+  });
+  const nucleoAceita = composto?.nucleo?.conteudo.includes(MARCADOR_PREFERENCIAS) ?? true;
+
+  const mudancas = descreverMudancas(atuais, prefs);
+  const definir = (chave: keyof PreferenciasEstilo, valor: string) =>
+    setPrefs((p) => ({ ...p, [chave]: valor }) as PreferenciasEstilo);
+
+  const chavesBinarias: (keyof PreferenciasEstilo)[] = [
+    'dialogo',
+    'pensamento_marca',
+    'pensamento_tempo',
+    'mais_que_perfeito',
+    'notas_tradutor',
+    'onomatopeia',
+  ];
+
+  return (
+    <div className="space-y-3">
+      {!nucleoAceita && (
+        <Aviso tipo="erro">
+          O núcleo ativo (v{composto?.nucleo?.versao}) traz estas regras no próprio corpo e{' '}
+          <strong>ignora as preferências</strong>. Elas ficam guardadas na versão, mas só passam a valer com um
+          núcleo que reserve a Seção 5 — o núcleo enxuto. Ative-o em “Núcleo universal” quando a comparação
+          convencer.
+        </Aviso>
+      )}
+
+      <div className="cartao space-y-4 p-4">
+        <div>
+          <h3 className="font-semibold">Preferências de estilo desta obra</h3>
+          <p className="text-sm text-tinta-2">
+            Os padrões reproduzem o comportamento de sempre: sem tocar em nada, a obra traduz igual. Cada chave
+            carrega o bloco inteiro da sua convenção no prompt.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {chavesBinarias.map((chave) => (
+            <label key={chave} className="block text-sm">
+              {ROTULOS_PREFERENCIAS[chave].titulo}
+              <select
+                value={prefs[chave]}
+                onChange={(e) => definir(chave, e.target.value)}
+                className="entrada mt-1 w-full"
+              >
+                {Object.entries(ROTULOS_PREFERENCIAS[chave].opcoes).map(([valor, rotulo]) => (
+                  <option key={valor} value={valor}>
+                    {rotulo}
+                    {valor === PREFERENCIAS_PADRAO[chave] ? ' (padrão)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+
+          <label className="block text-sm">
+            {ROTULOS_PREFERENCIAS.registro.titulo}
+            <select
+              value={registroLivre ? '__livre' : prefs.registro}
+              onChange={(e) => {
+                if (e.target.value === '__livre') {
+                  setRegistroLivre(true);
+                } else {
+                  setRegistroLivre(false);
+                  definir('registro', e.target.value);
+                }
+              }}
+              className="entrada mt-1 w-full"
+            >
+              {Object.entries(ROTULOS_PREFERENCIAS.registro.opcoes).map(([valor, rotulo]) => (
+                <option key={valor} value={valor}>
+                  {rotulo}
+                  {valor === PREFERENCIAS_PADRAO.registro ? ' (padrão)' : ''}
+                </option>
+              ))}
+              <option value="__livre">descrever eu mesmo…</option>
+            </select>
+          </label>
+
+          {registroLivre && (
+            <label className="block self-end text-sm">
+              Público-alvo em uma linha
+              <input
+                value={prefs.registro in REGISTROS_PREDEFINIDOS ? '' : prefs.registro}
+                onChange={(e) => definir('registro', e.target.value)}
+                placeholder="ex.: leitores de wuxia clássico, acostumados a vocabulário arcaico"
+                className="entrada mt-1 w-full"
+              />
+            </label>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-1 text-xs text-tinta-2">O que a IA vai receber (Seção 5 do prompt composto):</p>
+          <pre className="max-h-72 overflow-auto rounded bg-papel-fundo/60 p-3 text-xs leading-relaxed whitespace-pre-wrap">
+            {renderizarPreferencias(prefs)}
+          </pre>
+        </div>
+
+        {mudancas.length === 0 ? (
+          <p className="text-sm text-tinta-2">Nada mudou em relação à versão ativa.</p>
+        ) : (
+          <div className="space-y-3">
+            <ul className="list-inside list-disc text-sm">
+              {mudancas.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block text-sm">
+                Versão*
+                <input value={versao} onChange={(e) => setVersao(e.target.value)} className="entrada mt-1 w-24" />
+              </label>
+              <Botao
+                disabled={enviando || !versao.trim()}
+                onClick={() => aoSalvar(prefs, versao.trim(), `Preferências — ${mudancas.join('; ')}`)}
+              >
+                {enviando ? 'Salvando…' : 'Salvar como nova versão'}
+              </Botao>
+              <p className="text-xs text-tinta-2">
+                O texto do delta não muda; a versão nova registra a chave virada e passa a ativa.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

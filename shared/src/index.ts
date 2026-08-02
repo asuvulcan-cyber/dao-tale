@@ -1,5 +1,7 @@
 // Tipos de domínio e contratos da API — fonte única de verdade entre server e web.
 
+import type { PreferenciasEstilo } from './preferenciasEstilo.js';
+
 // Tokens de pigmento/tipografia como dado, para o alvo EPUB (doc 12 §6).
 export * from './pigmentos.js';
 // Formatação inline da tradução (*itálico*, **negrito**), usada pelo editor, pelo
@@ -7,6 +9,9 @@ export * from './pigmentos.js';
 export * from './inline.js';
 // Regras do livro: remontagem de parágrafos, cabeçalho e escopo de exportação.
 export * from './livro.js';
+// Preferências de estilo por obra (doc 08 §12): a camada de chaves entre o núcleo
+// universal e o delta em texto livre.
+export * from './preferenciasEstilo.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
@@ -74,12 +79,15 @@ export interface PromptMae {
   tipo: TipoPrompt;
   /** Versão do núcleo sobre a qual o delta foi escrito (informativo). */
   nucleo_id: number | null;
+  /** Preferências de estilo desta versão (doc 08 §12). Virar uma chave cria uma
+   * versão nova, então o capítulo já traduzido guarda as que o traduziram. */
+  preferencias: PreferenciasEstilo;
   criado_em: string;
 }
 
 /** Versão do núcleo universal (prompt padrão global): regras zh→pt-BR comuns a
  * todas as obras; o delta de cada obra é inserido no marcador {{DELTA_OBRA}}. */
-export type PromptPadrao = Omit<PromptMae, 'obra_id' | 'tipo' | 'nucleo_id'>;
+export type PromptPadrao = Omit<PromptMae, 'obra_id' | 'tipo' | 'nucleo_id' | 'preferencias'>;
 
 /** Prompt mãe efetivo de uma obra (núcleo + delta compostos), com proveniência. */
 export interface PromptComposto {

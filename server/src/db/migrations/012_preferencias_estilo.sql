@@ -1,0 +1,11 @@
+-- Doc 08 §12 — preferências de estilo da obra (aspas ou travessão, itálico no
+-- pensamento, "fizera", nota do tradutor, onomatopeia, registro).
+--
+-- Ficam na VERSÃO do prompt, não na obra: virar uma chave passa a ser uma versão
+-- nova e imutável, com notas e diff, e `capitulos.prompt_id` (que já existe) grava
+-- a proveniência. Sem isso, um capítulo traduzido em aspas ficaria indistinguível
+-- de um traduzido em travessão.
+--
+-- NULL = padrões do aplicativo = comportamento de hoje: toda linha existente
+-- continua produzindo exatamente o mesmo prompt.
+ALTER TABLE prompts ADD COLUMN preferencias TEXT;

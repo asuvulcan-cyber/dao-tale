@@ -39,7 +39,7 @@ explícita, vence o intervalo). Escopo sem capítulo nenhum → `400 escopo-vazi
 | Método e rota | Descrição |
 |---|---|
 | `GET /obras/:id/prompts` | Histórico completo (versão, notas, data, ativo) |
-| `POST /obras/:id/prompts` | Cria nova versão `{ versao, conteudo, notas_versao?, ativar: bool }` — versões são imutáveis |
+| `POST /obras/:id/prompts` | Cria nova versão `{ versao, conteudo, notas_versao?, ativar: bool, preferencias? }` — versões são imutáveis. `preferencias` (doc 08 §12) é parcial e **herda** as da versão ativa: editar o texto do delta não reseta as chaves |
 | `POST /prompts/:id/ativar` | Transação: desativa o atual, ativa este (também é o "reverter" da tela 4.6) |
 
 ### Capítulos e tradução

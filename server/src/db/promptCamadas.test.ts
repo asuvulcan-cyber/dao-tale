@@ -4,7 +4,13 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { abrirBanco } from './index.js';
 import { reposObras, reposPrompts, reposPromptPadrao } from './repos.js';
-import { MARCADOR_DELTA, PROMPT_PADRAO_INICIAL, comporPromptMae, extrairCamadas } from './promptPadraoInicial.js';
+import {
+  MARCADOR_DELTA,
+  MARCADOR_PREFERENCIAS,
+  PROMPT_PADRAO_INICIAL,
+  comporPromptMae,
+  extrairCamadas,
+} from './promptPadraoInicial.js';
 
 const NUCLEO = ['# Regras', '', '## 5. PARTÍCULAS', 'texto.', '', '---', '', MARCADOR_DELTA, '', '## 7. PROIBIÇÕES', 'tabela.'].join('\n');
 
@@ -70,26 +76,52 @@ describe('migração de boot: padrão legado (com Seção 6) vira núcleo', () =
     const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dao-tale-')), 'teste.db');
     const legadoCompleto = comporPromptMae(NUCLEO, 'Diretriz que era do padrão.');
 
-    // Banco "antigo": padrão ativo ainda carrega a Seção 6 e a flag não existe.
+    // Banco "antigo": uma só versão de padrão, ativa, ainda com a Seção 6, e
+    // nenhuma das flags de migração.
     const antes = abrirBanco(arquivo);
-    antes.prepare('UPDATE prompt_padrao SET conteudo = ?').run(legadoCompleto);
-    antes.prepare("DELETE FROM configuracoes WHERE chave = 'nucleo_migrado'").run();
+    antes.prepare('DELETE FROM prompt_padrao').run();
+    antes
+      .prepare("INSERT INTO prompt_padrao (versao, conteudo, ativo) VALUES ('1.0', ?, 1)")
+      .run(legadoCompleto);
+    antes.prepare("DELETE FROM configuracoes WHERE chave IN ('nucleo_migrado','nucleo_enxuto_semeado')").run();
     antes.close();
 
     const depois = abrirBanco(arquivo);
     const versoes = reposPromptPadrao.listar(depois);
-    expect(versoes).toHaveLength(2);
+    // v1.0 legada + v2.0 derivada (ativa) + v3.0 enxuta (inativa).
+    expect(versoes).toHaveLength(3);
     const ativo = reposPromptPadrao.ativo(depois)!;
     expect(ativo.versao).toBe('2.0');
     expect(ativo.conteudo).toContain(MARCADOR_DELTA);
     expect(ativo.conteudo).not.toContain('Diretriz que era do padrão.');
-    expect(versoes.find((v) => !v.ativo)!.conteudo).toBe(legadoCompleto);
+    expect(versoes.find((v) => v.versao === '1.0')!.conteudo).toBe(legadoCompleto);
 
-    // Reabrir de novo não cria terceira versão (flag persiste).
+    // Reabrir de novo não cria versão nova (as duas flags persistem).
     depois.close();
     const denovo = abrirBanco(arquivo);
-    expect(reposPromptPadrao.listar(denovo)).toHaveLength(2);
+    expect(reposPromptPadrao.listar(denovo)).toHaveLength(3);
     denovo.close();
+    fs.rmSync(path.dirname(arquivo), { recursive: true, force: true });
+  });
+
+  it('o núcleo enxuto é semeado INATIVO e nunca desativa o que estava em uso', () => {
+    const novo = abrirBanco(':memory:');
+    const enxuto = reposPromptPadrao.listar(novo).find((v) => v.conteudo.includes(MARCADOR_PREFERENCIAS))!;
+    expect(enxuto).toBeDefined();
+    expect(enxuto.ativo).toBe(false);
+    // O ativo continua sendo o núcleo que já regia as traduções.
+    expect(reposPromptPadrao.ativo(novo)!.conteudo).not.toContain(MARCADOR_PREFERENCIAS);
+    novo.close();
+  });
+
+  it('a semeadura roda uma vez só: reabrir não cria outra versão', () => {
+    const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dao-tale-')), 'teste.db');
+    const antes = abrirBanco(arquivo);
+    const total = reposPromptPadrao.listar(antes).length;
+    antes.close();
+    const depois = abrirBanco(arquivo);
+    expect(reposPromptPadrao.listar(depois)).toHaveLength(total);
+    depois.close();
     fs.rmSync(path.dirname(arquivo), { recursive: true, force: true });
   });
 });
@@ -102,12 +134,16 @@ describe('reposPrompts.composto', () => {
     reposPrompts.criar(db, legado.id, { versao: '1.0', conteudo: 'Prompt inteiro da obra.', ativar: true });
     expect(reposPrompts.composto(db, legado.id)!.texto).toBe('Prompt inteiro da obra.');
 
+    // O enxuto vem semeado inativo; este teste é sobre a composição com ele.
+    const enxuto = reposPromptPadrao.listar(db).find((v) => v.conteudo.includes(MARCADOR_PREFERENCIAS))!;
+    reposPromptPadrao.ativar(db, enxuto.id);
+
     const nova = reposObras.criar(db, { titulo: 'Nova' });
     const delta = reposPrompts.adotarPadrao(db, nova.id)!;
     expect(delta.tipo).toBe('delta');
     const antes = reposPrompts.composto(db, nova.id)!;
     expect(antes.nucleo).not.toBeNull();
-    expect(antes.texto).toContain('## 7. PROIBIÇÕES ABSOLUTAS');
+    expect(antes.texto).toContain('## 3. DEMONSTRATIVOS');
 
     // Nova versão do núcleo flui para a obra sem tocar no delta dela.
     reposPromptPadrao.criar(db, { versao: '9.0', conteudo: `Regra nova do núcleo.\n\n${MARCADOR_DELTA}`, ativar: true });
