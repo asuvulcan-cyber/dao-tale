@@ -33,8 +33,11 @@ versionamento e para os fluxos que hoje violam a regra (revisão e extração).
 
 As instruções operacionais do aplicativo (formato numerado, `termos_novos`, protocolo
 de revisão) continuam sendo anexadas pelo servidor em `prompts.ts` — são parte do
-prefixo estável, mas variam por tarefa (tradução / detalhes / revisão / extração),
+prefixo estável, mas variam por tarefa (tradução / revisão / extração / QA),
 então ficam **depois** do delta na renderização.
+
+Uma tarefa **não** usa o prompt mãe: a contracapa (título e sinopse), que tem base
+própria — ver §11.
 
 ## 3. Composição e ordem de renderização
 
@@ -139,9 +142,10 @@ banco de testes que refina o prompt). Faz sentido cada papel ter seu modelo:
 
 | Papel | Perfil | Modelo |
 |-------|--------|--------|
-| Tradução (+ título/sinopse) | Alto volume, barato, rápido | O padrão atual (capítulo → obra → global) |
+| Tradução | Alto volume, barato, rápido | O padrão atual (capítulo → obra → global) |
 | Extração de termos | Alto volume potencial (frase a frase) | O mesmo padrão barato |
 | Revisão | Raro, precisa raciocinar | **Config própria: `provedor_revisao` / `modelo_revisao`** — um modelo de raciocínio (thinking) |
+| Contracapa (título + sinopse) | **1 chamada por obra**, máxima interpretação | **Config própria: `provedor_detalhes` / `modelo_detalhes`** — o melhor modelo disponível (§11) |
 | Sugestão de refinamento do prompt (§7) | Raríssimo, máximo valor | Usa o mesmo par da revisão |
 
 Comportamento: se `provedor_revisao`/`modelo_revisao` estiverem configurados
@@ -293,3 +297,42 @@ Leitura dos números, na direção prevista pelo §8:
 Nos provedores sem cache explícito o prefixo estável aproveita o cache implícito
 (Gemini/DeepSeek/Groq/OpenRouter) com fatores próprios; na Mistral vale só a
 redução bruta do prompt (extração: sistema médio caiu de ~3,8K para ~2,7K tokens).
+
+## 11. Contracapa: instrumento próprio (2026-08-02)
+
+O título e a sinopse da ficha da obra saíam literais e calcados — pior que um chat
+cru: `无道` virava "sem caminho" (é "Profano"/"iníquo"), `仙草级` virava "de primeira
+linha" (é um **grau** numa escala de qualidade), e um `丝丝入扣` chegava achatado.
+
+**A causa não era o modelo, era o instrumento.** A rota `POST /ia/traduzir-detalhes`
+montava o **núcleo de capítulo inteiro** como `promptMae`. O núcleo é literalidade
+controlada de propósito — proíbe invenção, embelezamento e nota do tradutor, porque
+o texto do capítulo é ficção corrida que o revisor confere frase a frase. A
+contracapa é o oposto: paratexto, aparece uma vez, precisa funcionar sozinha em
+português e vive exatamente de chengyu, termo de gênero e clichê de resenha — tudo
+o que o núcleo manda decalcar. Somavam-se dois agravantes: a sinopse era **picotada
+em parágrafos numerados** (`dividirParagrafos`), então os versos paralelos da
+abertura eram traduzidos isolados e viravam prosa; e a chamada usava o **modelo
+barato** da obra, escolhido para volume.
+
+**O conserto, em três peças:**
+
+1. **Prompt próprio** (`server/src/ia/promptContracapa.ts`, fixo no código): registro
+   de contracapa, padrão declarado como **fiel-mas-natural** (nem decalque, nem
+   adaptação livre) e autorização explícita para localizar chengyu, termo cultural,
+   escala/grau e clichê de resenha. Mantém o que importa: glossário é lei para nomes
+   e termos, quebras de linha e de parágrafo preservadas, nada acrescentado nem
+   omitido, saída limpa (sem nota, colchete, pinyin entre parênteses ou alternativa
+   "X ou Y"). Os exemplos do prompt são deliberadamente diferentes dos casos usados
+   para verificar a qualidade — ensinar a classe sem entregar a resposta.
+   Da obra entra **só o glossário**; o delta (house-style de capítulo) fica fora.
+2. **Contrato próprio** (`CONTRATO_CONTRACAPA`, método `traduzirContracapa` nos 4
+   provedores): dois campos anuláveis, `titulo_pt` e `sinopse_pt`. Sem itens
+   numerados e sem `termos_novos` — a sinopse é **um campo**, lida e traduzida
+   inteira, que é o que devolve intenção aos versos. A saída segue estruturada (o
+   valor é entregar campo pronto para a ficha), só deixou de ser uma lista numerada.
+   No Gemini, esta tarefa **não** desliga o *thinking*: aqui o raciocínio é o produto.
+3. **Modelo por papel** (`provedor_detalhes` / `modelo_detalhes`, em Configurações):
+   vazio = comportamento de hoje. É a aplicação mais barata do §5 — 1 chamada por
+   obra, então o melhor modelo disponível custa frações de centavo e a premissa
+   financeira do lote (doc 09) não é arranhada.

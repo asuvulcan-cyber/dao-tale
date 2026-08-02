@@ -3,15 +3,24 @@ import type { EntradaGlossario } from '@dao-tale/shared';
 import {
   filtrarGlossarioRelevante,
   incluirPrincipais,
+  sistemaContracapa,
+  sistemaContracapaPartes,
   sistemaExtrairTermos,
   sistemaRevisao,
   sistemaTraducao,
   sistemaTraducaoPartes,
+  usuarioContracapa,
   usuarioExtrairTermos,
   usuarioRevisao,
   usuarioTraducao,
 } from './prompts.js';
-import type { RequisicaoExtrairTermos, RequisicaoRevisao, RequisicaoTraducaoBloco } from './provedor.js';
+import { PROMPT_CONTRACAPA } from './promptContracapa.js';
+import type {
+  RequisicaoContracapa,
+  RequisicaoExtrairTermos,
+  RequisicaoRevisao,
+  RequisicaoTraducaoBloco,
+} from './provedor.js';
 
 const entrada = (termo_zh: string, termo_pt: string): EntradaGlossario => ({
   id: 0,
@@ -171,31 +180,56 @@ describe('variantes de termo no glossário', () => {
   });
 });
 
-describe('modo detalhes (título/sinopse de obra)', () => {
-  const req: RequisicaoTraducaoBloco = {
+describe('contracapa (título/sinopse de obra)', () => {
+  const versos = '一本死人经，半部无道书。\n斩尽千人头，啖吞百身骨。\n\n非常难得的一本传统武侠小说。';
+  const req: RequisicaoContracapa = {
     modelo: 'm',
-    promptMae: 'Regras da obra.',
-    modo: 'detalhes',
-    glossario: [],
-    caudaAnterior: [],
-    frases: [
-      { ordem: 0, texto_zh: '十日终焉', rotulo: 'título da obra' },
-      { ordem: 1, texto_zh: '他醒来了。世界变了。', rotulo: 'sinopse da obra' },
-    ],
-    proximas: [],
+    tituloZh: '死人经',
+    sinopseZh: versos,
+    glossario: [entrada('齐夏', 'Qi Xia')],
   };
 
-  it('instruções mandam traduzir o item inteiro, não frase a frase', () => {
-    const sistema = sistemaTraducao(req);
-    expect(sistema).toContain('POR COMPLETO');
-    expect(sistema).toContain('Não resuma, não corte e não omita nada.');
+  it('a base é o prompt de contracapa, não o prompt mãe de capítulo', () => {
+    const partes = sistemaContracapaPartes(req);
+    expect(partes.base).toBe(PROMPT_CONTRACAPA.trim());
+    expect(`${partes.base}\n\n${partes.operacional}`).toBe(sistemaContracapa(req));
+    // O prompt mãe nem é aceito na requisição: nada da obra entra aqui além do glossário.
+    expect(partes.base).not.toContain('Regras da obra');
+  });
+
+  it('autoriza localizar chengyu/termo cultural e proíbe nota, alternativa e resumo', () => {
+    const sistema = sistemaContracapa(req);
+    expect(sistema).toContain('成语');
+    expect(sistema).toContain('AUTORIZADO');
+    expect(sistema).toContain('FIEL, MAS NATURAL');
+    expect(sistema).toMatch(/nota do tradutor/i);
+    expect(sistema).toMatch(/alternativas/i);
+    expect(sistema).toContain('sem resumir, cortar ou omitir nada');
+    // Nada de item numerado: a instrução de capítulo não pode vazar para cá.
     expect(sistema).not.toContain('Traduza cada frase numerada');
   });
 
-  it('rótulo fica fora do texto-fonte, em linha própria', () => {
-    const usuario = usuarioTraducao(req);
-    expect(usuario).toContain('### Itens a traduzir:');
-    expect(usuario).toContain('[0] (título da obra)\n十日终焉');
-    expect(usuario).toContain('[1] (sinopse da obra)\n他醒来了。世界变了。');
+  it('a sinopse vai inteira, com as quebras de verso e de parágrafo preservadas', () => {
+    const usuario = usuarioContracapa(req);
+    expect(usuario).toContain('### Título da obra (chinês):\n死人经');
+    expect(usuario).toContain(`### Sinopse da obra (chinês, completa):\n${versos}`);
+    expect(usuario).not.toMatch(/\[\d\]/);
+    expect(usuario).not.toContain('parágrafo 1 de');
+  });
+
+  it('só o campo enviado aparece — sem sinopse, o texto não a menciona', () => {
+    const usuario = usuarioContracapa({ ...req, sinopseZh: undefined });
+    expect(usuario).toContain('死人经');
+    expect(usuario).not.toContain('Sinopse da obra');
+  });
+
+  it('glossário filtrado vai na mensagem do usuário e o sistema fica estável', () => {
+    const comFlag = { ...req, glossarioNoUsuario: true };
+    const sistema = sistemaContracapa(comFlag);
+    expect(sistema).not.toContain('齐夏 → Qi Xia');
+    expect(usuarioContracapa(comFlag)).toContain('齐夏 → Qi Xia');
+    expect(sistemaContracapa({ ...comFlag, glossario: [] })).toBe(sistema);
+    // Sem a flag, o glossário inteiro fica no sistema (comportamento legado).
+    expect(sistemaContracapa(req)).toContain('齐夏 → Qi Xia');
   });
 });

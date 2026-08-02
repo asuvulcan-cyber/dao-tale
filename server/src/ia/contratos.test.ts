@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Type } from '@google/genai';
 import { z } from 'zod';
 import {
+  CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
@@ -11,7 +12,13 @@ import {
   type Contrato,
 } from './contratos.js';
 
-const CONTRATOS: Contrato[] = [CONTRATO_TRADUCAO, CONTRATO_EXTRAIR_TERMOS, CONTRATO_REVISAO, CONTRATO_REFINAR_PROMPT];
+const CONTRATOS: Contrato[] = [
+  CONTRATO_TRADUCAO,
+  CONTRATO_CONTRACAPA,
+  CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_REVISAO,
+  CONTRATO_REFINAR_PROMPT,
+];
 
 describe('paraGemini (derivação da fonte única)', () => {
   it('converte objeto aninhado com required, enum e inteiro', () => {
@@ -80,5 +87,17 @@ describe('coerência schema ⇄ zod (a fonte única não pode divergir da valida
     expect(() =>
       CONTRATO_REFINAR_PROMPT.zod.parse({ propostas: [{ secao_regra: 'g', regra_proposta: 'r', justificativa: 'j' }] }),
     ).not.toThrow();
+    expect(() =>
+      CONTRATO_CONTRACAPA.zod.parse({ titulo_pt: 'O Cânone dos Mortos', sinopse_pt: 'Verso um.\nVerso dois.' }),
+    ).not.toThrow();
+  });
+
+  it('contracapa: só o título enviado → sinopse volta null, e os dois campos são anuláveis', () => {
+    expect(CONTRATO_CONTRACAPA.zod.parse({ titulo_pt: 'X', sinopse_pt: null }).sinopse_pt).toBeNull();
+    // Campo ausente também vira null (modelo que só devolve o que traduziu).
+    expect(CONTRATO_CONTRACAPA.zod.parse({ titulo_pt: 'X' }).sinopse_pt).toBeNull();
+    const g = paraGemini(CONTRATO_CONTRACAPA.schema);
+    expect(g.properties!.sinopse_pt.nullable).toBe(true);
+    expect(instrucaoJson(CONTRATO_CONTRACAPA)).toContain('ou null');
   });
 });

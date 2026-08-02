@@ -1,19 +1,25 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { FASES_TRADUCAO, PROVEDORES_IDS, type EventoLote, type ProvedorId } from '@dao-tale/shared';
+import {
+  FASES_TRADUCAO,
+  PROVEDORES_IDS,
+  type Configuracoes,
+  type EventoLote,
+  type ParProvedor,
+  type ProvedorId,
+} from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
 import { jobEmExecucao } from '../traducao/job.js';
 import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote } from '../traducao/lote.js';
 import { checkpointDaObra } from '../traducao/checkpoint.js';
-import { comporPromptMae, extrairCamadas } from '../db/promptPadraoInicial.js';
+import { extrairCamadas } from '../db/promptPadraoInicial.js';
 import { exportarObra, importarObra } from '../db/portabilidade.js';
 import { backupSeArquivo } from '../db/backup.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { obterChave } from '../credenciais/index.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
-import type { FraseParaTraduzir } from '../ia/provedor.js';
 import { registrarEvento } from '../telemetria/registrar.js';
 import { telemetriaDaObra } from '../telemetria/painel.js';
 
@@ -48,17 +54,26 @@ const atualizarObraSchema = z.object({
 const MIMES_CAPA = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const CAPA_MAX_BYTES = 2 * 1024 * 1024;
 
-/** Quebra a sinopse em parágrafos. Modelos pequenos (ex.: Flash Lite) só devolviam
-    o 1º parágrafo quando a sinopse ia como um item único; enviada como parágrafos
-    numerados (o mesmo formato confiável da tradução de capítulo), o modelo completa
-    todos. Usa linhas em branco como fronteira; sem elas, cai para quebra por linha. */
-export function dividirParagrafos(texto: string): string[] {
-  const porBlocos = texto
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const base = porBlocos.length > 1 ? porBlocos : texto.split('\n');
-  return base.map((p) => p.trim()).filter(Boolean);
+/** Par provedor/modelo da contracapa (doc 08 §5/§11). Ordem: pedido explícito →
+    papel `provedor_detalhes` → cadeia normal (obra → global). A contracapa roda
+    1× por obra: é o lugar barato de usar o melhor modelo. Modelo de um provedor
+    nunca vai para outro — trocado o provedor, o modelo volta para o padrão dele. */
+export function resolverParContracapa(
+  config: Configuracoes,
+  obra: { provedor_padrao: ProvedorId | null; modelo_padrao: string | null } | undefined,
+  pedido: { provedor?: ProvedorId; modelo?: string },
+): ParProvedor {
+  const papelDetalhes = !pedido.provedor && !!config.provedor_detalhes;
+  const provedor: ProvedorId =
+    pedido.provedor ??
+    (papelDetalhes ? (config.provedor_detalhes as ProvedorId) : (obra?.provedor_padrao ?? config.provedor_padrao));
+  const padraoDoProvedor = obterProvedor(provedor).modeloPadrao;
+  if (pedido.modelo) return { provedor, modelo: pedido.modelo };
+  if (papelDetalhes) return { provedor, modelo: config.modelo_detalhes || padraoDoProvedor };
+  // Cadeia normal, só enquanto o provedor for o mesmo de quem guardou o modelo.
+  const daObra = obra?.provedor_padrao === provedor ? obra?.modelo_padrao : null;
+  const daConfig = config.provedor_padrao === provedor ? config.modelo_padrao : '';
+  return { provedor, modelo: daObra || daConfig || padraoDoProvedor };
 }
 
 const criarPromptSchema = z.object({
@@ -449,9 +464,10 @@ export function rotasObras(db: BancoDados): Hono {
     return c.json(prompt);
   });
 
-  // ── Tradução de título/sinopse (cadastro e ficha da obra) ───────────────
-  // Sem obra_id (cadastro) usa o prompt padrão; com obra_id usa o prompt da
-  // obra (adotando o padrão se ela ainda não tiver um) e o glossário dela.
+  // ── Tradução de contracapa: título/sinopse (cadastro e ficha da obra) ───
+  // NÃO usa o prompt mãe da obra: contracapa tem prompt próprio (doc 08 §11) —
+  // o núcleo de capítulo proíbe justamente a interpretação que esta tarefa
+  // exige. Da obra vem só o glossário. Sem obra_id (cadastro) não há glossário.
 
   const traduzirDetalhesSchema = z
     .object({
@@ -471,44 +487,17 @@ export function rotasObras(db: BancoDados): Hono {
     if (corpo.data.obra_id && !obra) {
       return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     }
-    // Com obra: composição núcleo + delta dela. Sem obra (cadastro): o núcleo
-    // ativo composto com delta vazio — a composição também remove o marcador.
-    const nucleoAtivo = reposPromptPadrao.ativo(db);
-    const promptTexto = obra
-      ? reposPrompts.composto(db, obra.id)?.texto
-      : nucleoAtivo
-        ? comporPromptMae(nucleoAtivo.conteudo, '')
-        : undefined;
-    if (!promptTexto) {
-      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'Não há prompt padrão ativo para orientar a tradução.' } }, 400);
-    }
 
     const config = reposConfig.obterTodas(db);
-    const provedorId: ProvedorId = corpo.data.provedor ?? obra?.provedor_padrao ?? config.provedor_padrao;
-    const provedor = obterProvedor(provedorId);
-    const modelo = corpo.data.modelo ?? obra?.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao);
-    const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
+    const par = resolverParContracapa(config, obra, corpo.data);
+    const provedor = obterProvedor(par.provedor);
+    const chave = provedor.precisaChave ? await obterChave(par.provedor) : null;
     if (provedor.precisaChave && !chave) {
       return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
     }
 
-    // Título e sinopse viajam como itens numerados no modo "detalhes": o rótulo
-    // fica fora do texto-fonte. A sinopse é quebrada em parágrafos numerados (1..N)
-    // porque modelos pequenos só devolvem o 1º parágrafo quando ela vai como item
-    // único — numerada, cada parágrafo é completado como na tradução de capítulo.
-    const frases: FraseParaTraduzir[] = [];
-    if (corpo.data.titulo_zh) frases.push({ ordem: 0, texto_zh: corpo.data.titulo_zh, rotulo: 'título da obra' });
-    const paragrafosSinopse = corpo.data.sinopse_zh ? dividirParagrafos(corpo.data.sinopse_zh) : [];
-    paragrafosSinopse.forEach((p, i) => {
-      frases.push({
-        ordem: i + 1,
-        texto_zh: p,
-        rotulo: paragrafosSinopse.length > 1 ? `sinopse da obra — parágrafo ${i + 1} de ${paragrafosSinopse.length}` : 'sinopse da obra',
-      });
-    });
-
-    // Mesmo desenho da tradução de capítulo: glossário filtrado pelo trecho vai
-    // na mensagem do usuário e o sistema fica estável (cacheável).
+    // Mesmo desenho das demais tarefas: glossário filtrado pelo texto vai na
+    // mensagem do usuário e o bloco de sistema fica estável (cacheável).
     const glossarioTodo = obra ? reposGlossario.listar(db, obra.id) : [];
     const glossario = config.glossario_relevante
       ? incluirPrincipais(
@@ -518,16 +507,16 @@ export function rotasObras(db: BancoDados): Hono {
       : glossarioTodo;
 
     try {
-      reposUso.registrar(db, provedorId, modelo);
-      const resposta = await provedor.traduzirBloco(chave, {
-        modelo,
-        promptMae: promptTexto,
-        modo: 'detalhes',
+      reposUso.registrar(db, par.provedor, par.modelo);
+      // A sinopse vai INTEIRA, com as quebras originais: picotada em parágrafos
+      // numerados, os versos paralelos da abertura eram traduzidos isolados e
+      // viravam prosa. Um campo, uma leitura, uma intenção.
+      const resposta = await provedor.traduzirContracapa(chave, {
+        modelo: par.modelo,
+        tituloZh: corpo.data.titulo_zh,
+        sinopseZh: corpo.data.sinopse_zh,
         glossario,
         glossarioNoUsuario: config.glossario_relevante,
-        caudaAnterior: [],
-        frases,
-        proximas: [],
       });
       // No cadastro de obra nova ainda não existe obra_id: o gasto entra no total
       // do dia (e na conta da cota) sem ser atribuível a uma obra.
@@ -535,21 +524,17 @@ export function rotasObras(db: BancoDados): Hono {
         obra_id: obra?.id ?? null,
         capitulo_id: null,
         papel: 'titulo',
-        provedor: provedorId,
-        modelo,
+        provedor: par.provedor,
+        modelo: par.modelo,
         uso: resposta.uso,
       });
-      const porOrdem = new Map<number, string>();
-      for (const t of resposta.traducoes) {
-        const texto = t.texto_pt?.trim();
-        if (texto) porOrdem.set(t.ordem, texto);
-      }
-      // Remonta a sinopse na ordem dos parágrafos enviados; ignora o que o modelo
-      // não devolveu (melhor perder um parágrafo do que a sinopse inteira).
-      const partesSinopse = paragrafosSinopse.map((_, i) => porOrdem.get(i + 1)).filter(Boolean);
+      const limpar = (texto: string | null) => {
+        const t = texto?.trim();
+        return t ? t : null;
+      };
       return c.json({
-        titulo_pt: corpo.data.titulo_zh ? (porOrdem.get(0) ?? null) : null,
-        sinopse_pt: partesSinopse.length > 0 ? partesSinopse.join('\n\n') : null,
+        titulo_pt: corpo.data.titulo_zh ? limpar(resposta.titulo_pt) : null,
+        sinopse_pt: corpo.data.sinopse_zh ? limpar(resposta.sinopse_pt) : null,
       });
     } catch (e) {
       return c.json({ erro: { codigo: 'provedor', mensagem: (e as Error).message } }, 502);

@@ -371,6 +371,11 @@ export interface Configuracoes {
    * cadeia normal (capítulo → obra → padrão global). */
   provedor_revisao: ProvedorId | '';
   modelo_revisao: string;
+  /** Modelo por papel: a contracapa (título + sinopse) roda UMA vez por obra e é
+   * a tarefa mais interpretativa do app — o melhor modelo disponível aqui custa
+   * frações de centavo. Vazio = cadeia normal (obra → padrão global). */
+  provedor_detalhes: ProvedorId | '';
+  modelo_detalhes: string;
   /** Limite diário de requisições por provedor para o indicador de cota
    * (ausente ou 0 = não mostrar). */
   cotas_diarias: Record<string, number>;
@@ -418,6 +423,8 @@ export const CONFIG_PADRAO: Configuracoes = {
   glossario_relevante: true,
   provedor_revisao: '',
   modelo_revisao: '',
+  provedor_detalhes: '',
+  modelo_detalhes: '',
   // Valores da cota gratuita de cada provedor (jul/2026) — ajustáveis em Configurações.
   // Gemini: 250 req/dia no Flash; OpenRouter: 50 req/dia em modelos :free (1000 com
   // US$ 10 de crédito); Groq: 1000 req/dia por modelo na faixa gratuita.

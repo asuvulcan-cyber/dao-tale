@@ -1018,6 +1018,9 @@ export const reposConfig = {
         : CONFIG_PADRAO.glossario_relevante,
       provedor_revisao: (mapa.provedor_revisao as Configuracoes['provedor_revisao']) ?? CONFIG_PADRAO.provedor_revisao,
       modelo_revisao: mapa.modelo_revisao ?? CONFIG_PADRAO.modelo_revisao,
+      provedor_detalhes:
+        (mapa.provedor_detalhes as Configuracoes['provedor_detalhes']) ?? CONFIG_PADRAO.provedor_detalhes,
+      modelo_detalhes: mapa.modelo_detalhes ?? CONFIG_PADRAO.modelo_detalhes,
       cotas_diarias: lerCotasDiarias(mapa),
       checkpoint_janela: numeroConfig(mapa.checkpoint_janela, CONFIG_PADRAO.checkpoint_janela),
       checkpoint_termos_max: numeroConfig(mapa.checkpoint_termos_max, CONFIG_PADRAO.checkpoint_termos_max),

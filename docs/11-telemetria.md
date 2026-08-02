@@ -165,7 +165,7 @@ pergunta do usuário é em reais. Validação em `configSchema` como as demais.
 | Papel | Arquivo · momento | obra_id | capitulo_id |
 |---|---|---|---|
 | `traducao` | `traducao/job.ts` — após cada bloco bem-sucedido | ✅ | ✅ |
-| `titulo` | `rotas/obras.ts` — tradução de título/sinopse (modo `detalhes`) | ✅ | — |
+| `titulo` | `rotas/obras.ts` — contracapa: título/sinopse (`traduzirContracapa`, doc 08 §11) | ✅ | — |
 | `revisao` | `rotas/frases.ts` — `POST /frases/:id/revisar` | ✅ | ✅ |
 | `extracao` | `rotas/frases.ts` — `POST /frases/:id/sugerir-termos` | ✅ | ✅ |
 | `refinamento` | `rotas/obras.ts` — `POST /obras/:id/prompts/refinar` | ✅ | — |

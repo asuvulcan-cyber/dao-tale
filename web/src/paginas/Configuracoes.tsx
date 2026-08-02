@@ -550,6 +550,40 @@ function FormularioPadroes({
           )}
         </label>
         <label className="block text-sm">
+          Provedor da contracapa (título e sinopse)
+          <select
+            value={valores.provedor_detalhes}
+            onChange={(e) =>
+              setValores({ ...valores, provedor_detalhes: e.target.value as ProvedorId | '', modelo_detalhes: '' })
+            }
+            className="entrada mt-1 w-full"
+          >
+            <option value="">— o mesmo da tradução —</option>
+            {provedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+          <span className="mt-0.5 block text-xs text-tinta-2">
+            Título e sinopse são traduzidos uma vez por obra e é onde a interpretação pesa mais (chengyu, termos de
+            gênero, versos). O melhor modelo que você tiver custa frações de centavo aqui — vale escolher um.
+          </span>
+        </label>
+        <label className="block text-sm">
+          Modelo da contracapa
+          {valores.provedor_detalhes ? (
+            <SeletorModelo
+              provedor={valores.provedor_detalhes}
+              valor={valores.modelo_detalhes}
+              aoMudar={(novo) => setValores({ ...valores, modelo_detalhes: novo })}
+              modeloPadraoProvedor={provedores.find((p) => p.id === valores.provedor_detalhes)?.modelo_padrao}
+            />
+          ) : (
+            <input disabled value="" placeholder="segue o modelo da tradução" className="entrada mt-1 w-full opacity-60" />
+          )}
+        </label>
+        <label className="block text-sm">
           Frases por bloco de tradução
           <input
             type="number"

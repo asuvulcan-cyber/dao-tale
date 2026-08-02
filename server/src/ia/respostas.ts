@@ -40,6 +40,14 @@ export const respostaRevisaoSchema = z.object({
   correcao_proposta: z.string().nullable().default(null),
 });
 
+// Contracapa (título/sinopse da ficha): campos prontos, sem numeração e sem
+// termos_novos — o que volta daqui é escrito direto na ficha da obra. Nulo é
+// resposta legítima: a rota pode ter enviado só o título ou só a sinopse.
+export const respostaContracapaSchema = z.object({
+  titulo_pt: z.string().nullable().default(null),
+  sinopse_pt: z.string().nullable().default(null),
+});
+
 export const respostaRefinarPromptSchema = z.object({
   propostas: z
     .array(

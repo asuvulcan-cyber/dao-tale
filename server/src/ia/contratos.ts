@@ -2,6 +2,7 @@ import { Type, type Schema } from '@google/genai';
 import type { z } from 'zod';
 import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import {
+  respostaContracapaSchema,
   respostaExtrairTermosSchema,
   respostaQaSchema,
   respostaRefinarPromptSchema,
@@ -147,6 +148,31 @@ export const CONTRATO_TRADUCAO: Contrato<typeof respostaTraducaoSchema> = {
     required: ['traducoes', 'termos_novos'],
   },
   notasInstrucao: ['Se não houver termos novos, use "termos_novos": [].'],
+};
+
+// Contracapa: dois campos de texto pronto, sem itens numerados. A numeração da
+// tradução de capítulo era o que picotava a sinopse (e matava os versos); aqui
+// a sinopse é UM campo, traduzida inteira e de uma vez.
+export const CONTRATO_CONTRACAPA: Contrato<typeof respostaContracapaSchema> = {
+  ferramenta: 'entregar_contracapa',
+  descricao: 'Entrega o título e a sinopse traduzidos, prontos para a ficha da obra.',
+  zod: respostaContracapaSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      titulo_pt: {
+        type: ['string', 'null'],
+        description: 'título em português brasileiro, pronto para a ficha; null se nenhum título foi enviado',
+      },
+      sinopse_pt: {
+        type: ['string', 'null'],
+        description:
+          'sinopse completa em português brasileiro, com as mesmas quebras de linha e de parágrafo do original; null se nenhuma sinopse foi enviada',
+      },
+    },
+    required: [],
+  },
+  notasInstrucao: ['Use null no campo cujo texto NÃO foi enviado — não invente título nem sinopse.'],
 };
 
 export const CONTRATO_EXTRAIR_TERMOS: Contrato<typeof respostaExtrairTermosSchema> = {

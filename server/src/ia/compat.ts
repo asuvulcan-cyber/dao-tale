@@ -4,11 +4,13 @@ import {
   ErroProvedor,
   type ProvedorIA,
   type UsoChamada,
+  type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
   type RequisicaoQa,
+  type RespostaContracapa,
   type RespostaExtrairTermos,
   type RespostaQa,
   type RespostaRefinarPrompt,
@@ -16,11 +18,13 @@ import {
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
+  sistemaContracapa,
   sistemaExtrairTermos,
   sistemaQa,
   sistemaRefinarPrompt,
   sistemaRevisao,
   sistemaTraducao,
+  usuarioContracapa,
   usuarioExtrairTermos,
   usuarioQa,
   usuarioRefinarPrompt,
@@ -28,6 +32,7 @@ import {
   usuarioTraducao,
 } from './prompts.js';
 import {
+  CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
@@ -215,6 +220,20 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
+        }
+        throw e;
+      }
+    },
+
+    async traduzirContracapa(chave, req: RequisicaoContracapa): Promise<RespostaContracapa> {
+      const sistema = `${sistemaContracapa(req)}\n\n${instrucaoJson(CONTRATO_CONTRACAPA)}`;
+      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioContracapa(req));
+      try {
+        const dados = CONTRATO_CONTRACAPA.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          throw new ErroProvedor('Resposta do modelo fora do contrato de contracapa.', 'transitorio');
         }
         throw e;
       }

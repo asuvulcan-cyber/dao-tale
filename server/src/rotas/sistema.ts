@@ -25,6 +25,9 @@ const configSchema = z.object({
   // próprio ('' = usar a cadeia normal).
   provedor_revisao: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
   modelo_revisao: z.string().max(120).optional(),
+  // Contracapa (título/sinopse): 1 chamada por obra — cabe o melhor modelo.
+  provedor_detalhes: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
+  modelo_detalhes: z.string().max(120).optional(),
   cotas_diarias: z.record(z.string(), z.number().int().min(0).max(1000000)).optional(),
   // Checkpoint de estabilidade (doc 09 §4): limiares do semáforo de liberação do lote.
   checkpoint_janela: z.number().int().min(1).max(50).optional(),

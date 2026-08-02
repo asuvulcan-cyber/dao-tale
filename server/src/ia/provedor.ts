@@ -20,18 +20,11 @@ export interface UsoChamada {
 export interface FraseParaTraduzir {
   ordem: number;
   texto_zh: string;
-  /** Rótulo do item quando não é uma frase de capítulo (ex.: "título da obra"),
-   * apresentado ao modelo fora do texto-fonte para não contaminá-lo. */
-  rotulo?: string;
 }
 
 export interface RequisicaoTraducaoBloco {
   modelo: string;
   promptMae: string;
-  /** 'capitulo' (padrão): frases numeradas de um capítulo. 'detalhes': título e/ou
-   * sinopse de obra — muda as instruções operacionais (traduzir o item inteiro,
-   * não frase a frase). */
-  modo?: 'capitulo' | 'detalhes';
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado por bloco (só termos presentes no trecho):
    * ele entra na mensagem do usuário e o sistema fica estável para o prompt caching. */
@@ -61,6 +54,32 @@ export interface RespostaTraducaoBloco {
   traducoes: { ordem: number; texto_pt: string }[];
   termos_novos: TermoNovoDetectado[];
   /** JSON bruto retornado pelo provedor. */
+  bruta: string;
+  uso: UsoChamada;
+}
+
+// ── Contracapa: título e sinopse da ficha da obra ──────────────────────────
+// Tarefa própria, não um modo da tradução de capítulo: prompt próprio
+// (`promptContracapa.ts`, interpretativo em vez de literal), sinopse INTEIRA em
+// um campo só (para os versos serem traduzidos juntos) e saída já no formato da
+// ficha. Roda 1× por obra — daí valer um modelo forte (`provedor_detalhes`).
+
+export interface RequisicaoContracapa {
+  modelo: string;
+  /** Ausente quando o usuário só quer a sinopse. */
+  tituloZh?: string;
+  /** Vai inteira, com as quebras de linha originais. */
+  sinopseZh?: string;
+  /** Nomes e termos já catalogados — a única parte da obra que entra aqui. */
+  glossario: EntradaGlossario[];
+  /** true quando o glossário foi filtrado pelo texto enviado: ele vai na
+   * mensagem do usuário e o bloco de sistema fica estável (cacheável). */
+  glossarioNoUsuario?: boolean;
+}
+
+export interface RespostaContracapa {
+  titulo_pt: string | null;
+  sinopse_pt: string | null;
   bruta: string;
   uso: UsoChamada;
 }
@@ -210,6 +229,7 @@ export interface ProvedorIA {
   listarModelos(chave: string | null): Promise<ModeloInfo[]>;
   testarCredencial(chave: string | null): Promise<{ ok: boolean; mensagem: string }>;
   traduzirBloco(chave: string | null, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco>;
+  traduzirContracapa(chave: string | null, req: RequisicaoContracapa): Promise<RespostaContracapa>;
   revisarFrase(chave: string | null, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor>;
   extrairTermos(chave: string | null, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos>;
   refinarPrompt(chave: string | null, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt>;

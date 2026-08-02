@@ -1,11 +1,13 @@
 import type { EntradaGlossario } from '@dao-tale/shared';
 import type {
+  RequisicaoContracapa,
   RequisicaoExtrairTermos,
   RequisicaoQa,
   RequisicaoRefinarPrompt,
   RequisicaoRevisao,
   RequisicaoTraducaoBloco,
 } from './provedor.js';
+import { PROMPT_CONTRACAPA } from './promptContracapa.js';
 
 // Montagem dos textos de sistema e usuário — compartilhada por todos os provedores.
 // O bloco de sistema é idêntico em todas as chamadas de um capítulo (pré-requisito do prompt caching).
@@ -74,27 +76,14 @@ export function juntarPartes(p: PartesSistema): string {
 }
 
 export function sistemaTraducaoPartes(
-  req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario' | 'modo'>,
+  req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>,
 ): PartesSistema {
-  const instrucoes =
-    req.modo === 'detalhes'
-      ? // Título/sinopse de obra: a sinopse chega já quebrada em parágrafos numerados
-        // (modelos pequenos só devolviam o 1º parágrafo quando ela ia como item único).
-        [
-          'Você receberá itens numerados: o título da obra e/ou os parágrafos da sinopse, em chinês, para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
-          'Traduza CADA item numerado POR COMPLETO, mantendo o número. Não resuma, não corte e não omita nada.',
-          '- Título da obra: traduza como título — conciso, evocativo e natural em PT-BR.',
-          '- Parágrafos da sinopse: cada parágrafo vem como um item separado; traduza todos, com tom de contracapa e mantendo o encadeamento entre eles.',
-          'Devolva um item traduzido para cada número recebido — nenhum pode faltar.',
-          'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
-          'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
-        ]
-      : [
-          'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
-          'Traduza cada frase numerada mantendo o número. Não traduza o contexto marcado como "já traduzido" nem o marcado como "contexto futuro".',
-          'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
-          'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
-        ];
+  const instrucoes = [
+    'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
+    'Traduza cada frase numerada mantendo o número. Não traduza o contexto marcado como "já traduzido" nem o marcado como "contexto futuro".',
+    'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
+    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+  ];
   const operacional = [
     ...(req.glossarioNoUsuario
       ? // Glossário filtrado por bloco vai na mensagem do usuário: o sistema fica
@@ -108,7 +97,7 @@ export function sistemaTraducaoPartes(
   return { base: req.promptMae.trim(), operacional };
 }
 
-export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario' | 'modo'>): string {
+export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
   return juntarPartes(sistemaTraducaoPartes(req));
 }
 
@@ -131,15 +120,66 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
     for (const f of req.caudaAnterior) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt}`);
     partes.push('');
   }
-  partes.push(req.modo === 'detalhes' ? '### Itens a traduzir:' : '### Frases a traduzir:');
+  partes.push('### Frases a traduzir:');
   if (req.titulo) partes.push(`[-1] ${req.titulo} (título do capítulo — traduza como título)`);
-  for (const f of req.frases) partes.push(f.rotulo ? `[${f.ordem}] (${f.rotulo})\n${f.texto_zh}` : `[${f.ordem}] ${f.texto_zh}`);
+  for (const f of req.frases) partes.push(`[${f.ordem}] ${f.texto_zh}`);
   if (req.proximas.length > 0) {
     partes.push('');
     partes.push('### Contexto futuro (apenas referência — não traduzir):');
     for (const zh of req.proximas) partes.push(zh);
   }
   return partes.join('\n');
+}
+
+// ── Contracapa (título/sinopse da ficha da obra) ───────────────────────────
+// A base NÃO é o prompt mãe da obra: é o prompt de contracapa fixo do app
+// (`promptContracapa.ts`). O núcleo de capítulo proíbe justamente o que esta
+// tarefa exige — localizar chengyu, termo de gênero e clichê de resenha. Da
+// obra vem só o glossário, que continua sendo lei para nomes e termos.
+
+export function sistemaContracapaPartes(
+  req: Pick<RequisicaoContracapa, 'glossario' | 'glossarioNoUsuario' | 'tituloZh' | 'sinopseZh'>,
+): PartesSistema {
+  const operacional = [
+    ...(req.glossarioNoUsuario
+      ? ['## GLOSSÁRIO DA OBRA', 'Os termos do glossário presentes neste texto virão na mensagem do usuário. Uso obrigatório e consistente.']
+      : ['## GLOSSÁRIO DA OBRA (uso obrigatório e consistente)', formatarGlossario(req.glossario)]),
+    '',
+    '## INSTRUÇÕES OPERACIONAIS DO APLICATIVO',
+    'Você receberá o título e/ou a sinopse da obra em chinês — cada um por inteiro, sem numeração.',
+    'A sinopse vem completa de uma vez: leia-a toda antes de traduzir, para que os versos e o encadeamento sejam resolvidos juntos. Traduza-a inteira, sem resumir, cortar ou omitir nada.',
+    'Preencha titulo_pt com o título traduzido e sinopse_pt com a sinopse traduzida, mantendo em sinopse_pt as mesmas quebras de linha e de parágrafo do original.',
+    'Deixe em null o campo cujo texto não foi enviado — nunca invente um título ou uma sinopse que você não recebeu.',
+    'Os dois campos recebem o texto FINAL, pronto para a ficha da obra: sem rótulos, sem aspas em volta, sem notas e sem alternativas.',
+    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+  ].join('\n');
+  return { base: PROMPT_CONTRACAPA.trim(), operacional };
+}
+
+export function sistemaContracapa(
+  req: Pick<RequisicaoContracapa, 'glossario' | 'glossarioNoUsuario' | 'tituloZh' | 'sinopseZh'>,
+): string {
+  return juntarPartes(sistemaContracapaPartes(req));
+}
+
+export function usuarioContracapa(req: RequisicaoContracapa): string {
+  const partes: string[] = [];
+  if (req.glossarioNoUsuario && req.glossario.length > 0) {
+    partes.push('### Glossário (termos presentes neste texto — uso obrigatório):');
+    partes.push(formatarGlossario(req.glossario));
+    partes.push('');
+  }
+  if (req.tituloZh) {
+    partes.push('### Título da obra (chinês):');
+    partes.push(req.tituloZh);
+    partes.push('');
+  }
+  if (req.sinopseZh) {
+    // Inteira e com as quebras originais — é o que permite ver os versos juntos.
+    partes.push('### Sinopse da obra (chinês, completa):');
+    partes.push(req.sinopseZh);
+  }
+  return partes.join('\n').trimEnd();
 }
 
 export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {

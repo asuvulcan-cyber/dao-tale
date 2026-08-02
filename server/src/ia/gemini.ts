@@ -4,11 +4,13 @@ import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
+  type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
   type RequisicaoQa,
+  type RespostaContracapa,
   type RespostaExtrairTermos,
   type RespostaQa,
   type RespostaRefinarPrompt,
@@ -16,11 +18,13 @@ import {
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
+  sistemaContracapa,
   sistemaExtrairTermos,
   sistemaQa,
   sistemaRefinarPrompt,
   sistemaRevisao,
   sistemaTraducao,
+  usuarioContracapa,
   usuarioExtrairTermos,
   usuarioQa,
   usuarioRefinarPrompt,
@@ -28,6 +32,7 @@ import {
   usuarioTraducao,
 } from './prompts.js';
 import {
+  CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
@@ -40,6 +45,7 @@ import { usoDoGemini } from './uso.js';
 // Schemas no formato do Gemini (responseSchema), derivados da fonte única (M7).
 
 const SCHEMA_TRADUCAO_GEMINI = paraGemini(CONTRATO_TRADUCAO.schema);
+const SCHEMA_CONTRACAPA_GEMINI = paraGemini(CONTRATO_CONTRACAPA.schema);
 const SCHEMA_EXTRAIR_TERMOS_GEMINI = paraGemini(CONTRATO_EXTRAIR_TERMOS.schema);
 const SCHEMA_REVISAO_GEMINI = paraGemini(CONTRATO_REVISAO.schema);
 const SCHEMA_REFINAR_GEMINI = paraGemini(CONTRATO_REFINAR_PROMPT.schema);
@@ -149,6 +155,36 @@ export const provedorGemini: ProvedorIA = {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async traduzirContracapa(chave, req: RequisicaoContracapa): Promise<RespostaContracapa> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      // Sem `pensamentoEconomico` de propósito: aqui o raciocínio é o produto
+      // (localizar chengyu e imagem cultural) e a chamada acontece 1× por obra
+      // — economizar tokens de pensamento nesta tarefa é economia no lugar errado.
+      const resposta = await cliente.models.generateContent({
+        model: req.modelo,
+        contents: usuarioContracapa(req),
+        config: {
+          systemInstruction: sistemaContracapa(req),
+          responseMimeType: 'application/json',
+          responseSchema: SCHEMA_CONTRACAPA_GEMINI,
+        },
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+        throw new ErroProvedor('O Gemini truncou a contracapa no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_CONTRACAPA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de contracapa.', 'transitorio');
       }
       throw classificarErro(e);
     }

@@ -4,11 +4,13 @@ import type { ModeloInfo } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
+  type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
   type RequisicaoQa,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RespostaContracapa,
   type RespostaExtrairTermos,
   type RespostaQa,
   type RespostaRefinarPrompt,
@@ -16,11 +18,13 @@ import {
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
+  sistemaContracapaPartes,
   sistemaExtrairTermosPartes,
   sistemaQaPartes,
   sistemaRefinarPromptPartes,
   sistemaRevisaoPartes,
   sistemaTraducaoPartes,
+  usuarioContracapa,
   usuarioExtrairTermos,
   usuarioQa,
   usuarioRefinarPrompt,
@@ -29,6 +33,7 @@ import {
   type PartesSistema,
 } from './prompts.js';
 import {
+  CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
@@ -140,6 +145,31 @@ export const provedorClaude: ProvedorIA = {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato de tradução.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async traduzirContracapa(chave, req: RequisicaoContracapa): Promise<RespostaContracapa> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo,
+        max_tokens: 4096,
+        system: sistemaEmBlocos(sistemaContracapaPartes(req)),
+        messages: [{ role: 'user', content: usuarioContracapa(req) }],
+        ...ferramenta(CONTRATO_CONTRACAPA),
+      });
+      if (resposta.stop_reason === 'max_tokens') {
+        throw new ErroProvedor('A Anthropic truncou a contracapa no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = extrairToolUse(resposta, CONTRATO_CONTRACAPA.ferramenta);
+      const dados = CONTRATO_CONTRACAPA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato de contracapa.', 'transitorio');
       }
       throw classificarErro(e);
     }

@@ -1,6 +1,7 @@
 import {
   ErroProvedor,
   type ProvedorIA,
+  type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
   type RequisicaoQa,
   type RequisicaoRefinarPrompt,
@@ -8,6 +9,7 @@ import {
   type RequisicaoTraducaoBloco,
   type UsoChamada,
 } from './provedor.js';
+import { PROMPT_CONTRACAPA } from './promptContracapa.js';
 import { estimarTokens } from './uso.js';
 
 // Provedor simulado (decisão D4): permite desenvolver, demonstrar e testar todo o
@@ -97,6 +99,28 @@ export const provedorMock: ProvedorIA = {
         : [];
     const dados = { traducoes, termos_novos };
     return { ...dados, bruta: JSON.stringify(dados), uso: usoSimulado('traducao', req, dados) };
+  },
+
+  async traduzirContracapa(_chave, req: RequisicaoContracapa) {
+    await espera(latenciaMs());
+    // Espelha a estrutura do original linha a linha: é assim que o teste verifica
+    // que a sinopse volta inteira e com as quebras (versos) preservadas.
+    const dados = {
+      titulo_pt: req.tituloZh ? `[título simulado] ${req.tituloZh}` : null,
+      sinopse_pt: req.sinopseZh
+        ? req.sinopseZh
+            .split('\n')
+            .map((linha) => (linha.trim() ? `[tradução simulada] ${linha}` : linha))
+            .join('\n')
+        : null,
+    };
+    return {
+      ...dados,
+      bruta: JSON.stringify(dados),
+      // O prompt de contracapa é o prefixo estável desta tarefa (o prompt mãe da
+      // obra não entra aqui) — é ele que o cache simulado deve contabilizar.
+      uso: usoSimulado('contracapa', { ...req, promptMae: PROMPT_CONTRACAPA }, dados),
+    };
   },
 
   async extrairTermos(_chave, req: RequisicaoExtrairTermos) {

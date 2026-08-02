@@ -163,7 +163,7 @@ describe('fluxo completo com provedor mock', () => {
     expect(prompts[0].notas_versao).toContain('prompt padrão');
   });
 
-  it('traduz título e sinopse do cadastro com o prompt padrão', async () => {
+  it('traduz título e sinopse do cadastro (contracapa, sem obra)', async () => {
     const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', {
       titulo_zh: '十日终焉',
       sinopse_zh: '他醒来时发现自己在终焉之地。',
@@ -176,6 +176,14 @@ describe('fluxo completo com provedor mock', () => {
 
     const invalido = await chamar('POST', '/api/ia/traduzir-detalhes', { provedor: 'mock' });
     expect(invalido.status).toBe(400);
+  });
+
+  it('só o campo enviado volta preenchido (o outro não é inventado)', async () => {
+    const soTitulo = await json(
+      await chamar('POST', '/api/ia/traduzir-detalhes', { titulo_zh: '死人经', provedor: 'mock' }),
+    );
+    expect(soTitulo.titulo_pt).toBeTruthy();
+    expect(soTitulo.sinopse_pt).toBeNull();
   });
 
   it('substituir do glossário: troca escopada pela origem e por palavra isolada', async () => {
@@ -315,18 +323,21 @@ describe('fluxo completo com provedor mock', () => {
     expect(sugestao2.termos.some((t: any) => t.termo_zh === termo.termo_zh)).toBe(false);
   });
 
-  it('sinopse com vários parágrafos volta inteira (um item por parágrafo)', async () => {
-    const paragrafos = ['第一段落的内容。', '第二段落的内容。', '第三段落的内容。'];
-    const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', {
-      sinopse_zh: paragrafos.join('\n\n'),
-      provedor: 'mock',
-    });
+  it('sinopse vai inteira numa chamada e volta com versos e parágrafos preservados', async () => {
+    // Dois versos paralelos (uma linha cada, sem linha em branco entre eles) e
+    // um parágrafo de resenha: a forma que o formato numerado antigo destruía.
+    const sinopse = '一本死人经，半部无道书。\n斩尽千人头，啖吞百身骨。\n\n非常难得的一本传统武侠小说。';
+    const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', { sinopse_zh: sinopse, provedor: 'mock' });
     expect(resposta.status).toBe(200);
     const dados = await json(resposta);
-    // O mock traduz cada frase; a rota remonta os parágrafos com linha em branco.
-    const linhas = dados.sinopse_pt.split('\n\n');
-    expect(linhas).toHaveLength(3);
-    for (const p of paragrafos) expect(dados.sinopse_pt).toContain(p);
+    // Mesma estrutura do original: 4 linhas, a 3ª em branco (fronteira de parágrafo).
+    const linhas = dados.sinopse_pt.split('\n');
+    expect(linhas).toHaveLength(4);
+    expect(linhas[2]).toBe('');
+    expect(dados.sinopse_pt.split('\n\n')).toHaveLength(2);
+    for (const trecho of sinopse.split('\n').filter(Boolean)) {
+      expect(dados.sinopse_pt).toContain(trecho);
+    }
   });
 
   it('prompt padrão: vem semeado, versiona e pode ser adotado explicitamente', async () => {
