@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI } from '@google/genai';
+import { ApiError, GoogleGenAI, type GenerateContentConfig } from '@google/genai';
 import { z } from 'zod';
 import type { ModeloInfo } from '@dao-tale/shared';
 import {
@@ -41,6 +41,7 @@ import {
   paraGemini,
 } from './contratos.js';
 import { usoDoGemini } from './uso.js';
+import { ehErroDeTemperatura, temperaturaDoPedido } from './temperatura.js';
 
 // Schemas no formato do Gemini (responseSchema), derivados da fonte única (M7).
 
@@ -83,6 +84,38 @@ function parsearJson(texto: string | undefined): unknown {
 // repetidos sem ela. A revisão fica de fora — lá o raciocínio ajuda no veredito.
 function pensamentoEconomico(modelo: string): { thinkingBudget: number } | undefined {
   return /flash/.test(modelo) ? { thinkingBudget: 0 } : undefined;
+}
+
+// Amostragem (doc 08 §13): o Gemini aceita temperature de 0 a 2. Independente do
+// thinking — a contracapa mantém o raciocínio ligado (§11) e ainda assim manda
+// a temperatura dela.
+function amostragem(req: { modelo: string; temperatura?: number }): { temperature?: number } {
+  const t = temperaturaDoPedido(req, 2);
+  return t === undefined ? {} : { temperature: t };
+}
+
+/** Uma chamada com as duas quedas de configuração que o catálogo do Gemini
+    exige: 400 com `thinkingConfig` → repete sem ele (modelo que não deixa
+    desligar o raciocínio); 400 falando de `temperature` → repete sem ela
+    (modelo de raciocínio que fixa a amostragem). Cada queda é definitiva
+    apenas para esta chamada — a configuração seguinte tenta de novo. */
+async function gerar(
+  cliente: GoogleGenAI,
+  modelo: string,
+  contents: string,
+  config: GenerateContentConfig,
+): ReturnType<GoogleGenAI['models']['generateContent']> {
+  try {
+    return await cliente.models.generateContent({ model: modelo, contents, config });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 400) {
+      if (config.thinkingConfig) return gerar(cliente, modelo, contents, { ...config, thinkingConfig: undefined });
+      if (config.temperature !== undefined && ehErroDeTemperatura(e.message)) {
+        return gerar(cliente, modelo, contents, { ...config, temperature: undefined });
+      }
+    }
+    throw e;
+  }
 }
 
 export const provedorGemini: ProvedorIA = {
@@ -129,20 +162,12 @@ export const provedorGemini: ProvedorIA = {
   async traduzirBloco(chave, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
     try {
-      const config = {
+      const resposta = await gerar(cliente, req.modelo, usuarioTraducao(req), {
         systemInstruction: sistemaTraducao(req),
         responseMimeType: 'application/json',
         responseSchema: SCHEMA_TRADUCAO_GEMINI,
         thinkingConfig: pensamentoEconomico(req.modelo),
-      };
-      const gerar = (cfg: typeof config) =>
-        cliente.models.generateContent({ model: req.modelo, contents: usuarioTraducao(req), config: cfg });
-      const resposta = await gerar(config).catch((e) => {
-        // Modelo que não aceita desligar o thinking (400): repete sem a opção.
-        if (config.thinkingConfig && e instanceof ApiError && e.status === 400) {
-          return gerar({ ...config, thinkingConfig: undefined });
-        }
-        throw e;
+        ...amostragem(req),
       });
       // A1: resposta cortada pelo teto de tokens de saída — o job divide o bloco.
       if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
@@ -166,14 +191,11 @@ export const provedorGemini: ProvedorIA = {
       // Sem `pensamentoEconomico` de propósito: aqui o raciocínio é o produto
       // (localizar chengyu e imagem cultural) e a chamada acontece 1× por obra
       // — economizar tokens de pensamento nesta tarefa é economia no lugar errado.
-      const resposta = await cliente.models.generateContent({
-        model: req.modelo,
-        contents: usuarioContracapa(req),
-        config: {
-          systemInstruction: sistemaContracapa(req),
-          responseMimeType: 'application/json',
-          responseSchema: SCHEMA_CONTRACAPA_GEMINI,
-        },
+      const resposta = await gerar(cliente, req.modelo, usuarioContracapa(req), {
+        systemInstruction: sistemaContracapa(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_CONTRACAPA_GEMINI,
+        ...amostragem(req),
       });
       if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
         throw new ErroProvedor('O Gemini truncou a contracapa no limite de tokens de saída.', 'truncado');
@@ -193,14 +215,11 @@ export const provedorGemini: ProvedorIA = {
   async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
     try {
-      const resposta = await cliente.models.generateContent({
-        model: req.modelo,
-        contents: usuarioExtrairTermos(req),
-        config: {
-          systemInstruction: sistemaExtrairTermos(req),
-          responseMimeType: 'application/json',
-          responseSchema: SCHEMA_EXTRAIR_TERMOS_GEMINI,
-        },
+      const resposta = await gerar(cliente, req.modelo, usuarioExtrairTermos(req), {
+        systemInstruction: sistemaExtrairTermos(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_EXTRAIR_TERMOS_GEMINI,
+        ...amostragem(req),
       });
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
@@ -217,14 +236,11 @@ export const provedorGemini: ProvedorIA = {
   async revisarFrase(chave, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
     try {
-      const resposta = await cliente.models.generateContent({
-        model: req.modelo,
-        contents: usuarioRevisao(req),
-        config: {
-          systemInstruction: sistemaRevisao(req),
-          responseMimeType: 'application/json',
-          responseSchema: SCHEMA_REVISAO_GEMINI,
-        },
+      const resposta = await gerar(cliente, req.modelo, usuarioRevisao(req), {
+        systemInstruction: sistemaRevisao(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_REVISAO_GEMINI,
+        ...amostragem(req),
       });
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_REVISAO.zod.parse(bruto);
@@ -241,14 +257,11 @@ export const provedorGemini: ProvedorIA = {
   async refinarPrompt(chave, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
     try {
-      const resposta = await cliente.models.generateContent({
-        model: req.modelo,
-        contents: usuarioRefinarPrompt(req),
-        config: {
-          systemInstruction: sistemaRefinarPrompt(req),
-          responseMimeType: 'application/json',
-          responseSchema: SCHEMA_REFINAR_GEMINI,
-        },
+      const resposta = await gerar(cliente, req.modelo, usuarioRefinarPrompt(req), {
+        systemInstruction: sistemaRefinarPrompt(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_REFINAR_GEMINI,
+        ...amostragem(req),
       });
       const bruto = parsearJson(resposta.text);
       const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
@@ -265,14 +278,11 @@ export const provedorGemini: ProvedorIA = {
   async analisarQa(chave, req: RequisicaoQa): Promise<RespostaQa> {
     const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
     try {
-      const resposta = await cliente.models.generateContent({
-        model: req.modelo,
-        contents: usuarioQa(req),
-        config: {
-          systemInstruction: sistemaQa(req),
-          responseMimeType: 'application/json',
-          responseSchema: SCHEMA_QA_GEMINI,
-        },
+      const resposta = await gerar(cliente, req.modelo, usuarioQa(req), {
+        systemInstruction: sistemaQa(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_QA_GEMINI,
+        ...amostragem(req),
       });
       if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
         throw new ErroProvedor('O Gemini truncou a resposta de QA no limite de tokens de saída.', 'truncado');

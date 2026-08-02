@@ -450,6 +450,12 @@ Medição de 2026-08-02 (obra real 十日终焉 convertida para camadas, caps. 1
   antigo ela era um passo de decisão com pergunta ("o evento ocorreu no mesmo local
   físico?"), no enxuto é uma afirmação solta depois de outras duas regras. Antes de um
   próximo A/B, vale reescrevê-la como teste, não como aviso.
+  **Feito em 2026-08-02:** a linha voltou a ser um passo-teste ("*os personagens estão
+  nesse lugar agora?*" → sim: "este/neste/aqui", **pare aqui**), com um exemplo
+  contrastivo próprio — diferente do caso usado para verificar, para não entregar a
+  resposta ao teste. Cópias que já semearam o enxuto recebem o conserto no boot,
+  **só enquanto ele estiver inativo e nada o referenciar** (`corrigirNucleoEnxutoSemeado`
+  em `db/index.ts`): versão que já traduziu algo continua imutável.
 - **Confundidor registrado:** o delta real de 十日终焉 cita "Seção 3, Passo 1", que não
   existe mais no enxuto. A regra (o tique de 那样 do Kim Wonhun) sobrevive porque o
   enxuto tem o mesmo carve-out de intensidade, mas a referência cruzada envelheceu.
@@ -458,3 +464,71 @@ Medição de 2026-08-02 (obra real 十日终焉 convertida para camadas, caps. 1
 O gate era "só ativar se segurar a qualidade"; ele segurou, não melhorou — e o ganho
 real (−15% de tokens, e as chaves, que só funcionam com ele) é bom, mas é decisão do
 usuário, com um clique em "Núcleo universal", e reversível com outro.
+
+## 13. Temperatura: amostragem, não texto (2026-08-02)
+
+Até aqui **nenhum provedor definia `temperature`**. Toda chamada do aplicativo saía
+no padrão do modelo — 1.0 — e isso não é neutro: é o valor mais alto que qualquer
+tarefa daqui usaria. Duas medições reais já haviam batido nele sem que o nome
+aparecesse:
+
+- **§11 (contracapa):** ~2 de 8 chamadas saíram degeneradas — deliberação vazada no
+  `titulo_pt`, lixo de treino, uma resposta em inglês.
+- **§12.5 (portão A/B):** o *mesmo* núcleo foi de 7 a 10 "aquele" no mesmo trecho.
+  A dispersão entre execuções idênticas ficou do tamanho da diferença que se queria
+  medir — o empate declarado ali é, em boa parte, artefato de medição.
+
+### 13.1 Por que não é preferência de estilo
+
+Preferência de estilo (§12) é **texto**: entra no prompt, muda os bytes enviados e por
+isso é versionada com a versão do prompt — um capítulo traduzido em aspas precisa ser
+distinguível de um traduzido em travessão. Temperatura não muda um byte do que é
+enviado; muda como o modelo sorteia o próximo token. Versioná-la só criaria versões de
+prompt idênticas entre si.
+
+Por isso ela mora em dois lugares, na mesma forma do par `provedor_revisao`/`modelo_revisao`:
+
+| Onde | O quê | Vazio significa |
+|---|---|---|
+| Configurações → `temperaturas` | padrão **por papel** | — (a tabela sempre tem valor) |
+| Obra → `temperatura` (migração 013) | override da obra inteira | usar o padrão do papel |
+
+O override da obra é **um número só**, não uma tabela: quem o define está dizendo
+"esta obra sorteia assim". Papel a papel é o que a configuração global já faz.
+
+### 13.2 Os padrões
+
+| Papel | Padrão | Por quê |
+|---|---:|---|
+| Tradução | **0.3** | consistência entre capítulos, sem engessar a prosa |
+| Revisão | **0.2** | veredito; variar é ruído |
+| QA | **0.2** | duas passadas devem apontar as mesmas coisas |
+| Extração de termos | **0.2** | catálogo, não prosa |
+| Contracapa | **0.4** | a única tarefa declaradamente interpretativa (§11) |
+| Refinamento do prompt | **0.5** | propor regra nova — aqui variedade é o produto |
+
+O comparador **não** tem chave própria: ele *é* tradução sendo medida e sai com a
+temperatura da tradução. Outra temperatura mediria outra coisa.
+
+### 13.3 O que os provedores exigem
+
+O valor resolvido passa por duas defesas, porque o catálogo muda mais rápido que o
+código (`server/src/ia/temperatura.ts`):
+
+1. **Faixa por provedor.** Anthropic aceita 0–1; Gemini e compatíveis com OpenAI, 0–2.
+   O valor é aparado no provedor, não na configuração.
+2. **Modelos que fixam a amostragem.** Famílias de raciocínio conhecidas (o1–o4,
+   gpt-5, `deepseek-reasoner`, variantes `-thinking`) não recebem o parâmetro; e um
+   400 que fale de `temperature` derruba o parâmetro e repete a chamada — o mesmo
+   desenho do fallback de `thinkingConfig` do Gemini, que já existia. Um modelo novo
+   com regra própria não derruba a tradução.
+
+No Gemini, temperatura e *thinking* são independentes: a contracapa segue com o
+raciocínio **ligado** (§11) e ainda assim manda a temperatura dela.
+
+### 13.4 Efeito no portão A/B
+
+Com a tradução em 0.3, repetir o mesmo alvo no comparador passa a medir o prompt, e
+não o sorteio — que era a condição que faltava para o §12.5 dar um veredito honesto
+sobre o núcleo enxuto. Também barateia o teste: menos execuções bastam para ver o
+sinal.

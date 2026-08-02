@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { PROVEDORES_IDS } from '@dao-tale/shared';
+import { PROVEDORES_IDS, resolverTemperatura } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposGlossario, reposObras, reposPrompts, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
@@ -81,6 +81,11 @@ export function rotasComparador(db: BancoDados): Hono {
       : glossarioTodo;
 
     const base: Omit<RequisicaoTraducaoBloco, 'modelo' | 'promptMae'> = {
+      // O comparador É tradução sendo medida: sai com a temperatura da tradução
+      // (doc 08 §13). É o que torna o portão A/B do §12 honesto — a temperatura
+      // 1.0 de antes espalhava as execuções do MESMO prompt tanto quanto a
+      // diferença entre dois prompts.
+      temperatura: resolverTemperatura(config.temperaturas, 'traducao', obra.temperatura),
       glossario,
       glossarioNoUsuario: config.glossario_relevante,
       caudaAnterior: [],

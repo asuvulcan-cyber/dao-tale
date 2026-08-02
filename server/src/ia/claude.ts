@@ -42,6 +42,17 @@ import {
   type Contrato,
 } from './contratos.js';
 import { usoDoClaude } from './uso.js';
+import { temperaturaDoPedido } from './temperatura.js';
+
+// Amostragem (doc 08 §13): a Anthropic aceita temperature de 0 a 1 — a faixa
+// mais estreita entre os provedores, então o valor resolvido é aparado aqui.
+// Sem fallback de 400 como no Gemini/compat: o tool use do Claude aceita
+// temperature em toda a família, e o raciocínio estendido (o único modo que a
+// fixaria em 1) não é usado por nenhuma tarefa do aplicativo.
+function amostragem(req: { modelo: string; temperatura?: number }): { temperature?: number } {
+  const t = temperaturaDoPedido(req, 1);
+  return t === undefined ? {} : { temperature: t };
+}
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof Anthropic.APIError) {
@@ -129,6 +140,7 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 8192,
+        ...amostragem(req),
         system: sistemaEmBlocos(sistemaTraducaoPartes(req)),
         messages: [{ role: 'user', content: usuarioTraducao(req) }],
         ...ferramenta(CONTRATO_TRADUCAO),
@@ -156,6 +168,7 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 4096,
+        ...amostragem(req),
         system: sistemaEmBlocos(sistemaContracapaPartes(req)),
         messages: [{ role: 'user', content: usuarioContracapa(req) }],
         ...ferramenta(CONTRATO_CONTRACAPA),
@@ -181,6 +194,7 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 2048,
+        ...amostragem(req),
         system: sistemaEmBlocos(sistemaExtrairTermosPartes(req)),
         messages: [{ role: 'user', content: usuarioExtrairTermos(req) }],
         ...ferramenta(CONTRATO_EXTRAIR_TERMOS),
@@ -203,6 +217,7 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 4096,
+        ...amostragem(req),
         system: sistemaEmBlocos(sistemaRevisaoPartes(req)),
         messages: [{ role: 'user', content: usuarioRevisao(req) }],
         ...ferramenta(CONTRATO_REVISAO),
@@ -225,6 +240,7 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 4096,
+        ...amostragem(req),
         system: sistemaEmBlocos(sistemaRefinarPromptPartes(req)),
         messages: [{ role: 'user', content: usuarioRefinarPrompt(req) }],
         ...ferramenta(CONTRATO_REFINAR_PROMPT),
@@ -247,6 +263,7 @@ export const provedorClaude: ProvedorIA = {
       const resposta = await cliente.messages.create({
         model: req.modelo,
         max_tokens: 8192,
+        ...amostragem(req),
         system: sistemaEmBlocos(sistemaQaPartes(req)),
         messages: [{ role: 'user', content: usuarioQa(req) }],
         ...ferramenta(CONTRATO_QA),

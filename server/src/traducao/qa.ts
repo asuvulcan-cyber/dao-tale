@@ -1,6 +1,6 @@
-import type { ApontamentoQa, Configuracoes, ParProvedor, ProvedorId } from '@dao-tale/shared';
+import { resolverTemperatura, type ApontamentoQa, type Configuracoes, type ParProvedor, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposPrompts, reposQa, reposUso } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { ParParaQa, RequisicaoQa } from '../ia/provedor.js';
@@ -68,6 +68,7 @@ export async function analisarCapitulo(
   const traduzidas = todas.filter((f) => f.status_traducao === 'traduzida' && f.texto_pt.trim());
   if (traduzidas.length === 0) return { ok: false, codigo: 'sem-frases', erro: 'Nenhuma frase traduzida para auditar.' };
 
+  const obra = reposObras.obter(db, capitulo.obra_id);
   const glossario = reposGlossario.listar(db, capitulo.obra_id);
   const porOrdem = new Map(todas.map((f) => [f.ordem, f]));
 
@@ -92,6 +93,9 @@ export async function analisarCapitulo(
 
     const req: RequisicaoQa = {
       modelo: par.modelo,
+      // Amostragem (doc 08 §13): o QA aponta problema, não escreve prosa —
+      // duas passadas na mesma tradução devem apontar as mesmas coisas.
+      temperatura: resolverTemperatura(config.temperaturas, 'qa', obra?.temperatura),
       promptMae: prompt.texto,
       glossario: glossarioDoBloco,
       glossarioNoUsuario: config.glossario_relevante,

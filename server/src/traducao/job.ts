@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { EventoTraducao, ProgressoTraducao, ProvedorId } from '@dao-tale/shared';
+import { resolverTemperatura, type EventoTraducao, type ProgressoTraducao, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
@@ -181,6 +181,10 @@ export async function iniciarTraducao(
     void executarJob(db, capituloId, job, {
       provedorId,
       modelo,
+      // Amostragem da tradução (doc 08 §13): padrão do papel, ou o override da
+      // obra. Resolvida uma vez por job — todos os blocos do capítulo saem com a
+      // mesma temperatura, mesmo que a configuração mude no meio.
+      temperatura: resolverTemperatura(config.temperaturas, 'traducao', obra.temperatura),
       chave,
       promptMae: prompt.texto,
       config,
@@ -201,6 +205,7 @@ async function executarJob(
   ctx: {
     provedorId: ProvedorId;
     modelo: string;
+    temperatura: number;
     chave: string | null;
     promptMae: string;
     config: ReturnType<typeof reposConfig.obterTodas>;
@@ -238,6 +243,7 @@ async function executarJob(
         termosAdotados,
         titulo: tituloPendente ? (capitulo.titulo ?? undefined) : undefined,
         modelo: ctx.modelo,
+        temperatura: ctx.temperatura,
         promptMae: ctx.promptMae,
         tamanhoBloco,
         caudaContexto: ctx.config.cauda_contexto,

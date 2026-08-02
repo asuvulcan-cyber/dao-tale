@@ -4,7 +4,9 @@ import { z } from 'zod';
 import {
   FASES_TRADUCAO,
   PROVEDORES_IDS,
+  TEMPERATURA_MAX,
   normalizarPreferencias,
+  resolverTemperatura,
   type Configuracoes,
   type EventoLote,
   type ParProvedor,
@@ -50,6 +52,8 @@ const atualizarObraSchema = z.object({
   tags: z.array(z.string().min(1)).max(20).optional(),
   provedor_padrao: z.enum(PROVEDORES_IDS).nullable().optional(),
   modelo_padrao: z.string().nullable().optional(),
+  // Override de amostragem da obra (doc 08 §13); null = padrão do papel.
+  temperatura: z.number().min(0).max(TEMPERATURA_MAX).nullable().optional(),
 });
 
 const MIMES_CAPA = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -424,6 +428,9 @@ export function rotasObras(db: BancoDados): Hono {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.refinarPrompt(chave, {
         modelo,
+        // Amostragem (doc 08 §13): a única tarefa em que variedade é o produto —
+        // propor regra nova a partir dos casos —, por isso a mais solta.
+        temperatura: resolverTemperatura(config.temperaturas, 'refinamento', obra.temperatura),
         promptMae: prompt.texto,
         deltaAtual: prompt.prompt.tipo === 'delta' ? prompt.prompt.conteudo : (extrairCamadas(prompt.prompt.conteudo)?.delta ?? ''),
         casos,
@@ -530,6 +537,10 @@ export function rotasObras(db: BancoDados): Hono {
       // viravam prosa. Um campo, uma leitura, uma intenção.
       const resposta = await provedor.traduzirContracapa(chave, {
         modelo: par.modelo,
+        // Amostragem (doc 08 §13): a tarefa declaradamente interpretativa do app
+        // (§11) — um pouco mais solta que a tradução, longe do 1.0 que fez ~2 de
+        // 8 chamadas saírem degeneradas na medição da contracapa.
+        temperatura: resolverTemperatura(config.temperaturas, 'titulo', obra?.temperatura),
         tituloZh: corpo.data.titulo_zh,
         sinopseZh: corpo.data.sinopse_zh,
         glossario,

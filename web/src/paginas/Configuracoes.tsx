@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  Configuracoes as Config,
-  EstadoConfiguracoes,
-  EstadoSaude,
-  InfoBackup,
-  PrecosModelos,
-  ProvedorId,
-  TelemetriaDia,
+import {
+  TEMPERATURA_MAX,
+  type Configuracoes as Config,
+  type EstadoConfiguracoes,
+  type EstadoSaude,
+  type InfoBackup,
+  type PapelTemperatura,
+  type PrecosModelos,
+  type ProvedorId,
+  type TelemetriaDia,
 } from '@dao-tale/shared';
 import { api, ErroApi } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
@@ -21,6 +23,17 @@ interface ProvedorInfo {
   precisa_chave: boolean;
   modelo_padrao: string;
 }
+
+// Temperatura por papel (doc 08 §13). A dica de cada campo diz o que se ganha ou
+// se perde ali — o padrão é o valor recomendado, ninguém precisa mexer.
+const TEMPERATURAS_ROTULOS: { chave: PapelTemperatura; rotulo: string; dica: string }[] = [
+  { chave: 'traducao', rotulo: 'Tradução', dica: 'Capítulos. Baixa = capítulos consistentes entre si.' },
+  { chave: 'revisao', rotulo: 'Revisão', dica: 'Veredito do Protocolo de Revisão — variar aqui é ruído.' },
+  { chave: 'qa', rotulo: 'QA por segunda IA', dica: 'Duas passadas devem apontar as mesmas coisas.' },
+  { chave: 'extracao', rotulo: 'Extração de termos', dica: 'Catálogo do glossário, não prosa.' },
+  { chave: 'titulo', rotulo: 'Contracapa', dica: 'Título e sinopse: a tarefa mais interpretativa do app.' },
+  { chave: 'refinamento', rotulo: 'Refinamento do prompt', dica: 'Propor regra nova — aqui variedade ajuda.' },
+];
 
 export function Configuracoes() {
   const clienteQuery = useQueryClient();
@@ -670,6 +683,39 @@ function FormularioPadroes({
           em vez do glossário inteiro — economia grande de tokens em obras com glossário extenso.
         </span>
       </label>
+
+      <div className="mt-4">
+        <h3 className="text-sm font-medium">Temperatura por papel</h3>
+        <p className="mb-2 mt-0.5 text-sm text-tinta-2">
+          Quanto o modelo varia entre uma execução e outra da <em>mesma</em> chamada. Os valores abaixo já são os
+          recomendados — <strong>você não precisa mexer aqui</strong>. Subir troca consistência por variação: a mesma
+          frase passa a sair diferente a cada tentativa, e comparar dois prompts (ou dois modelos) deixa de dizer
+          alguma coisa. Descer aproxima da repetição literal. Uma obra específica pode fugir destes padrões na ficha
+          dela, em "Preferências de IA desta obra".
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {TEMPERATURAS_ROTULOS.map(({ chave, rotulo, dica }) => (
+            <label key={chave} className="block text-sm">
+              {rotulo}
+              <input
+                type="number"
+                min={0}
+                max={TEMPERATURA_MAX}
+                step={0.1}
+                value={valores.temperaturas[chave]}
+                onChange={(e) =>
+                  setValores({
+                    ...valores,
+                    temperaturas: { ...valores.temperaturas, [chave]: Number(e.target.value) },
+                  })
+                }
+                className="entrada mt-1 w-full"
+              />
+              <span className="mt-0.5 block text-xs text-tinta-2">{dica}</span>
+            </label>
+          ))}
+        </div>
+      </div>
 
       <div className="mt-4">
         <h3 className="text-sm font-medium">Checkpoint de estabilidade</h3>

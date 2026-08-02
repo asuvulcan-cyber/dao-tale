@@ -15,6 +15,8 @@ export interface ParametrosBloco {
   /** Título do capítulo ainda por traduzir (undefined se já resolvido). */
   titulo: string | undefined;
   modelo: string;
+  /** Amostragem já resolvida (doc 08 §13); undefined = padrão do modelo. */
+  temperatura?: number;
   promptMae: string;
   tamanhoBloco: number;
   caudaContexto: number;
@@ -78,6 +80,7 @@ export function montarBloco(p: ParametrosBloco): ContextoBloco {
     ultimaOrdem,
     req: {
       modelo: p.modelo,
+      temperatura: p.temperatura,
       promptMae: p.promptMae,
       glossario: glossarioDoBloco,
       glossarioNoUsuario: p.glossarioRelevante,

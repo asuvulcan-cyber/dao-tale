@@ -3,10 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { abrirBanco } from './index.js';
-import { reposObras, reposPrompts, reposPromptPadrao } from './repos.js';
+import { reposCapitulos, reposObras, reposPrompts, reposPromptPadrao } from './repos.js';
 import {
   MARCADOR_DELTA,
   MARCADOR_PREFERENCIAS,
+  NUCLEO_ENXUTO,
   PROMPT_PADRAO_INICIAL,
   comporPromptMae,
   extrairCamadas,
@@ -112,6 +113,50 @@ describe('migração de boot: padrão legado (com Seção 6) vira núcleo', () =
     // O ativo continua sendo o núcleo que já regia as traduções.
     expect(reposPromptPadrao.ativo(novo)!.conteudo).not.toContain(MARCADOR_PREFERENCIAS);
     novo.close();
+  });
+
+  // Doc 08 §12.5: a regra do lugar da cena voltou a ser um PASSO com pergunta —
+  // era como o núcleo antigo a escrevia, e a medição real mostrou o enxuto
+  // errando 2 de 2 quando ela virou afirmação solta.
+  it('a regra do lugar da cena é um passo-teste, com pergunta e parada', () => {
+    expect(NUCLEO_ENXUTO).toContain('os personagens estão nesse lugar agora?');
+    expect(NUCLEO_ENXUTO).toContain('**Pare aqui.**');
+  });
+
+  it('conserta a linha do lugar da cena numa cópia que semeou o enxuto antes do conserto', () => {
+    const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dao-tale-')), 'teste.db');
+    const antes = abrirBanco(arquivo);
+    const idEnxuto = reposPromptPadrao.listar(antes).find((v) => v.conteudo.includes(MARCADOR_PREFERENCIAS))!.id;
+    // Simula a cópia semeada antes: texto velho no lugar e a flag do conserto ausente.
+    antes.prepare('UPDATE prompt_padrao SET conteudo = ? WHERE id = ?').run('NÚCLEO ENXUTO VELHO', idEnxuto);
+    antes.prepare("DELETE FROM configuracoes WHERE chave = 'nucleo_enxuto_lugar_da_cena'").run();
+    antes.close();
+
+    const depois = abrirBanco(arquivo);
+    expect(reposPromptPadrao.listar(depois).find((v) => v.id === idEnxuto)!.conteudo).toBe(NUCLEO_ENXUTO);
+    depois.close();
+    fs.rmSync(path.dirname(arquivo), { recursive: true, force: true });
+  });
+
+  it('não reescreve um núcleo enxuto que já traduziu algum capítulo', () => {
+    const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dao-tale-')), 'teste.db');
+    const antes = abrirBanco(arquivo);
+    const idEnxuto = reposPromptPadrao.listar(antes).find((v) => v.conteudo.includes(MARCADOR_PREFERENCIAS))!.id;
+    antes.prepare('UPDATE prompt_padrao SET conteudo = ? WHERE id = ?').run('NÚCLEO ENXUTO EM USO', idEnxuto);
+    const obra = reposObras.criar(antes, { titulo: 'Obra' });
+    const cap = reposCapitulos.criar(antes, obra.id, { numero: 1, texto_origem: '甲。' }, [
+      { texto_zh: '甲。', paragrafo: 0 },
+    ]);
+    reposCapitulos.atualizar(antes, cap.id, { nucleo_id: idEnxuto });
+    antes.prepare("DELETE FROM configuracoes WHERE chave = 'nucleo_enxuto_lugar_da_cena'").run();
+    antes.close();
+
+    const depois = abrirBanco(arquivo);
+    // Histórico de tradução é imutável: o capítulo continua apontando para o
+    // texto exato que o traduziu.
+    expect(reposPromptPadrao.listar(depois).find((v) => v.id === idEnxuto)!.conteudo).toBe('NÚCLEO ENXUTO EM USO');
+    depois.close();
+    fs.rmSync(path.dirname(arquivo), { recursive: true, force: true });
   });
 
   it('a semeadura roda uma vez só: reabrir não cria outra versão', () => {

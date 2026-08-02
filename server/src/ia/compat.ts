@@ -41,6 +41,7 @@ import {
   instrucaoJson,
 } from './contratos.js';
 import { usoDoCompat } from './uso.js';
+import { ehErroDeTemperatura, temperaturaDoPedido } from './temperatura.js';
 
 // Provedor genérico para APIs compatíveis com OpenAI (chat completions):
 // DeepSeek, OpenRouter, Groq, Mistral etc. usam o mesmo protocolo — só mudam
@@ -147,21 +148,37 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
     return json;
   }
 
-  /** Uma chamada de chat: devolve o JSON já saneado e o consumo normalizado. */
+  /** Uma chamada de chat: devolve o JSON já saneado e o consumo normalizado.
+      `req` traz o modelo e a temperatura resolvida (doc 08 §13). */
   async function completar(
     chave: string | null,
-    modelo: string,
+    req: { modelo: string; temperatura?: number },
     sistema: string,
     usuario: string,
   ): Promise<{ bruto: unknown; uso: UsoChamada }> {
-    const json = await requisitar(exigirChave(chave, opts.nome), '/chat/completions', {
-      model: modelo,
+    // Faixa 0–2, como na API da OpenAI que todos estes provedores imitam.
+    const temperature = temperaturaDoPedido(req, 2);
+    const corpo = {
+      model: req.modelo,
       messages: [
         { role: 'system', content: sistema },
         { role: 'user', content: usuario },
       ],
       response_format: { type: 'json_object' },
       ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+      ...(temperature === undefined ? {} : { temperature }),
+    };
+    const chaveApi = exigirChave(chave, opts.nome);
+    const json = await requisitar(chaveApi, '/chat/completions', corpo).catch((e) => {
+      // Modelo de raciocínio que fixa a amostragem: o 400 fala de `temperature`
+      // e a chamada só precisa perder o parâmetro (mesmo desenho do fallback de
+      // `thinkingConfig` do Gemini). Um provedor novo com regra própria não
+      // derruba a tradução por causa disto.
+      if (temperature !== undefined && e instanceof ErroProvedor && ehErroDeTemperatura(e.message)) {
+        const { temperature: _, ...semTemperatura } = corpo;
+        return requisitar(chaveApi, '/chat/completions', semTemperatura);
+      }
+      throw e;
     });
     const escolha = json.choices?.[0];
     // A1: resposta cortada pelo teto de tokens de saída — repetir a chamada
@@ -213,7 +230,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async traduzirBloco(chave, req: RequisicaoTraducaoBloco): Promise<RespostaTraducaoBloco> {
       const sistema = `${sistemaTraducao(req)}\n\n${instrucaoJson(CONTRATO_TRADUCAO)}`;
-      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioTraducao(req));
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioTraducao(req));
       try {
         const dados = CONTRATO_TRADUCAO.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto), uso };
@@ -227,7 +244,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async traduzirContracapa(chave, req: RequisicaoContracapa): Promise<RespostaContracapa> {
       const sistema = `${sistemaContracapa(req)}\n\n${instrucaoJson(CONTRATO_CONTRACAPA)}`;
-      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioContracapa(req));
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioContracapa(req));
       try {
         const dados = CONTRATO_CONTRACAPA.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto), uso };
@@ -241,7 +258,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async extrairTermos(chave, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos> {
       const sistema = `${sistemaExtrairTermos(req)}\n\n${instrucaoJson(CONTRATO_EXTRAIR_TERMOS)}`;
-      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioExtrairTermos(req));
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioExtrairTermos(req));
       try {
         const dados = CONTRATO_EXTRAIR_TERMOS.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto), uso };
@@ -255,7 +272,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async revisarFrase(chave, req: RequisicaoRevisao): Promise<RespostaRevisaoProvedor> {
       const sistema = `${sistemaRevisao(req)}\n\n${instrucaoJson(CONTRATO_REVISAO)}`;
-      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioRevisao(req));
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioRevisao(req));
       try {
         const dados = CONTRATO_REVISAO.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto), uso };
@@ -269,7 +286,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async refinarPrompt(chave, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt> {
       const sistema = `${sistemaRefinarPrompt(req)}\n\n${instrucaoJson(CONTRATO_REFINAR_PROMPT)}`;
-      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioRefinarPrompt(req));
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioRefinarPrompt(req));
       try {
         const dados = CONTRATO_REFINAR_PROMPT.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto), uso };
@@ -283,7 +300,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
 
     async analisarQa(chave, req: RequisicaoQa): Promise<RespostaQa> {
       const sistema = `${sistemaQa(req)}\n\n${instrucaoJson(CONTRATO_QA)}`;
-      const { bruto, uso } = await completar(chave, req.modelo, sistema, usuarioQa(req));
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioQa(req));
       try {
         const dados = CONTRATO_QA.zod.parse(bruto);
         return { ...dados, bruta: JSON.stringify(bruto), uso };

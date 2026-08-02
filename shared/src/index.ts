@@ -1,6 +1,7 @@
 // Tipos de domínio e contratos da API — fonte única de verdade entre server e web.
 
 import type { PreferenciasEstilo } from './preferenciasEstilo.js';
+import { TEMPERATURAS_PADRAO, type TemperaturasPapel } from './temperatura.js';
 
 // Tokens de pigmento/tipografia como dado, para o alvo EPUB (doc 12 §6).
 export * from './pigmentos.js';
@@ -12,6 +13,9 @@ export * from './livro.js';
 // Preferências de estilo por obra (doc 08 §12): a camada de chaves entre o núcleo
 // universal e o delta em texto livre.
 export * from './preferenciasEstilo.js';
+// Temperatura por papel (doc 08 §13): amostragem, não texto — por isso fica na
+// configuração e na obra, e não na versão do prompt.
+export * from './temperatura.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
@@ -46,6 +50,9 @@ export interface Obra {
   tem_capa: boolean;
   provedor_padrao: ProvedorId | null;
   modelo_padrao: string | null;
+  /** Override de temperatura desta obra (doc 08 §13); null = padrão do papel,
+   * vindo das Configurações. Vale para todos os papéis da obra. */
+  temperatura: number | null;
   fase_traducao: FaseTraducao;
   criado_em: string;
   atualizado_em: string;
@@ -384,6 +391,9 @@ export interface Configuracoes {
    * frações de centavo. Vazio = cadeia normal (obra → padrão global). */
   provedor_detalhes: ProvedorId | '';
   modelo_detalhes: string;
+  /** Temperatura por papel (doc 08 §13). É o padrão de todas as obras; cada obra
+   * pode sobrepor com `Obra.temperatura`. Baixa = consistente entre execuções. */
+  temperaturas: TemperaturasPapel;
   /** Limite diário de requisições por provedor para o indicador de cota
    * (ausente ou 0 = não mostrar). */
   cotas_diarias: Record<string, number>;
@@ -433,6 +443,7 @@ export const CONFIG_PADRAO: Configuracoes = {
   modelo_revisao: '',
   provedor_detalhes: '',
   modelo_detalhes: '',
+  temperaturas: { ...TEMPERATURAS_PADRAO },
   // Valores da cota gratuita de cada provedor (jul/2026) — ajustáveis em Configurações.
   // Gemini: 250 req/dia no Flash; OpenRouter: 50 req/dia em modelos :free (1000 com
   // US$ 10 de crédito); Groq: 1000 req/dia por modelo na faixa gratuita.

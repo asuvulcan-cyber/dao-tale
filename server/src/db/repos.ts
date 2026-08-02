@@ -27,8 +27,9 @@ import type {
   PrecoModelo,
   PrecosModelos,
   PreferenciasEstilo,
+  TemperaturasPapel,
 } from '@dao-tale/shared';
-import { CONFIG_PADRAO, normalizarPreferencias } from '@dao-tale/shared';
+import { CONFIG_PADRAO, normalizarPreferencias, normalizarTemperaturas, temperaturaValida } from '@dao-tale/shared';
 import { comporPromptMae } from './promptPadraoInicial.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
@@ -55,7 +56,7 @@ function paraFrase(l: any): Frase {
 
 // Colunas sem o BLOB da capa (pesado e sem lugar em JSON); tem_capa o resume.
 const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.autor, o.sinopse, o.tags, o.provedor_padrao,
-  o.modelo_padrao, o.fase_traducao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
+  o.modelo_padrao, o.temperatura, o.fase_traducao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
 
 function paraObra<T extends { tags: unknown; tem_capa: unknown }>(linha: T): T & { tags: string[]; tem_capa: boolean } {
   return { ...linha, tags: JSON.parse((linha.tags as string) || '[]'), tem_capa: !!linha.tem_capa };
@@ -113,14 +114,24 @@ export const reposObras = {
     db: BancoDados,
     id: number,
     campos: Partial<
-      Pick<Obra, 'titulo' | 'titulo_original' | 'autor' | 'sinopse' | 'tags' | 'provedor_padrao' | 'modelo_padrao'>
+      Pick<
+        Obra,
+        | 'titulo'
+        | 'titulo_original'
+        | 'autor'
+        | 'sinopse'
+        | 'tags'
+        | 'provedor_padrao'
+        | 'modelo_padrao'
+        | 'temperatura'
+      >
     >,
   ): Obra | undefined {
     const atual = this.obter(db, id);
     if (!atual) return undefined;
     db.prepare(
       `UPDATE obras SET titulo = ?, titulo_original = ?, autor = ?, sinopse = ?, tags = ?, provedor_padrao = ?, modelo_padrao = ?,
-        atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+        temperatura = ?, atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
     ).run(
       campos.titulo ?? atual.titulo,
       campos.titulo_original !== undefined ? campos.titulo_original : atual.titulo_original,
@@ -129,6 +140,8 @@ export const reposObras = {
       JSON.stringify(campos.tags !== undefined ? campos.tags : atual.tags),
       campos.provedor_padrao !== undefined ? campos.provedor_padrao : atual.provedor_padrao,
       campos.modelo_padrao !== undefined ? campos.modelo_padrao : atual.modelo_padrao,
+      // Guarda de fronteira: valor fora da faixa aceita não vira chamada rejeitada.
+      campos.temperatura !== undefined ? temperaturaValida(campos.temperatura) : atual.temperatura,
       id,
     );
     return this.obter(db, id);
@@ -1036,6 +1049,7 @@ export const reposConfig = {
       provedor_detalhes:
         (mapa.provedor_detalhes as Configuracoes['provedor_detalhes']) ?? CONFIG_PADRAO.provedor_detalhes,
       modelo_detalhes: mapa.modelo_detalhes ?? CONFIG_PADRAO.modelo_detalhes,
+      temperaturas: lerTemperaturas(mapa),
       cotas_diarias: lerCotasDiarias(mapa),
       checkpoint_janela: numeroConfig(mapa.checkpoint_janela, CONFIG_PADRAO.checkpoint_janela),
       checkpoint_termos_max: numeroConfig(mapa.checkpoint_termos_max, CONFIG_PADRAO.checkpoint_termos_max),
@@ -1109,6 +1123,17 @@ function lerPrecos(mapa: Record<string, string>): PrecosModelos {
     return precos;
   } catch {
     return { ...CONFIG_PADRAO.precos_modelos };
+  }
+}
+
+/** Temperatura por papel (JSON). Chave ausente, fora da faixa ou corrompida cai
+ * no padrão dela sozinha — o resto da tabela continua valendo (doc 08 §13). */
+function lerTemperaturas(mapa: Record<string, string>): TemperaturasPapel {
+  if (!mapa.temperaturas) return { ...CONFIG_PADRAO.temperaturas };
+  try {
+    return normalizarTemperaturas(JSON.parse(mapa.temperaturas));
+  } catch {
+    return { ...CONFIG_PADRAO.temperaturas };
   }
 }
 

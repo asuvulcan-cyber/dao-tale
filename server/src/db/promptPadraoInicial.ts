@@ -281,7 +281,12 @@ O chinês aponta muito mais que o português. Traduzir 这/那 por "este/esse/aq
 
 **Intensidade não é apontamento:** 这么, 那么, 这样, 那样 viram "tão", "assim", "desse tipo" — nunca uma palavra de apontar.
 
-**O lugar da cena é "aqui".** O espaço onde os personagens estão agora é "este/neste/aqui", mesmo quando o evento narrado se passou nele no passado.
+**Teste do lugar — faça esta pergunta antes de escrever "aquele/naquele/lá" sobre um lugar:** *os personagens estão nesse lugar agora?*
+→ Sim: escreva "este/neste/aqui". Vale mesmo quando o que se narra ali aconteceu no passado — o tempo é passado, o espaço é presente. **Pare aqui.**
+→ Não: "aquele/naquele/lá" está liberado.
+
+> Errado: "Tinha de sair daquela sala." — dito por quem está dentro dela.
+> Certo: "Tinha de sair desta sala."
 
 > Decalcado: "Aquele homem olhou para aquela espada e sentiu aquele frio subir pelas costas."
 > Natural: "O homem olhou para a espada e sentiu o frio subir pelas costas."

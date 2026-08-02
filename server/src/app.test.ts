@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { abrirBanco, type BancoDados } from './db/index.js';
 import { criarApp } from './app.js';
+import { _temperaturaMock, _zerarCacheMock } from './ia/mock.js';
 import type { Hono } from 'hono';
 
 // Teste de integração do fluxo completo da Fase 1, usando o provedor mock:
@@ -829,6 +830,75 @@ describe('fluxo completo com provedor mock', () => {
     expect(t.total.chamadas_sem_preco).toBe(0);
     expect(t.total.custo_usd).toBeGreaterThan(0);
     expect(t.taxa_usd_brl).toBe(5.5);
+  });
+
+  // Doc 08 §13: a temperatura resolvida (padrão do papel, ou override da obra)
+  // tem de chegar ao provedor pela rota real — é o que faltava até aqui, e a
+  // ausência era invisível justamente por não quebrar nada.
+  it('temperatura: o padrão do papel e o override da obra chegam ao provedor', async () => {
+    _zerarCacheMock();
+    const obra = await json(
+      await chamar('POST', '/api/obras', { titulo: 'Obra', prompt_inicial: { versao: '1.0', conteudo: 'p' } }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。' }),
+    );
+    const traduzir = async () => {
+      await chamar('POST', `/api/capitulos/${criado.capitulo.id}/traduzir`, {
+        provedor: 'mock',
+        sobrescrever: true,
+      });
+      for (let i = 0; i < 100; i++) {
+        const det = await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`));
+        if (!det.progresso.em_execucao && det.frases[0].status_traducao === 'traduzida') return;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+    };
+
+    await traduzir();
+    expect(_temperaturaMock('traducao')).toBe(0.3);
+
+    // Configuração global por papel.
+    await chamar('PUT', '/api/configuracoes', { temperaturas: { traducao: 0.1 } });
+    await traduzir();
+    expect(_temperaturaMock('traducao')).toBe(0.1);
+
+    // Salvar só um papel não devolve os outros ao padrão…
+    const estado = await json(await chamar('GET', '/api/configuracoes'));
+    expect(estado.configuracoes.temperaturas).toEqual({
+      traducao: 0.1,
+      revisao: 0.2,
+      qa: 0.2,
+      extracao: 0.2,
+      titulo: 0.4,
+      refinamento: 0.5,
+    });
+
+    // …e o override da obra vence a configuração, em todos os papéis dela.
+    await chamar('PUT', `/api/obras/${obra.id}`, { temperatura: 0.8 });
+    await traduzir();
+    expect(_temperaturaMock('traducao')).toBe(0.8);
+
+    const frases = (await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`))).frases;
+    await chamar('POST', `/api/frases/${frases[0].id}/revisar`, { pergunta: 'Está certo?', provedor: 'mock' });
+    expect(_temperaturaMock('revisao')).toBe(0.8);
+
+    await chamar('POST', '/api/ia/traduzir-detalhes', {
+      obra_id: obra.id,
+      titulo_zh: '十日终焉',
+      provedor: 'mock',
+    });
+    expect(_temperaturaMock('contracapa')).toBe(0.8);
+
+    // Fora da faixa é recusado na rota — a obra continua com o valor bom.
+    const ruim = await chamar('PUT', `/api/obras/${obra.id}`, { temperatura: 9 });
+    expect(ruim.status).toBe(400);
+    expect((await json(await chamar('GET', `/api/obras/${obra.id}`))).temperatura).toBe(0.8);
+
+    // Limpar o override volta ao padrão do papel (agora 0.1).
+    await chamar('PUT', `/api/obras/${obra.id}`, { temperatura: null });
+    await traduzir();
+    expect(_temperaturaMock('traducao')).toBe(0.1);
   });
 
   it('versionamento do prompt: só um ativo por vez', async () => {

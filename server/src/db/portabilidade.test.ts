@@ -27,6 +27,8 @@ function fixture(): ExportObra {
       capa_mime: null,
       provedor_padrao: 'gemini',
       modelo_padrao: 'gemini-flash-latest',
+      // Override de amostragem da obra (doc 08 §13) — decisão do usuário, viaja no export.
+      temperatura: 0.2,
       fase_traducao: 'cruzeiro',
     },
     prompts: [

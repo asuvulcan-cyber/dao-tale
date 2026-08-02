@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  Capitulo,
-  CapituloResumo,
-  CheckpointObra,
-  Lote,
-  LoteCapitulo,
-  Obra,
-  PromptMae,
-  PromptPadrao,
-  ProvedorId,
+import {
+  TEMPERATURA_MAX,
+  type Capitulo,
+  type CapituloResumo,
+  type CheckpointObra,
+  type Lote,
+  type LoteCapitulo,
+  type Obra,
+  type PromptMae,
+  type PromptPadrao,
+  type ProvedorId,
 } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
@@ -524,6 +525,9 @@ function FichaObra() {
             {obra.provedor_padrao
               ? `${obra.provedor_padrao}${obra.modelo_padrao ? ` · ${obra.modelo_padrao}` : ''}`
               : 'padrão global das Configurações'}
+            {/* Só aparece quando a obra foge do padrão de temperatura — estado
+                incomum, e que muda o texto que sai da IA. */}
+            {obra.temperatura != null && ` · temperatura ${obra.temperatura}`}
           </p>
         </div>
       </div>
@@ -756,14 +760,18 @@ function PreferenciasObra() {
 
   const [provedor, setProvedor] = useState<string | null>(null);
   const [modelo, setModelo] = useState<string | null>(null);
+  // Texto, não número: vazio é um estado legítimo (= herdar o padrão do papel).
+  const [temperatura, setTemperatura] = useState<string | null>(null);
   const provedorAtual = provedor ?? obra?.provedor_padrao ?? '';
   const modeloAtual = modelo ?? obra?.modelo_padrao ?? '';
+  const temperaturaAtual = temperatura ?? (obra?.temperatura != null ? String(obra.temperatura) : '');
 
   const salvar = useMutation({
     mutationFn: () =>
       api('PUT', `/obras/${obraId}`, {
         provedor_padrao: provedorAtual || null,
         modelo_padrao: modeloAtual || null,
+        temperatura: temperaturaAtual.trim() === '' ? null : Number(temperaturaAtual),
       }),
     onSuccess: () => {
       clienteQuery.invalidateQueries({ queryKey: ['obra', obraId] });
@@ -809,6 +817,32 @@ function PreferenciasObra() {
           />
         </label>
       </div>
+      {/* Recolhido de propósito: os padrões por papel (Configurações) são a
+          estrela — este campo existe para a obra que precisa fugir deles. */}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm text-tinta-2">Avançado: temperatura desta obra</summary>
+        <div className="mt-2 flex flex-wrap items-start gap-3">
+          <label className="block w-40 text-sm">
+            Temperatura
+            <input
+              type="number"
+              min={0}
+              max={TEMPERATURA_MAX}
+              step={0.1}
+              value={temperaturaAtual}
+              onChange={(e) => setTemperatura(e.target.value)}
+              placeholder="padrão do papel"
+              className="entrada mt-1 w-full"
+            />
+          </label>
+          <p className="max-w-[52ch] text-xs text-tinta-2">
+            Vazio = usar a temperatura de cada papel definida em Configurações (o normal). Preenchido, este valor vale
+            para <strong>todas</strong> as chamadas desta obra — tradução, revisão, QA, glossário, contracapa.{' '}
+            <strong>Subir troca consistência por variação:</strong> a mesma frase passa a sair diferente a cada
+            tentativa. Só mexa se esta obra realmente pedir outra coisa.
+          </p>
+        </div>
+      </details>
       <div className="mt-3 flex items-center gap-3">
         <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
           Salvar

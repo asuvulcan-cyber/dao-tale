@@ -12,7 +12,7 @@ Em **modo hospedado** (`DAO_TALE_MODO=hospedado`, doc 13) isso muda: toda rota a
 |---|---|
 | `GET /saude` | `{ ok, versao, caminho_banco }` — também usada pelo launcher para detectar instância já aberta |
 | `GET /configuracoes` | Todas as configurações + status das chaves por provedor (`configurada: true/false` — **nunca** o valor da chave) |
-| `PUT /configuracoes` | Atualiza chaves-valor (bloco de tradução, vizinhas de revisão, provedor/modelo padrão globais…) |
+| `PUT /configuracoes` | Atualiza chaves-valor (bloco de tradução, vizinhas de revisão, provedor/modelo padrão globais, `temperaturas` por papel…). `temperaturas` é mesclada sobre a tabela gravada: mandar um papel só não devolve os outros ao padrão (doc 08 §13) |
 | `PUT /credenciais/:provedor` | Grava a chave de API no keyring/fallback. A chave só trafega nesta chamada, de localhost para localhost |
 | `DELETE /credenciais/:provedor` | Remove a chave |
 | `POST /credenciais/:provedor/testar` | Faz uma chamada mínima ao provedor para validar a chave; retorna ok/erro e modelos disponíveis |
@@ -24,7 +24,7 @@ Em **modo hospedado** (`DAO_TALE_MODO=hospedado`, doc 13) isso muda: toda rota a
 |---|---|
 | `GET /obras` | Lista com contadores (capítulos por status, termos, casos pendentes) |
 | `POST /obras` | `{ titulo, titulo_original?, prompt_inicial?: { versao, conteudo }, glossario_inicial?: [...] }` — cobre o fluxo "Nova obra" da tela 4.1 numa chamada |
-| `GET /obras/:id` · `PUT /obras/:id` · `DELETE /obras/:id` | Delete retorna antes a contagem do que cai em cascata quando chamado com `?simular=1`; PUT também aceita `sinopse` e `tags` |
+| `GET /obras/:id` · `PUT /obras/:id` · `DELETE /obras/:id` | Delete retorna antes a contagem do que cai em cascata quando chamado com `?simular=1`; PUT também aceita `sinopse`, `tags` e `temperatura` (0–2, `null` = padrão do papel — doc 08 §13) |
 | `GET /obras/:id/capa` · `PUT /obras/:id/capa` · `DELETE /obras/:id/capa` | Capa da obra: PUT recebe a imagem como corpo binário (JPEG/PNG/WebP/GIF, até 2 MB); GET serve com o mime original |
 | `GET /obras/:id/exportar?formato=json` | Download do export completo (`dao-tale-export-v1`, inclui capa em base64) |
 | `GET /obras/:id/epub` | **Livro da obra** em EPUB 3.3 (doc 12): capa, rosto, sumário e um XHTML por capítulo |

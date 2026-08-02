@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { PROVEDORES_IDS, type ProvedorId } from '@dao-tale/shared';
+import { PROVEDORES_IDS, resolverTemperatura, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposTestes, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
@@ -173,6 +173,8 @@ export function rotasFrases(db: BancoDados): Hono {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.revisarFrase(chave, {
         modelo,
+        // Amostragem (doc 08 §13): a revisão é veredito — variar aqui é ruído.
+        temperatura: resolverTemperatura(config.temperaturas, 'revisao', obra.temperatura),
         promptMae: prompt.texto,
         glossario,
         // A4 da auditoria: glossário filtrado vai na mensagem do usuário e o
@@ -259,6 +261,8 @@ export function rotasFrases(db: BancoDados): Hono {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.extrairTermos(chave, {
         modelo,
+        // Amostragem (doc 08 §13): extração é catálogo, quer a mesma lista.
+        temperatura: resolverTemperatura(config.temperaturas, 'extracao', obra.temperatura),
         promptMae: prompt.texto,
         glossario,
         glossarioNoUsuario: config.glossario_relevante,

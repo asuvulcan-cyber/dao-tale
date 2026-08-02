@@ -51,6 +51,7 @@ export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMig
   semearPromptPadrao(db);
   migrarPadraoParaNucleo(db);
   semearNucleoEnxuto(db);
+  corrigirNucleoEnxutoSemeado(db);
   // Lotes de uma sessão anterior não sobrevivem ao processo (doc 09 §5).
   reposLotes.marcarInterrompidosNoBoot(db);
   return db;
@@ -113,6 +114,31 @@ function semearNucleoEnxuto(db: BancoDados): void {
     );
     db.prepare(
       "INSERT INTO configuracoes (chave, valor) VALUES ('nucleo_enxuto_semeado', '1') ON CONFLICT (chave) DO UPDATE SET valor = '1'",
+    ).run();
+  })();
+}
+
+// Conserto da regra do lugar da cena (doc 08 §12.5): no núcleo antigo ela era um
+// PASSO com pergunta, no enxuto virou afirmação solta — e a medição real mostrou
+// o enxuto errando 2 de 2 justamente ali, apesar de ter a regra. Versão de prompt
+// é imutável por princípio, mas a linha semeada com o defeito só existe em cópias
+// que ainda NÃO ativaram o enxuto: enquanto ele está inativo e nada o referencia,
+// é rascunho distribuído pelo aplicativo, não histórico de tradução. As três
+// condições do WHERE garantem exatamente isso; uma cópia que já ativou (ou que o
+// usuário editou) fica intocada e o conserto some com a flag.
+function corrigirNucleoEnxutoSemeado(db: BancoDados): void {
+  const flag = db.prepare("SELECT valor FROM configuracoes WHERE chave = 'nucleo_enxuto_lugar_da_cena'").get();
+  if (flag) return;
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE prompt_padrao SET conteudo = ?
+        WHERE ativo = 0
+          AND notas_versao LIKE 'Núcleo enxuto%'
+          AND id NOT IN (SELECT nucleo_id FROM capitulos WHERE nucleo_id IS NOT NULL)
+          AND id NOT IN (SELECT nucleo_id FROM prompts WHERE nucleo_id IS NOT NULL)`,
+    ).run(NUCLEO_ENXUTO);
+    db.prepare(
+      "INSERT INTO configuracoes (chave, valor) VALUES ('nucleo_enxuto_lugar_da_cena', '1') ON CONFLICT (chave) DO UPDATE SET valor = '1'",
     ).run();
   })();
 }

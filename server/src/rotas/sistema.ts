@@ -1,6 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { PROVEDORES_IDS, type EstadoConfiguracoes, type ProvedorId } from '@dao-tale/shared';
+import {
+  PAPEIS_TEMPERATURA,
+  PROVEDORES_IDS,
+  TEMPERATURA_MAX,
+  normalizarTemperaturas,
+  type EstadoConfiguracoes,
+  type ProvedorId,
+} from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposUso } from '../db/repos.js';
 import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '../credenciais/index.js';
@@ -28,6 +35,9 @@ const configSchema = z.object({
   // Contracapa (título/sinopse): 1 chamada por obra — cabe o melhor modelo.
   provedor_detalhes: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
   modelo_detalhes: z.string().max(120).optional(),
+  // Temperatura por papel (doc 08 §13): substitui a tabela inteira, como as
+  // cotas e os preços. Chave ausente na leitura volta ao padrão do papel.
+  temperaturas: z.record(z.enum(PAPEIS_TEMPERATURA), z.number().min(0).max(TEMPERATURA_MAX)).optional(),
   cotas_diarias: z.record(z.string(), z.number().int().min(0).max(1000000)).optional(),
   // Checkpoint de estabilidade (doc 09 §4): limiares do semáforo de liberação do lote.
   checkpoint_janela: z.number().int().min(1).max(50).optional(),
@@ -107,7 +117,18 @@ export function rotasSistema(db: BancoDados): Hono {
   app.put('/configuracoes', async (c) => {
     const corpo = configSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
-    return c.json(reposConfig.definir(db, corpo.data));
+    const { temperaturas, ...resto } = corpo.data;
+    return c.json(
+      reposConfig.definir(db, {
+        ...resto,
+        // A tabela de temperaturas é guardada como um valor só (JSON): um PUT com
+        // uma chave apenas precisa ser mesclado sobre o que já está gravado,
+        // senão salvar "tradução" devolveria os outros papéis ao padrão.
+        ...(temperaturas
+          ? { temperaturas: normalizarTemperaturas({ ...reposConfig.obterTodas(db).temperaturas, ...temperaturas }) }
+          : {}),
+      }),
+    );
   });
 
   // Requisições de hoje por provedor/modelo — alimenta o indicador de cota gratuita.

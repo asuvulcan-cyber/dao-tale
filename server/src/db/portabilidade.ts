@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { BancoDados } from './index.js';
-import { FASES_TRADUCAO, STATUS_CAPITULO, normalizarPreferencias, type Obra } from '@dao-tale/shared';
+import { FASES_TRADUCAO, STATUS_CAPITULO, normalizarPreferencias, temperaturaValida, type Obra } from '@dao-tale/shared';
 import { reposObras } from './repos.js';
 
 // Exportação/reimportação completa da obra (formato dao-tale-export v1, doc 03).
@@ -25,6 +25,9 @@ const exportSchema = z.object({
     capa_mime: z.string().nullable().default(null),
     provedor_padrao: z.string().nullable(),
     modelo_padrao: z.string().nullable(),
+    // default: compatibilidade com exports anteriores à migração 013. É decisão
+    // do usuário sobre a obra (doc 08 §13), então viaja junto.
+    temperatura: z.number().nullable().default(null),
     // default: compatibilidade com exports anteriores à migração 007. É uma
     // decisão real do usuário (calibração × cruzeiro), então viaja no export.
     fase_traducao: z.enum(FASES_TRADUCAO).default('calibracao'),
@@ -151,6 +154,7 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
       capa_mime: capa?.mime ?? null,
       provedor_padrao: obra.provedor_padrao,
       modelo_padrao: obra.modelo_padrao,
+      temperatura: obra.temperatura,
       fase_traducao: obra.fase_traducao,
     },
     prompts: prompts.map((p) => ({
@@ -239,8 +243,8 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
   return db.transaction((): Obra => {
     const infoObra = db
       .prepare(
-        `INSERT INTO obras (titulo, titulo_original, autor, sinopse, tags, capa, capa_mime, provedor_padrao, modelo_padrao, fase_traducao)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO obras (titulo, titulo_original, autor, sinopse, tags, capa, capa_mime, provedor_padrao, modelo_padrao, temperatura, fase_traducao)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         dados.obra.titulo,
@@ -252,6 +256,7 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
         dados.obra.capa_mime,
         dados.obra.provedor_padrao,
         dados.obra.modelo_padrao,
+        temperaturaValida(dados.obra.temperatura),
         dados.obra.fase_traducao,
       );
     const obraId = Number(infoObra.lastInsertRowid);

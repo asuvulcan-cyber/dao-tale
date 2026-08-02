@@ -28,6 +28,8 @@ CREATE TABLE obras (
   capa_mime        TEXT,
   provedor_padrao  TEXT,                          -- (+) id de provedor (PROVEDORES_IDS no shared); NULL = padrão global
   modelo_padrao    TEXT,                          -- (+) id do modelo no provedor; NULL = padrão do provedor
+  temperatura      REAL,                          -- (+) migração 013: override de amostragem da obra (doc 08 §13);
+                                                  --     NULL = padrão do papel, vindo das Configurações
   criado_em        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   atualizado_em    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );

@@ -16,6 +16,9 @@ export interface UsoChamada {
 }
 
 // ── Requisições montadas pela orquestração (independentes de provedor) ─────
+// Toda requisição carrega `temperatura` (doc 08 §13): a amostragem já resolvida
+// (padrão do papel + override da obra). `undefined` = não mandar o parâmetro e
+// ficar no padrão do modelo — que é 1.0 e foi o comportamento do app até aqui.
 
 export interface FraseParaTraduzir {
   ordem: number;
@@ -24,6 +27,7 @@ export interface FraseParaTraduzir {
 
 export interface RequisicaoTraducaoBloco {
   modelo: string;
+  temperatura?: number;
   promptMae: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado por bloco (só termos presentes no trecho):
@@ -66,6 +70,7 @@ export interface RespostaTraducaoBloco {
 
 export interface RequisicaoContracapa {
   modelo: string;
+  temperatura?: number;
   /** Ausente quando o usuário só quer a sinopse. */
   tituloZh?: string;
   /** Vai inteira, com as quebras de linha originais. */
@@ -86,6 +91,7 @@ export interface RespostaContracapa {
 
 export interface RequisicaoRevisao {
   modelo: string;
+  temperatura?: number;
   promptMae: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado pela frase questionada: ele entra na
@@ -109,6 +115,7 @@ export interface RespostaRevisaoProvedor extends RespostaRevisao {
 
 export interface RequisicaoExtrairTermos {
   modelo: string;
+  temperatura?: number;
   promptMae: string;
   /** Termos já catalogados que o modelo não deve repetir. Com `glossarioNoUsuario`,
    * chega filtrado pela frase (os ausentes dela não ajudam a deduplicar nada). */
@@ -131,6 +138,7 @@ export interface RespostaExtrairTermos {
 
 export interface RequisicaoRefinarPrompt {
   modelo: string;
+  temperatura?: number;
   /** Prompt mãe composto (núcleo + delta) vigente na obra. */
   promptMae: string;
   /** Delta atual (Seção 6) — é o que a proposta deve refinar. */
@@ -171,6 +179,7 @@ export interface ParParaQa {
 
 export interface RequisicaoQa {
   modelo: string;
+  temperatura?: number;
   promptMae: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário filtrado vai na mensagem do usuário (sistema estável). */
