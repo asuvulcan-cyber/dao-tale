@@ -460,10 +460,46 @@ Medição de 2026-08-02 (obra real 十日终焉 convertida para camadas, caps. 1
   existe mais no enxuto. A regra (o tique de 那样 do Kim Wonhun) sobrevive porque o
   enxuto tem o mesmo carve-out de intensidade, mas a referência cruzada envelheceu.
 
-**Decisão:** o enxuto é semeado **sempre inativo**, em banco novo e em banco em uso.
-O gate era "só ativar se segurar a qualidade"; ele segurou, não melhorou — e o ganho
-real (−15% de tokens, e as chaves, que só funcionam com ele) é bom, mas é decisão do
-usuário, com um clique em "Núcleo universal", e reversível com outro.
+**Decisão de 2026-08-02 (primeira medição):** o enxuto é semeado **sempre inativo**, em
+banco novo e em banco em uso. O gate era "só ativar se segurar a qualidade"; ele segurou,
+não melhorou — e o ganho real (−15% de tokens, e as chaves, que só funcionam com ele) é
+bom, mas é decisão do usuário, com um clique em "Núcleo universal", e reversível com outro.
+
+### 12.6 Re-A/B a temperatura baixa — e a ativação
+
+A primeira medição foi feita sem controle de amostragem (§13): tudo a 1.0. Repetida com a
+tradução em **0.3**, mesmo trecho real das caps. 118 e 119 de 十日终焉, mesmo modelo dos dois
+lados (`deepseek-v4-flash` — a cota gratuita do Gemini já estava esgotada no dia),
+**6 amostras por núcleo**, e com a regra do lugar da cena já reescrita como passo-teste:
+
+| | "aquele" | demonstrativos | "-mente" | decalques | glossário |
+|---|---:|---:|---:|---:|---:|
+| antigo v2.0 | 2,3 | **15,0** | 15,2 | **0** | **16,0/18** |
+| enxuto v3.0 | 3,0 | **15,0** | **13,7** | 1 | 15,7/18 |
+
+Por capítulo, a dispersão caiu muito: no 119 o antigo deu "aquele" 1/1/1 e demonstrativos
+16/19/19 — três execuções do mesmo prompt praticamente iguais, o que a 1.0 não acontecia.
+Sobrou um outlier (o enxuto foi 4/2/7 no 118): temperatura baixa reduz o ruído, não o zera.
+
+**Custo, medido por chamada nesta obra** (a entrada some com o cache do provedor, então o
+que conta é entrada + cache lido): **4 827 → 4 156 tokens, −13,9%** — a mesma ordem dos
+−738/−15% da primeira medição, agora em outro modelo.
+
+**O caso alvo.** O sinal contrário da §12.5 (`这个诡异的地方` → "escapar **daquele** lugar")
+sumiu: **1 de 3 nos dois núcleos**. Note que o *antigo* também caiu para 1/3 aqui — parte
+do que parecia defeito do enxuto era o modelo, não o prompt.
+
+**Veredito: empate, agora com número confiável.** Demonstrativos idênticos, "-mente" melhor
+no enxuto, "aquele" e glossário marginalmente melhores no antigo (0,7 ocorrência e 0,3
+entrada de 18 — abaixo da dispersão interna de cada núcleo), 1 decalque (`对方` → "a outra
+parte") em 6 amostras do enxuto contra 0. Nada sistemático em nenhuma direção.
+
+**O enxuto foi ATIVADO** (2026-08-02): o gate era segurar a qualidade, e segurou nas duas
+medições, em dois modelos diferentes; o que não empata é o custo, −14% de entrada em toda
+chamada de toda obra, para sempre, mais as chaves de estilo, que só funcionam com ele. Na
+ativação, o delta de 十日终焉 virou v1.2: a referência morta "Seção 3, Passo 1" passou a
+citar a regra de intensidade pelo nome (a regra do tique de 那样 do Kim Wonhun continua
+inteira). Reverter continua sendo um clique em "Núcleo universal".
 
 ## 13. Temperatura: amostragem, não texto (2026-08-02)
 

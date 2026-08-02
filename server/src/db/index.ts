@@ -98,11 +98,12 @@ function migrarPadraoParaNucleo(db: BancoDados): void {
 }
 
 // Doc 08 §12 — o núcleo enxuto entra como versão NOVA e SEMPRE INATIVA, nunca por
-// cima do que está ativo. Ativar é decisão do usuário depois de comparar as duas
-// versões no comparador (portão A/B): a medição de 2026-08-02 mostrou empate de
-// qualidade dentro da variância do modelo, com −15% de tokens de entrada — ganho
-// real, mas não o "segurou a qualidade e melhorou" que justificaria virar a chave
-// por conta própria. Guardado por flag, como a migração para camadas.
+// cima do que está ativo. As duas medições (§12.5 e §12.6, modelos diferentes)
+// deram empate de qualidade com ~−14% de tokens de entrada, e por isso ele foi
+// ativado na instância real — mas ativar continua sendo um clique do usuário, não
+// efeito colateral de abrir o aplicativo: trocar o prompt ativo debaixo de quem
+// está traduzindo é exatamente o que a imutabilidade das versões existe para
+// impedir. Guardado por flag, como a migração para camadas.
 function semearNucleoEnxuto(db: BancoDados): void {
   const flag = db.prepare("SELECT valor FROM configuracoes WHERE chave = 'nucleo_enxuto_semeado'").get();
   if (flag) return;
