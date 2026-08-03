@@ -607,7 +607,7 @@ function FormularioPadroes({
           )}
         </label>
         <label className="block text-sm">
-          Frases por bloco de tradução
+          Frases por bloco de tradução <span className="text-tinta-2">(1 a 120)</span>
           <input
             type="number"
             min={1}
@@ -618,7 +618,7 @@ function FormularioPadroes({
           />
         </label>
         <label className="block text-sm">
-          Frases vizinhas na revisão (cada lado)
+          Frases vizinhas na revisão (cada lado) <span className="text-tinta-2">(0 a 10)</span>
           <input
             type="number"
             min={0}
@@ -629,7 +629,7 @@ function FormularioPadroes({
           />
         </label>
         <label className="block text-sm">
-          Cauda de contexto entre blocos (frases)
+          Cauda de contexto entre blocos (frases) <span className="text-tinta-2">(0 a 20)</span>
           <input
             type="number"
             min={0}
@@ -837,7 +837,7 @@ function FormularioPadroes({
           caro: o lote surfa as cotas gratuitas antes de gastar.
         </p>
         <label className="block w-56 text-sm">
-          Capítulos em paralelo
+          Capítulos em paralelo <span className="text-tinta-2">(1 a 8)</span>
           <input
             type="number"
             min={1}
