@@ -1,4 +1,4 @@
-import type { PrecoModelo, PrecosModelos } from '@dao-tale/shared';
+import { FATOR_CACHE_CRIACAO, FATOR_CACHE_LEITURA, type PrecoModelo, type PrecosModelos } from '@dao-tale/shared';
 import type { UsoChamada } from '../ia/provedor.js';
 
 // Conversão tokens → dinheiro (doc 11 §3). Puro: nenhuma leitura de banco aqui.
@@ -10,9 +10,8 @@ import type { UsoChamada } from '../ia/provedor.js';
 // O que NUNCA acontece é modelo desconhecido aparecer como US$ 0,00 disfarçado
 // de grátis — era exatamente a cegueira que este passo existe para acabar.
 
-/** Descontos padrão da indústria quando o preço de cache não é informado. */
-const FATOR_CACHE_LEITURA = 0.1;
-const FATOR_CACHE_CRIACAO = 1.25;
+// Os fatores padrão de cache moram em @dao-tale/shared: a tela de Preços mostra
+// o mesmo número que este cálculo cobra.
 
 export function chavePreco(provedor: string, modelo: string): string {
   return `${provedor}:${modelo}`;

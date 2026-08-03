@@ -50,6 +50,18 @@ describe('calcularCusto', () => {
     expect(custo).toBe(0);
   });
 
+  it('mistura preço de cache explícito com ausente, campo a campo (formato DeepSeek)', () => {
+    // A DeepSeek publica a leitura de cache (US$ 0,0028/1M, ~2% da entrada — bem
+    // longe dos 10% do padrão) e não cobra pela escrita. Preencher só a leitura
+    // tem de valer: o campo ausente cai no padrão sem contaminar o informado.
+    const custo = calcularCusto(
+      { entrada: 0.14, saida: 0.28, cache_leitura: 0.0028 },
+      { tokens_entrada: 1_000_000, tokens_saida: 1_000_000, tokens_cache_leitura: 1_000_000, tokens_cache_criacao: 0 },
+    );
+    // 0,14 + 0,28 + 0,0028 — e NÃO 0,014, que é o que o padrão de 0,1× cobraria.
+    expect(custo).toBeCloseTo(0.4228, 10);
+  });
+
   it('sem preço cadastrado, o custo é desconhecido — nunca 0', () => {
     expect(
       calcularCusto(null, { tokens_entrada: 999_999, tokens_saida: 999_999, tokens_cache_leitura: 0, tokens_cache_criacao: 0 }),

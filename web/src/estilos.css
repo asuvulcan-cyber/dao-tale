@@ -1,5 +1,31 @@
 @import 'tailwindcss';
 
+/* ── Inter (SIL Open Font License 1.1, licença em public/fontes/) ────────────
+   Embutida em vez de puxada do Google Fonts: o Dao Tale roda local e precisa
+   funcionar sem internet, e no modo hospedado o celular recebe a MESMA fonte
+   que o desktop — pilha de fontes do sistema não garante isso. Variável 400–700
+   nos dois arquivos, ~133 KB somados. `swap` para o texto nunca ficar invisível
+   esperando o download. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fontes/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fontes/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ============================================================================
    DAO TALE · Sistema de tokens "Tinta & Jade"
    Convenção completa em docs/tokens-css.md. Regra de ouro: componentes usam
@@ -33,7 +59,9 @@
 
   /* — Tipografia — */
   --fonte-display: 'Iowan Old Style', 'Palatino Linotype', 'Palatino', 'Book Antiqua', Georgia, 'Times New Roman', serif;
-  --fonte-corpo:   'Iowan Old Style', 'Palatino Linotype', 'Palatino', Georgia, 'Times New Roman', serif;
+  /* Corpo de leitura: sans, desenhada para tela. A pilha serifada de antes não
+     existia em nenhuma máquina Linux e caía num serif genérico qualquer. */
+  --fonte-corpo:   'Inter', 'Open Sans', 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
   --fonte-zh:      'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
   --fonte-ui:      ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --fonte-mono:    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', 'Roboto Mono', Menlo, monospace;

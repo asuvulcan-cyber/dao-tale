@@ -268,6 +268,15 @@ export interface PrecoModelo {
   cache_criacao?: number;
 }
 
+/** Descontos padrão da indústria para quando o preço de cache NÃO é informado
+ * (campo ausente ≠ campo zero). Ficam aqui, e não só no cálculo do servidor,
+ * porque a tela de Preços precisa mostrar exatamente o número que vai ser
+ * cobrado — senão o usuário não tem como saber que existe um padrão implícito.
+ * Nem todo provedor segue a proporção: a DeepSeek cobra cache a ~2% da entrada,
+ * não 10%, e é justamente por isso que o campo explícito existe. */
+export const FATOR_CACHE_LEITURA = 0.1;
+export const FATOR_CACHE_CRIACAO = 1.25;
+
 /** Chave `"<provedor>:<modelo>"`, com curinga `"<provedor>:*"` como fallback.
  * Ausência = preço desconhecido (nunca "grátis"). */
 export type PrecosModelos = Record<string, PrecoModelo>;

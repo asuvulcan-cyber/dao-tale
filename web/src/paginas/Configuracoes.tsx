@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  FATOR_CACHE_CRIACAO,
+  FATOR_CACHE_LEITURA,
   TEMPERATURA_MAX,
   type Configuracoes as Config,
   type EstadoConfiguracoes,
@@ -285,14 +287,26 @@ function TabelaPrecos({
   const definir = (chave: string, campo: 'entrada' | 'saida', valor: number) =>
     setPrecos({ ...precos, [chave]: { ...precos[chave], [campo]: valor } });
 
+  // Cache: campo VAZIO e campo ZERO são coisas diferentes. Vazio = "não informado",
+  // e o cálculo aplica o fator padrão da indústria; zero = "esse provedor não cobra".
+  // Por isso o valor sai do objeto quando o campo é apagado, em vez de virar 0.
+  const definirCache = (chave: string, campo: 'cache_leitura' | 'cache_criacao', valor: string) => {
+    const preco = { ...precos[chave] };
+    if (valor.trim() === '') delete preco[campo];
+    else preco[campo] = Number(valor);
+    setPrecos({ ...precos, [chave]: preco });
+  };
+
   return (
     <section className="cartao p-4" id="precos">
       <h2 className="olho mb-1">Preços dos modelos</h2>
       <p className="mb-3 text-sm text-tinta-2">
         Em dólares por 1 milhão de tokens, como os provedores publicam. Sem preço cadastrado, o painel de custos conta a
         chamada como <strong>desconhecida</strong> — nunca como grátis. Faixa gratuita se cadastra com <strong>0</strong>{' '}
-        nos dois campos. Leitura de cache é cobrada a 0,1× a entrada e escrita a 1,25×; só a família Claude vem
-        preenchida de fábrica.
+        nos dois campos. As colunas de cache podem ficar <strong>vazias</strong>: aí valem os padrões da indústria
+        (leitura a {FATOR_CACHE_LEITURA}× a entrada, escrita a {FATOR_CACHE_CRIACAO}×), que aparecem em cinza no campo.
+        Preencha quando o provedor fugir dessa proporção — a DeepSeek, por exemplo, cobra a leitura a ~2% da entrada, e
+        deixar no padrão cobraria 5× a mais. Só a família Claude vem preenchida de fábrica.
       </p>
 
       <div className="overflow-x-auto">
@@ -302,6 +316,8 @@ function TabelaPrecos({
               <th className="olho border-b border-linha px-2 py-1.5 text-left">Provedor · modelo</th>
               <th className="olho border-b border-linha px-2 py-1.5 text-right">Entrada US$/1M</th>
               <th className="olho border-b border-linha px-2 py-1.5 text-right">Saída US$/1M</th>
+              <th className="olho border-b border-linha px-2 py-1.5 text-right">Cache leitura</th>
+              <th className="olho border-b border-linha px-2 py-1.5 text-right">Cache escrita</th>
               <th className="olho border-b border-linha px-2 py-1.5"></th>
             </tr>
           </thead>
@@ -328,6 +344,30 @@ function TabelaPrecos({
                     step="0.01"
                     value={precos[chave].saida}
                     onChange={(e) => definir(chave, 'saida', Number(e.target.value))}
+                    className="entrada w-24 text-right text-sm tabular-nums"
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    value={precos[chave].cache_leitura ?? ''}
+                    onChange={(e) => definirCache(chave, 'cache_leitura', e.target.value)}
+                    placeholder={(precos[chave].entrada * FATOR_CACHE_LEITURA).toFixed(4)}
+                    title="Vazio = usa o padrão mostrado em cinza. Preencha quando o provedor cobrar diferente."
+                    className="entrada w-24 text-right text-sm tabular-nums"
+                  />
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    value={precos[chave].cache_criacao ?? ''}
+                    onChange={(e) => definirCache(chave, 'cache_criacao', e.target.value)}
+                    placeholder={(precos[chave].entrada * FATOR_CACHE_CRIACAO).toFixed(4)}
+                    title="Vazio = usa o padrão mostrado em cinza. Zero = o provedor não cobra para gravar cache."
                     className="entrada w-24 text-right text-sm tabular-nums"
                   />
                 </td>
