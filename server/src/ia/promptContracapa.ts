@@ -71,8 +71,12 @@ manter a SINTAXE do chinês. Português e chinês constroem a frase de modos dif
   (X 的 Y). Em português, o peso vai DEPOIS do substantivo, ou vira oração relativa. Um
   amontoado de adjetivos antes do nome denuncia tradução na primeira linha.
 - **Fórmulas de veredito** (堪称 / 称得上 / 不可多得 e afins): são o "vale cada página" do
-  chinês, não uma classificação formal. Não escreva "pode ser considerado/classificado
-  como" — escreva o elogio como um brasileiro elogiaria um livro.
+  chinês, não uma classificação formal. "Pode ser considerado/classificado como" é
+  linguagem de laudo — escreva o elogio como um brasileiro elogiaria um livro.
+  Cuidado com a exceção: quando o original DE FATO classifica (列为 X级, 评为, uma nota
+  ou um degrau de escala nomeado), o degrau é informação e não pode sumir — o que muda é
+  a roupa, não o fato: diga o nível em português corrente ("nível obra-prima", "entra
+  fácil na prateleira dos melhores"), sem virar relatório nem sumir com a escala.
 - Se uma frase em português só faz sentido para quem consegue imaginar o chinês por trás
   dela, ela está errada, mesmo que cada palavra esteja certa.
 
