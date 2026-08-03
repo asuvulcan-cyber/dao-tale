@@ -12,7 +12,7 @@ import {
   type ProvedorId,
   type TelemetriaDia,
 } from '@dao-tale/shared';
-import { api, ErroApi } from '../api';
+import { api, ErroApi, mensagemDeErro } from '../api';
 import { Aviso, Botao, Etiqueta } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
 import { IndicadorCota, NOME_CURTO } from '../componentes/IndicadorCota';
@@ -262,18 +262,22 @@ function TabelaPrecos({
   const [novoProvedor, setNovoProvedor] = useState<ProvedorId>(provedores[0]?.id ?? 'claude');
   const [novoModelo, setNovoModelo] = useState('');
   const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const salvar = useMutation({
     mutationFn: () => api('PUT', '/configuracoes', { precos_modelos: precos, taxa_usd_brl: taxa }),
     onSuccess: () => {
+      setErro(null);
       setSalvo(true);
       aoSalvar();
       setTimeout(() => setSalvo(false), 3000);
     },
+    onError: (e) => setErro(mensagemDeErro(e)),
   });
 
   const recalcular = useMutation({
     mutationFn: () => api<{ atualizados: number; total: number }>('POST', '/telemetria/recalcular'),
+    onError: (e) => setErro(mensagemDeErro(e)),
   });
 
   const chaves = Object.keys(precos).sort();
@@ -406,6 +410,7 @@ function TabelaPrecos({
           </span>
         )}
       </div>
+      {erro && <Aviso tipo="erro">Não foi possível salvar: {erro}</Aviso>}
       <p className="mt-2 text-sm text-tinta-2">
         Salvar preço novo não reescreve o passado sozinho — use “Recalcular” para aplicar a tabela vigente ao histórico
         já gravado.
@@ -433,12 +438,13 @@ function CartaoCredencial({
       setMensagem({ tipo: 'ok', texto: 'Chave salva.' });
       aoMudar();
     },
-    onError: (e) => setMensagem({ tipo: 'erro', texto: (e as Error).message }),
+    onError: (e) => setMensagem({ tipo: 'erro', texto: mensagemDeErro(e) }),
   });
 
   const testar = useMutation({
     mutationFn: () => api<{ ok: boolean; mensagem: string }>('POST', `/credenciais/${provedor.id}/testar`),
     onSuccess: (r) => setMensagem({ tipo: r.ok ? 'ok' : 'erro', texto: r.mensagem }),
+    onError: (e) => setMensagem({ tipo: 'erro', texto: mensagemDeErro(e) }),
   });
 
   const remover = useMutation({
@@ -447,6 +453,7 @@ function CartaoCredencial({
       setMensagem({ tipo: 'ok', texto: 'Chave removida.' });
       aoMudar();
     },
+    onError: (e) => setMensagem({ tipo: 'erro', texto: mensagemDeErro(e) }),
   });
 
   return (
@@ -493,14 +500,17 @@ function FormularioPadroes({
 }) {
   const [valores, setValores] = useState<Config>(config);
   const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const salvar = useMutation({
     mutationFn: () => api('PUT', '/configuracoes', valores),
     onSuccess: () => {
+      setErro(null);
       setSalvo(true);
       aoSalvar();
       setTimeout(() => setSalvo(false), 3000);
     },
+    onError: (e) => setErro(mensagemDeErro(e)),
   });
 
   return (
@@ -903,6 +913,7 @@ function FormularioPadroes({
         </Botao>
         {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
       </div>
+      {erro && <Aviso tipo="erro">Não foi possível salvar: {erro}</Aviso>}
     </section>
   );
 }

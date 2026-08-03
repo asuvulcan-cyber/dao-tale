@@ -1037,9 +1037,12 @@ export const reposConfig = {
     return {
       provedor_padrao: (mapa.provedor_padrao as Configuracoes['provedor_padrao']) ?? CONFIG_PADRAO.provedor_padrao,
       modelo_padrao: mapa.modelo_padrao ?? CONFIG_PADRAO.modelo_padrao,
-      tamanho_bloco: mapa.tamanho_bloco ? Number(mapa.tamanho_bloco) : CONFIG_PADRAO.tamanho_bloco,
-      vizinhas_revisao: mapa.vizinhas_revisao ? Number(mapa.vizinhas_revisao) : CONFIG_PADRAO.vizinhas_revisao,
-      cauda_contexto: mapa.cauda_contexto ? Number(mapa.cauda_contexto) : CONFIG_PADRAO.cauda_contexto,
+      // Mesma guarda de NaN (B9) dos campos abaixo: sem ela um valor corrompido
+      // virava NaN, saía como `null` no JSON da tela e fazia o salvar inteiro
+      // ser recusado pelo schema — calado.
+      tamanho_bloco: numeroConfig(mapa.tamanho_bloco, CONFIG_PADRAO.tamanho_bloco),
+      vizinhas_revisao: numeroConfig(mapa.vizinhas_revisao, CONFIG_PADRAO.vizinhas_revisao),
+      cauda_contexto: numeroConfig(mapa.cauda_contexto, CONFIG_PADRAO.cauda_contexto),
       parar_no_limite: mapa.parar_no_limite ? mapa.parar_no_limite === 'true' : CONFIG_PADRAO.parar_no_limite,
       glossario_relevante: mapa.glossario_relevante
         ? mapa.glossario_relevante === 'true'
@@ -1081,7 +1084,7 @@ export const reposConfig = {
 
 /** Config numérica com guarda de NaN (B9): valor corrompido cai no padrão. */
 function numeroConfig(valor: string | undefined, padrao: number): number {
-  if (valor === undefined) return padrao;
+  if (valor === undefined || valor === '') return padrao; // '' vira 0 no Number(), não é "não configurado"
   const n = Number(valor);
   return Number.isFinite(n) ? n : padrao;
 }

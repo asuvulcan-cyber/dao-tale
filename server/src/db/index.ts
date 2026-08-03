@@ -10,6 +10,7 @@ import {
   extrairCamadas,
 } from './promptPadraoInicial.js';
 import { reposLotes } from './repos.js';
+import { sanearConfiguracoes } from './configuracoes.js';
 import { fazerBackupSincrono } from './backup.js';
 
 export type BancoDados = Database.Database;
@@ -52,6 +53,14 @@ export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMig
   migrarPadraoParaNucleo(db);
   semearNucleoEnxuto(db);
   corrigirNucleoEnxutoSemeado(db);
+  // Config gravada quando as faixas eram outras (ex.: tamanho_bloco 400, de antes
+  // do teto de 120 da A1) volta para dentro do aceito hoje — senão a tela de
+  // Configurações reenvia o valor velho e o salvar inteiro morre em 400.
+  for (const ajuste of sanearConfiguracoes(db)) {
+    console.log(
+      `[dao-tale] configuração "${ajuste.chave}" estava fora da faixa aceita hoje: ${ajuste.de} → ${ajuste.para}.`,
+    );
+  }
   // Lotes de uma sessão anterior não sobrevivem ao processo (doc 09 §5).
   reposLotes.marcarInterrompidosNoBoot(db);
   return db;

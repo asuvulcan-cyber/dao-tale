@@ -1,14 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import {
-  PAPEIS_TEMPERATURA,
-  PROVEDORES_IDS,
-  TEMPERATURA_MAX,
-  normalizarTemperaturas,
-  type EstadoConfiguracoes,
-  type ProvedorId,
-} from '@dao-tale/shared';
+import { normalizarTemperaturas, type EstadoConfiguracoes, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
+import { configSchema, mensagemDeValidacao } from '../db/configuracoes.js';
 import { reposConfig, reposUso } from '../db/repos.js';
 import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '../credenciais/index.js';
 import { listarProvedores, obterProvedor } from '../ia/fabrica.js';
@@ -16,60 +10,6 @@ import { diretorioDados, ehInstanciaCanonica, PORTA } from '../config.js';
 import { fazerBackup, listarBackups } from '../db/backup.js';
 import { telemetriaDoDia } from '../telemetria/painel.js';
 import { recalcularCustos } from '../telemetria/registrar.js';
-
-const configSchema = z.object({
-  provedor_padrao: z.enum(PROVEDORES_IDS).optional(),
-  modelo_padrao: z.string().optional(),
-  // A1: teto alinhado à capacidade real de saída dos provedores (~8K tokens) —
-  // acima disso o truncamento era garantido e cada bloco pagava 5 chamadas
-  // fadadas a falhar. O job ainda divide o bloco sozinho se truncar.
-  tamanho_bloco: z.number().int().min(1).max(120).optional(),
-  vizinhas_revisao: z.number().int().min(0).max(10).optional(),
-  cauda_contexto: z.number().int().min(0).max(20).optional(),
-  parar_no_limite: z.boolean().optional(),
-  glossario_relevante: z.boolean().optional(),
-  // Modelo por papel: revisão pode usar um provedor/modelo de raciocínio
-  // próprio ('' = usar a cadeia normal).
-  provedor_revisao: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
-  modelo_revisao: z.string().max(120).optional(),
-  // Contracapa (título/sinopse): 1 chamada por obra — cabe o melhor modelo.
-  provedor_detalhes: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
-  modelo_detalhes: z.string().max(120).optional(),
-  // Temperatura por papel (doc 08 §13): substitui a tabela inteira, como as
-  // cotas e os preços. Chave ausente na leitura volta ao padrão do papel.
-  temperaturas: z.record(z.enum(PAPEIS_TEMPERATURA), z.number().min(0).max(TEMPERATURA_MAX)).optional(),
-  cotas_diarias: z.record(z.string(), z.number().int().min(0).max(1000000)).optional(),
-  // Checkpoint de estabilidade (doc 09 §4): limiares do semáforo de liberação do lote.
-  checkpoint_janela: z.number().int().min(1).max(50).optional(),
-  checkpoint_termos_max: z.number().min(0).max(100).optional(),
-  checkpoint_edicao_max: z.number().min(0).max(100).optional(),
-  checkpoint_violacoes_max: z.number().min(0).max(100).optional(),
-  // Lote / cruzeiro (doc 09 §5): paralelismo e cadeia de failover.
-  lote_paralelo: z.number().int().min(1).max(8).optional(),
-  failover: z
-    .array(z.object({ provedor: z.enum(PROVEDORES_IDS), modelo: z.string().max(120) }))
-    .max(6)
-    .optional(),
-  // QA por segunda IA (doc 09 §6): par próprio + automação opt-in.
-  provedor_qa: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
-  modelo_qa: z.string().max(120).optional(),
-  qa_automatica: z.boolean().optional(),
-  // Telemetria (doc 11 §3): preços em USD por 1M tokens, chave "provedor:modelo"
-  // (curinga "provedor:*" aceito). Teto alto o bastante para qualquer modelo de
-  // ponta e baixo o bastante para pegar dedo trocado (preço por 1k em vez de 1M).
-  precos_modelos: z
-    .record(
-      z.string().max(140),
-      z.object({
-        entrada: z.number().min(0).max(1000),
-        saida: z.number().min(0).max(1000),
-        cache_leitura: z.number().min(0).max(1000).optional(),
-        cache_criacao: z.number().min(0).max(1000).optional(),
-      }),
-    )
-    .optional(),
-  taxa_usd_brl: z.number().min(0).max(1000).optional(),
-});
 
 export function rotasSistema(db: BancoDados): Hono {
   const app = new Hono();
@@ -116,7 +56,10 @@ export function rotasSistema(db: BancoDados): Hono {
 
   app.put('/configuracoes', async (c) => {
     const corpo = configSchema.safeParse(await c.req.json());
-    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    // Mensagem legível com o campo culpado: a tela de Configurações mostra isto
+    // literalmente, e um salvar recusado precisa dizer QUAL campo recusou.
+    if (!corpo.success)
+      return c.json({ erro: { codigo: 'payload-invalido', mensagem: mensagemDeValidacao(corpo.error) } }, 400);
     const { temperaturas, ...resto } = corpo.data;
     return c.json(
       reposConfig.definir(db, {

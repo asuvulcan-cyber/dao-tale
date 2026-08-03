@@ -11,6 +11,15 @@ export class ErroApi extends Error {
   }
 }
 
+/** Texto para mostrar ao usuário a partir de um erro de mutação. Erro da API vem
+ *  com a mensagem do servidor (a de validação já nomeia o campo recusado);
+ *  qualquer outra coisa vira um texto genérico em vez de sumir da tela. */
+export function mensagemDeErro(e: unknown): string {
+  if (e instanceof ErroApi) return e.message;
+  if (e instanceof Error && e.message) return e.message;
+  return 'erro inesperado';
+}
+
 /** Modo hospedado (doc 13 §3): a sessão venceu (ou o serviço reiniciou com
     senha nova) enquanto a aba estava aberta. Quem escuta é o PortaoSessao, que
     troca o app pela tela de login sem perder a rota atual. */
