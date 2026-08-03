@@ -1,0 +1,15 @@
+-- Override de modo thinking por obra.
+--
+-- Mesmo lugar e mesma justificativa da temperatura (013): é parâmetro de
+-- INFERÊNCIA, não texto — não muda um byte do que é enviado, então versioná-lo
+-- junto do prompt só criaria versões idênticas entre si.
+--
+-- Por que existe: medido na 死人经 com deepseek-v4-flash, o raciocínio respondeu
+-- por 86% dos tokens de SAÍDA de um capítulo (32.477 cobrados para ~4.500 de
+-- tradução real) — e saída é 99,7% da conta. Numa sonda de uma frase, 159 de 181
+-- tokens eram raciocínio. Tradução de romance é tarefa direta; o raciocínio
+-- prolongado é desperdício pago em dinheiro e em dez minutos de espera.
+--
+-- NULL = usar o padrão do provedor (comportamento de hoje). Toda obra existente
+-- fica NULL, isto é, sem mudança de comportamento até alguém escolher.
+ALTER TABLE obras ADD COLUMN thinking TEXT;

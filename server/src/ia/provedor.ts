@@ -1,4 +1,4 @@
-import type { EntradaGlossario, ModeloInfo, ProvedorId, RespostaRevisao } from '@dao-tale/shared';
+import type { EntradaGlossario, ModeloInfo, ModoThinking, ProvedorId, RespostaRevisao } from '@dao-tale/shared';
 
 // ── Consumo real de uma chamada (telemetria, doc 11 §1) ────────────────────
 // Toda resposta de provedor carrega o `usage` que a API devolveu, normalizado:
@@ -28,6 +28,8 @@ export interface FraseParaTraduzir {
 export interface RequisicaoTraducaoBloco {
   modelo: string;
   temperatura?: number;
+  /** Raciocínio prolongado; `undefined` = não mandar nada (padrão do provedor). */
+  thinking?: ModoThinking;
   promptMae: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado por bloco (só termos presentes no trecho):

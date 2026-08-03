@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ModeloInfo } from '@dao-tale/shared';
+import type { ModeloInfo, ModoThinking } from '@dao-tale/shared';
 import {
   ErroProvedor,
   type ProvedorIA,
@@ -41,7 +41,7 @@ import {
   instrucaoJson,
 } from './contratos.js';
 import { usoDoCompat } from './uso.js';
-import { ehErroDeTemperatura, temperaturaDoPedido } from './temperatura.js';
+import { ehErroDeParametro, ehErroDeTemperatura, temperaturaDoPedido } from './temperatura.js';
 
 // Provedor genérico para APIs compatíveis com OpenAI (chat completions):
 // DeepSeek, OpenRouter, Groq, Mistral etc. usam o mesmo protocolo — só mudam
@@ -152,12 +152,18 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       `req` traz o modelo e a temperatura resolvida (doc 08 §13). */
   async function completar(
     chave: string | null,
-    req: { modelo: string; temperatura?: number },
+    req: { modelo: string; temperatura?: number; thinking?: ModoThinking },
     sistema: string,
     usuario: string,
   ): Promise<{ bruto: unknown; uso: UsoChamada }> {
     // Faixa 0–2, como na API da OpenAI que todos estes provedores imitam.
     const temperature = temperaturaDoPedido(req, 2);
+    // `reasoning_effort` é a forma OpenAI-compatível, que é o que estes quatro
+    // provedores imitam — preferida à `thinking: {type}` da Anthropic por ser a
+    // que tem chance de valer nos outros. Medido na DeepSeek: "none" zera os
+    // reasoning_tokens (181 → 20 tokens de saída na mesma frase). Só mandamos o
+    // parâmetro quando a obra escolheu; sem escolha, o padrão do provedor vale.
+    const reasoning_effort = req.thinking === 'desligado' ? 'none' : undefined;
     const corpo = {
       model: req.modelo,
       messages: [
@@ -167,6 +173,7 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       response_format: { type: 'json_object' },
       ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
       ...(temperature === undefined ? {} : { temperature }),
+      ...(reasoning_effort === undefined ? {} : { reasoning_effort }),
     };
     const chaveApi = exigirChave(chave, opts.nome);
     const json = await requisitar(chaveApi, '/chat/completions', corpo).catch((e) => {
@@ -177,6 +184,12 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       if (temperature !== undefined && e instanceof ErroProvedor && ehErroDeTemperatura(e.message)) {
         const { temperature: _, ...semTemperatura } = corpo;
         return requisitar(chaveApi, '/chat/completions', semTemperatura);
+      }
+      // Provedor que não conhece `reasoning_effort`: economia é desejável, não
+      // essencial — perde o parâmetro e traduz, em vez de falhar o bloco.
+      if (reasoning_effort !== undefined && e instanceof ErroProvedor && ehErroDeParametro(e.message, 'reasoning_effort')) {
+        const { reasoning_effort: _, ...semRaciocinio } = corpo;
+        return requisitar(chaveApi, '/chat/completions', semRaciocinio);
       }
       throw e;
     });

@@ -36,17 +36,27 @@ const prefixosVistos = new Set<string>();
 // sem gastar nada, que a temperatura resolvida (padrão do papel + override da
 // obra) chega mesmo ao provedor pela rota real.
 const temperaturasRecebidas = new Map<string, number | undefined>();
+// Mesma ideia para o modo de raciocínio: prova que a escolha da obra atravessa
+// job → bloco → provedor sem gastar chamada real.
+const thinkingRecebido = new Map<string, string | undefined>();
 
 /** Somente para testes: zera o cache simulado e as temperaturas entre casos. */
 export function _zerarCacheMock(): void {
   prefixosVistos.clear();
   temperaturasRecebidas.clear();
+  thinkingRecebido.clear();
 }
 
 /** Somente para testes: temperatura da última chamada daquele papel
  * (`undefined` = o papel não chamou, ou chamou sem temperatura definida). */
 export function _temperaturaMock(papel: string): number | undefined {
   return temperaturasRecebidas.get(papel);
+}
+
+/** Somente para testes: modo de raciocínio da última chamada daquele papel
+ * (`undefined` = a obra não escolheu e nada foi mandado ao provedor). */
+export function _thinkingMock(papel: string): string | undefined {
+  return thinkingRecebido.get(papel);
 }
 
 function hash(texto: string): string {
@@ -57,10 +67,11 @@ function hash(texto: string): string {
 
 function usoSimulado(
   papel: string,
-  req: { promptMae?: string; temperatura?: number },
+  req: { promptMae?: string; temperatura?: number; thinking?: string },
   resposta: unknown,
 ): UsoChamada {
   temperaturasRecebidas.set(papel, req.temperatura);
+  thinkingRecebido.set(papel, req.thinking);
   const sistema = estimarTokens(req.promptMae ?? '');
   // O resto da requisição (glossário, frases, cauda) é a parte que nunca cacheia.
   const usuario = Math.max(0, estimarTokens(JSON.stringify(req)) - sistema);

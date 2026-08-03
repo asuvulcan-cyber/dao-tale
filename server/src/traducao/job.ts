@@ -1,5 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { resolverTemperatura, type EventoTraducao, type ProgressoTraducao, type ProvedorId } from '@dao-tale/shared';
+import {
+  resolverTemperatura,
+  type EventoTraducao,
+  type ModoThinking,
+  type ProgressoTraducao,
+  type ProvedorId,
+} from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
@@ -185,6 +191,9 @@ export async function iniciarTraducao(
       // obra. Resolvida uma vez por job — todos os blocos do capítulo saem com a
       // mesma temperatura, mesmo que a configuração mude no meio.
       temperatura: resolverTemperatura(config.temperaturas, 'traducao', obra.temperatura),
+      // Raciocínio: escolha da obra, resolvida junto com a temperatura e fixa
+      // para o job inteiro pelo mesmo motivo.
+      thinking: obra.thinking ?? undefined,
       chave,
       promptMae: prompt.texto,
       config,
@@ -206,6 +215,7 @@ async function executarJob(
     provedorId: ProvedorId;
     modelo: string;
     temperatura: number;
+    thinking?: ModoThinking;
     chave: string | null;
     promptMae: string;
     config: ReturnType<typeof reposConfig.obterTodas>;
@@ -244,6 +254,7 @@ async function executarJob(
         titulo: tituloPendente ? (capitulo.titulo ?? undefined) : undefined,
         modelo: ctx.modelo,
         temperatura: ctx.temperatura,
+        thinking: ctx.thinking,
         promptMae: ctx.promptMae,
         tamanhoBloco,
         caudaContexto: ctx.config.cauda_contexto,

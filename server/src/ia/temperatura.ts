@@ -25,6 +25,12 @@ export function ehErroDeTemperatura(mensagem: string): boolean {
   return /temperature/i.test(mensagem);
 }
 
+/** O 400 reclamou de um parâmetro específico? Usado para reenviar a chamada sem
+ *  ele, quando o parâmetro é otimização e não requisito. */
+export function ehErroDeParametro(mensagem: string, parametro: string): boolean {
+  return new RegExp(parametro.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(mensagem);
+}
+
 /** Temperatura a enviar, já dentro da faixa do provedor. `undefined` = não
     mandar o parâmetro (nenhuma temperatura definida ou modelo que não aceita). */
 export function temperaturaDoPedido(

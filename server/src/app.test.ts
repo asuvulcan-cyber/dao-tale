@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { abrirBanco, type BancoDados } from './db/index.js';
 import { criarApp } from './app.js';
-import { _temperaturaMock, _zerarCacheMock } from './ia/mock.js';
+import { _temperaturaMock, _thinkingMock, _zerarCacheMock } from './ia/mock.js';
 import type { Hono } from 'hono';
 
 // Teste de integração do fluxo completo da Fase 1, usando o provedor mock:
@@ -878,6 +878,19 @@ describe('fluxo completo com provedor mock', () => {
     await chamar('PUT', `/api/obras/${obra.id}`, { temperatura: 0.8 });
     await traduzir();
     expect(_temperaturaMock('traducao')).toBe(0.8);
+
+    // Raciocínio: sem escolha da obra nada é mandado (o padrão do provedor vale);
+    // escolhido, atravessa job → bloco → provedor. Medido na 死人经: com thinking
+    // ligado, 86% dos tokens de SAÍDA de um capítulo eram raciocínio.
+    expect(_thinkingMock('traducao')).toBeUndefined();
+    await chamar('PUT', `/api/obras/${obra.id}`, { thinking: 'desligado' });
+    await traduzir();
+    expect(_thinkingMock('traducao')).toBe('desligado');
+    await chamar('PUT', `/api/obras/${obra.id}`, { thinking: null });
+    await traduzir();
+    expect(_thinkingMock('traducao')).toBeUndefined();
+    const modoRuim = await chamar('PUT', `/api/obras/${obra.id}`, { thinking: 'talvez' });
+    expect(modoRuim.status).toBe(400);
 
     const frases = (await json(await chamar('GET', `/api/capitulos/${criado.capitulo.id}`))).frases;
     await chamar('POST', `/api/frases/${frases[0].id}/revisar`, { pergunta: 'Está certo?', provedor: 'mock' });

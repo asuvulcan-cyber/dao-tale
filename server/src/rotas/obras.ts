@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   FASES_TRADUCAO,
   PROVEDORES_IDS,
+  MODOS_THINKING,
   TEMPERATURA_MAX,
   normalizarPreferencias,
   resolverTemperatura,
@@ -54,6 +55,8 @@ const atualizarObraSchema = z.object({
   modelo_padrao: z.string().nullable().optional(),
   // Override de amostragem da obra (doc 08 §13); null = padrão do papel.
   temperatura: z.number().min(0).max(TEMPERATURA_MAX).nullable().optional(),
+  // Raciocínio do provedor nesta obra; null = o padrão dele.
+  thinking: z.enum(MODOS_THINKING).nullable().optional(),
 });
 
 const MIMES_CAPA = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);

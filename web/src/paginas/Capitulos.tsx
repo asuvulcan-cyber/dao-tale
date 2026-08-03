@@ -762,9 +762,12 @@ function PreferenciasObra() {
   const [modelo, setModelo] = useState<string | null>(null);
   // Texto, não número: vazio é um estado legítimo (= herdar o padrão do papel).
   const [temperatura, setTemperatura] = useState<string | null>(null);
+  // '' = padrão do provedor; 'ligado'/'desligado' = escolha explícita da obra.
+  const [thinking, setThinking] = useState<string | null>(null);
   const provedorAtual = provedor ?? obra?.provedor_padrao ?? '';
   const modeloAtual = modelo ?? obra?.modelo_padrao ?? '';
   const temperaturaAtual = temperatura ?? (obra?.temperatura != null ? String(obra.temperatura) : '');
+  const thinkingAtual = thinking ?? obra?.thinking ?? '';
 
   const salvar = useMutation({
     mutationFn: () =>
@@ -772,6 +775,7 @@ function PreferenciasObra() {
         provedor_padrao: provedorAtual || null,
         modelo_padrao: modeloAtual || null,
         temperatura: temperaturaAtual.trim() === '' ? null : Number(temperaturaAtual),
+        thinking: thinkingAtual === '' ? null : thinkingAtual,
       }),
     onSuccess: () => {
       clienteQuery.invalidateQueries({ queryKey: ['obra', obraId] });
@@ -820,7 +824,7 @@ function PreferenciasObra() {
       {/* Recolhido de propósito: os padrões por papel (Configurações) são a
           estrela — este campo existe para a obra que precisa fugir deles. */}
       <details className="mt-3">
-        <summary className="cursor-pointer text-sm text-tinta-2">Avançado: temperatura desta obra</summary>
+        <summary className="cursor-pointer text-sm text-tinta-2">Avançado: temperatura e raciocínio desta obra</summary>
         <div className="mt-2 flex flex-wrap items-start gap-3">
           <label className="block w-40 text-sm">
             Temperatura
@@ -840,6 +844,27 @@ function PreferenciasObra() {
             para <strong>todas</strong> as chamadas desta obra — tradução, revisão, QA, glossário, contracapa.{' '}
             <strong>Subir troca consistência por variação:</strong> a mesma frase passa a sair diferente a cada
             tentativa. Só mexa se esta obra realmente pedir outra coisa.
+          </p>
+        </div>
+        <div className="mt-3 flex flex-wrap items-start gap-3">
+          <label className="block w-40 text-sm">
+            Raciocínio (thinking)
+            <select
+              value={thinkingAtual}
+              onChange={(e) => setThinking(e.target.value)}
+              className="entrada mt-1 w-full"
+            >
+              <option value="">Padrão do provedor</option>
+              <option value="desligado">Desligado (economiza)</option>
+              <option value="ligado">Ligado</option>
+            </select>
+          </label>
+          <p className="max-w-[52ch] text-xs text-tinta-2">
+            Modelos de raciocínio "pensam" antes de responder, e esse pensamento é{' '}
+            <strong>cobrado como saída</strong> — que é ~99% da conta. Medido nesta obra com o deepseek-v4-flash:{' '}
+            <strong>86% dos tokens de saída de um capítulo eram raciocínio</strong>, e ele respondeu por quase todo o
+            custo e pelos dez minutos de espera. Tradução é tarefa direta;{' '}
+            <strong>desligar costuma valer a pena</strong>. Deixe no padrão se quiser comparar antes.
           </p>
         </div>
       </details>

@@ -38,6 +38,12 @@ export type Veredito = 'correto' | 'incorreto';
 export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-nova-necessaria';
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
 
+/** Raciocínio prolongado do provedor: 'desligado' economiza saída (que é quase
+ * toda a conta) e tempo; 'ligado' força mesmo onde o padrão do app economizaria.
+ * Ausente/null = não mandar nada e ficar com o padrão do provedor. */
+export type ModoThinking = 'ligado' | 'desligado';
+export const MODOS_THINKING = ['ligado', 'desligado'] as const;
+
 export interface Obra {
   id: number;
   titulo: string;
@@ -53,6 +59,10 @@ export interface Obra {
   /** Override de temperatura desta obra (doc 08 §13); null = padrão do papel,
    * vindo das Configurações. Vale para todos os papéis da obra. */
   temperatura: number | null;
+  /** Modo de raciocínio do provedor nesta obra; null = o padrão dele.
+   * Medido: com thinking ligado, 86% dos tokens de saída de um capítulo eram
+   * raciocínio — e saída é ~99% da conta. */
+  thinking: ModoThinking | null;
   fase_traducao: FaseTraducao;
   criado_em: string;
   atualizado_em: string;
