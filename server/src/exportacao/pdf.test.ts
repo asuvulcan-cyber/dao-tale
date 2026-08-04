@@ -133,6 +133,33 @@ describe('montarHtmlImpressao', () => {
     expect([...new Set(usados)].filter((t) => !declarados.has(t))).toEqual([]);
   });
 
+  it('não deixa crase entrar no CSS/JS embutidos — quebra o template literal', () => {
+    // Aconteceu três vezes ao editar este arquivo: uma crase num comentário
+    // dentro do template fecha a string e o módulo para de compilar. O teste
+    // não impede o erro, mas o denuncia junto do resto em vez de só no tsc.
+    const html = montarHtmlImpressao({ obra, capitulos });
+    const entreStyle = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    const entreScript = html.slice(html.indexOf('window.PagedConfig'), html.indexOf('Paged.js v'));
+    expect(entreStyle).not.toContain('`');
+    expect(entreScript).not.toContain('`');
+  });
+
+  it('tira o aviso do documento antes de paginar e o devolve depois', () => {
+    const html = montarHtmlImpressao({ obra, capitulos });
+    // Passar `content` como elemento NÃO serve: o Paged.js deixa o original no
+    // DOM, o conteúdo aparece duas vezes e o texto sai cortado nas margens.
+    expect(html).not.toContain("content: document.getElementById");
+    expect(html).toContain('before: function');
+    expect(html).toContain('avisoGuardado.remove()');
+    expect(html).toContain('insertBefore(avisoGuardado');
+  });
+
+  it('não põe página nomeada no h1: isso separa o título do texto', () => {
+    const html = montarHtmlImpressao({ obra, capitulos });
+    expect(html).not.toContain('page: capitulo-abertura');
+    expect(html).toContain('break-after: avoid');
+  });
+
   it('recusa livro sem capítulo em vez de gerar arquivo vazio', () => {
     expect(() => montarHtmlImpressao({ obra, capitulos: [] })).toThrow();
   });

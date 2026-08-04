@@ -3,6 +3,7 @@ import type { BancoDados } from '../db/index.js';
 import { coletarConteudo, lerEscopo, nomeArquivo, type ConteudoExportacao } from '../exportacao/escopo.js';
 import { montarEpub } from '../exportacao/epub.js';
 import { montarHtmlImpressao } from '../exportacao/pdf.js';
+import { gerarPdf, SemNavegador } from '../exportacao/pdfNavegador.js';
 import { montarMarkdown } from '../exportacao/markdown.js';
 
 // Exportação da obra inteira como livro (doc 12 §5). Duas rotas GET, só leitura,
@@ -80,6 +81,30 @@ export function rotasExportacao(db: BancoDados): Hono {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Disposition': `inline; filename="${nome}"`,
     });
+  });
+
+  // PDF pronto: o servidor renderiza o HTML paginado num navegador headless e
+  // devolve o arquivo. Precisa de um Chromium na máquina — sem ele, a rota diz
+  // como usar o caminho do HTML, que não depende de nada.
+  app.get('/obras/:id/pdf', async (c) => {
+    const pronto = preparar(c);
+    if (!pronto.ok) return pronto.resposta;
+    const { conteudo } = pronto;
+
+    try {
+      const pdf = await gerarPdf(montarHtmlImpressao(conteudo), { fundo: c.req.query('fundo') === '1' });
+      const nome = nomeArquivo(conteudo.obra, conteudo.capitulos, 'pdf');
+      return c.body(new Uint8Array(pdf), 200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${nome}"`,
+        'Content-Length': String(pdf.length),
+      });
+    } catch (e) {
+      if (e instanceof SemNavegador) {
+        return c.json({ erro: { codigo: 'sem-navegador', mensagem: e.message } }, 503);
+      }
+      return c.json({ erro: { codigo: 'pdf', mensagem: `Falha ao gerar o PDF: ${(e as Error).message}` } }, 500);
+    }
   });
 
   return app;

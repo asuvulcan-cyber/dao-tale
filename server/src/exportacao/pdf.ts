@@ -56,13 +56,6 @@ function cssPaginado(obra: ObraEpub): string {
   }
 }
 
-/* Página de abertura de capítulo não leva título corrente nem número: é a
-   convenção do livro impresso. */
-@page capitulo-abertura {
-  @top-center { content: none; }
-  @bottom-center { content: counter(page); }
-}
-
 @page :left {
   @top-center {
     content: "${titulo}";
@@ -83,17 +76,23 @@ function cssPaginado(obra: ObraEpub): string {
   }
 }
 
-/* Capa e rosto sem nada em volta. */
-@page sem-ornamento {
+/* A primeira folha (capa, ou o rosto quando não há capa) não leva número nem
+   título corrente. O seletor :first evita página nomeada, que forçava quebra e
+   deixava folha em branco antes do rosto. */
+@page :first {
   @top-center { content: none; }
   @bottom-center { content: none; }
 }
-.capa, .rosto { page: sem-ornamento; }
 
 body {
   font-size: 10.5pt;
   line-height: 1.5;
-  /* Justificado com hifenização: sem hífen, o justificado abre buracos. */
+}
+
+/* Justificado com hifenização SÓ na prosa do capítulo. No rosto e no sumário
+   ele estica linha curta de ponta a ponta — o nome do autor saía com metade em
+   cada margem: "Cold        Glamor". */
+.capitulo p, .capitulo .zh {
   text-align: justify;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -101,27 +100,37 @@ body {
 
 p { orphans: 2; widows: 2; }
 
+/* A quebra pertence à SEÇÃO, não ao título. Com break-before no h1, a página
+   nomeada do rosto e o avoid brigavam, e o título da obra sumia da folha. */
+.rosto, .sumario, .capitulo, #glossario { break-before: page; }
+.capa { break-before: auto; }
+
+/* Capítulo começa em página nova, e o texto segue LOGO ABAIXO do título. Não
+   use a propriedade page aqui: página nomeada no h1 obriga uma quebra depois
+   dele, e cada
+   capítulo desperdiçava uma folha inteira só com o cabeçalho — o sumário saía
+   com o título numa página e os itens na seguinte. */
 h1 {
   string-set: capitulo-corrente content(text);
-  page: capitulo-abertura;
-  break-before: page;
+  break-after: avoid;
   margin-top: 6mm;
 }
-/* O primeiro h1 do livro não força página nova (já está numa). */
-.capa + .rosto h1, .rosto h1 { break-before: avoid; }
 
 .capa { text-align: center; }
 .capa img { max-width: 100%; max-height: 92vh; }
 
-/* Sumário com linha de condução até o número da página. */
+/* Sumário: título à esquerda, número da página à direita.
+   Sem leader('.'): o Paged.js não implementa essa função e a declaração
+   inteira era descartada, deixando o sumário SEM número nenhum. */
 .sumario ol { list-style: none; padding: 0; }
-.sumario li { margin: 0 0 0.35em; }
+.sumario li { margin: 0 0 0.45em; overflow: hidden; }
 .sumario a { text-decoration: none; color: inherit; }
 .sumario a::after {
-  content: leader('.') target-counter(attr(href), page);
+  content: target-counter(attr(href), page);
   color: var(--cor-tinta-2);
+  float: right;
+  padding-left: 0.6em;
 }
-.sumario h1 { break-before: avoid; }
 
 /* Glossário: duas colunas aproveitam melhor a página de consulta. */
 .glossario { columns: 2; column-gap: 8mm; }
@@ -152,7 +161,7 @@ function capituloHtml(cap: CapituloEpub): string {
     .map((p) => `<p>${paragrafoXhtml(p.pt)}</p>`)
     .join('\n');
   const original = cap.titulo && cap.titulo_pt ? `<p class="zh">${escaparTexto(cap.titulo)}</p>\n` : '';
-  return `<section id="cap-${cap.numero}">
+  return `<section class="capitulo" id="cap-${cap.numero}">
 <h1>${escaparTexto(cabecalho)}</h1>
 <div class="ornamento"></div>
 ${original}${paragrafos}
@@ -220,6 +229,7 @@ ${cssPaginado(obra)}
 <p id="estado"><strong>Paginando o livro…</strong> Não imprima ainda — a numeração e os títulos
 correntes são calculados agora, e imprimir no meio sai incompleto.</p>
 </div>
+<div id="livro">
 ${capa}
 <section class="rosto">
 <h1>${escaparTexto(obra.titulo)}</h1>
@@ -236,31 +246,45 @@ ${itemGlossario}
 </nav>
 ${capitulos.map(capituloHtml).join('\n')}
 ${glossarioHtml(glossario)}
+</div>
 <script>
 // PagedConfig.after é o gancho documentado do Paged.js: roda quando TODAS as
 // páginas terminaram de fluir. Sem um sinal visível, o usuário imprime no meio
 // da paginação e leva um PDF truncado — foi o que aconteceu no primeiro teste
 // desta funcionalidade, com 2 páginas no lugar de 17.
+var avisoGuardado = null;
+var tituloOriginal = document.title;
+document.title = 'Paginando\u2026 \u2014 ' + tituloOriginal;
 window.PagedConfig = {
   // OBRIGATÓRIO. O Paged.js faz window.PagedConfig || {auto:true,...}: se o
   // objeto existe, o padrão inteiro é descartado, e sem auto a paginação
   // simplesmente não roda. Omitir isto entrega um livro de 2 páginas em branco.
   auto: true,
-  after: () => {
-    const paginas = document.querySelectorAll('.pagedjs_page').length;
-    const estado = document.getElementById('estado');
-    if (estado) {
-      estado.innerHTML =
-        '<strong>Pronto — ' + paginas + ' páginas.</strong> Agora use <strong>Ctrl+P</strong> → destino ' +
-        '<strong>Salvar como PDF</strong>. Nas opções, deixe “Margens: padrão” e <strong>desmarque</strong> ' +
-        '“Cabeçalhos e rodapés” (a numeração e os títulos correntes já estão na página). ' +
-        'Este aviso não sai no papel.';
-    }
-    document.getElementById('aviso')?.setAttribute('data-pronto', '1');
-    document.title = document.title + ' — ' + paginas + ' páginas';
+  // O aviso sai do documento ANTES de paginar e volta depois. Dentro do fluxo
+  // ele virava a primeira página e, como some na impressão, sobrava folha em
+  // branco. Passar content como elemento não serve: o Paged.js deixa o
+  // original no DOM, o conteúdo aparece duas vezes e o texto sai cortado.
+  before: function () {
+    avisoGuardado = document.getElementById('aviso');
+    if (avisoGuardado) avisoGuardado.remove();
   },
-};
-</script>
+  after: function () {
+    var paginas = document.querySelectorAll('.pagedjs_page').length;
+    if (avisoGuardado) {
+      var estado = avisoGuardado.querySelector('#estado');
+      if (estado) {
+        estado.innerHTML =
+          '<strong>Pronto \u2014 ' + paginas + ' p\u00e1ginas.</strong> Use <strong>Ctrl+P</strong> \u2192 ' +
+          'destino <strong>Salvar como PDF</strong>, com \u201cMargens: padr\u00e3o\u201d e <strong>sem</strong> ' +
+          '\u201cCabe\u00e7alhos e rodap\u00e9s\u201d. Ou use o bot\u00e3o <strong>Baixar .pdf</strong> na tela de ' +
+          'exporta\u00e7\u00e3o, que faz isso sozinho. Este aviso n\u00e3o sai no papel.';
+      }
+      avisoGuardado.setAttribute('data-pronto', '1');
+      document.body.insertBefore(avisoGuardado, document.body.firstChild);
+    }
+    document.title = tituloOriginal + ' \u2014 ' + paginas + ' p\u00e1ginas';
+  },
+};</script>
 <script>${pagedjs()}</script>
 </body>
 </html>

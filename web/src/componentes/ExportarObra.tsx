@@ -6,7 +6,7 @@ import {
   type CapituloResumo,
   type EscopoExportacao,
 } from '@dao-tale/shared';
-import { Botao } from '../App';
+import { Aviso, Botao } from '../App';
 
 // Painel de exportação da obra inteira (doc 12 §5). A contagem usa
 // filtrarPorEscopo — a MESMA função que o servidor aplica — então o que o painel
@@ -20,7 +20,7 @@ const FORMATOS: { id: Formato; rotulo: string; explicacao: string }[] = [
     id: 'pdf',
     rotulo: 'PDF',
     explicacao:
-      'Abre o livro já paginado (A5, numeração e títulos correntes) numa aba nova; salve em PDF com Ctrl+P. A paginação leva alguns segundos em obras longas.',
+      'Livro paginado em A5, com capa, sumário numerado, títulos correntes e número de página. O servidor monta o arquivo; em obras longas leva alguns segundos.',
   },
   { id: 'md', rotulo: 'Markdown', explicacao: 'Obra inteira em um .md, só o português.' },
   { id: 'md-bilingue', rotulo: 'Markdown bilíngue', explicacao: 'Cada parágrafo em chinês e português.' },
@@ -30,6 +30,8 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
   const [formato, setFormato] = useState<Formato>('epub');
   const [todosStatus, setTodosStatus] = useState(false);
   const [comGlossario, setComGlossario] = useState(true);
+  const [gerando, setGerando] = useState(false);
+  const [erroPdf, setErroPdf] = useState<string | null>(null);
   const [de, setDe] = useState('');
   const [ate, setAte] = useState('');
 
@@ -49,8 +51,30 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
   if (escopo.ate !== undefined) consulta.set('ate', String(escopo.ate));
   if (formato === 'md-bilingue') consulta.set('formato', 'bilingue');
   if (!comGlossario) consulta.set('glossario', '0');
-  const rota = formato === 'epub' ? 'epub' : formato === 'pdf' ? 'livro-html' : 'markdown';
+  const rota = formato === 'epub' ? 'epub' : formato === 'pdf' ? 'pdf' : 'markdown';
   const url = `/api/obras/${obraId}/${rota}?${consulta.toString()}`;
+
+  async function baixarPdf() {
+    setGerando(true);
+    setErroPdf(null);
+    try {
+      const resposta = await fetch(url);
+      if (!resposta.ok) {
+        const corpo = (await resposta.json().catch(() => null)) as { erro?: { mensagem?: string } } | null;
+        throw new Error(corpo?.erro?.mensagem ?? `Erro ${resposta.status}`);
+      }
+      const blob = await resposta.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${obraId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (e) {
+      setErroPdf((e as Error).message);
+    } finally {
+      setGerando(false);
+    }
+  }
 
   const faixa =
     selecionados.length === 0
@@ -122,13 +146,17 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {selecionados.length > 0 ? (
           // download deixa o navegador salvar o arquivo sem trocar de página.
-          <a
-            href={url}
-            {...(formato === 'pdf' ? { target: '_blank', rel: 'noreferrer' } : { download: true })}
-            className="rounded bg-acao px-3 py-1.5 text-sm font-medium text-papel-alto hover:bg-acao-forte"
-          >
-            {formato === 'pdf' ? 'Abrir para imprimir' : `Baixar ${formato === 'epub' ? '.epub' : '.md'}`}
-          </a>
+          formato === 'pdf' ? (
+            // PDF passa por fetch para o erro virar mensagem na tela: com <a
+            // download>, uma falha do servidor baixaria um arquivo JSON.
+            <Botao onClick={() => void baixarPdf()} disabled={gerando}>
+              {gerando ? 'Montando o livro…' : 'Baixar .pdf'}
+            </Botao>
+          ) : (
+            <a href={url} download className="rounded bg-acao px-3 py-1.5 text-sm font-medium text-papel-alto hover:bg-acao-forte">
+              Baixar {formato === 'epub' ? '.epub' : '.md'}
+            </a>
+          )
         ) : (
           <Botao disabled>Baixar</Botao>
         )}
@@ -140,6 +168,15 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
               : `${selecionados.length} capítulo${selecionados.length === 1 ? '' : 's'} · ${faixa}`}
         </span>
       </div>
+      {erroPdf && (
+        <Aviso tipo="erro">
+          {erroPdf}{' '}
+          <a className="underline" href={`/api/obras/${obraId}/livro-html?${consulta.toString()}`} target="_blank" rel="noreferrer">
+            Abrir a versão para imprimir
+          </a>{' '}
+          e salvar com Ctrl+P resolve sem depender do servidor.
+        </Aviso>
+      )}
     </div>
   );
 }
