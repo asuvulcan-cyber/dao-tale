@@ -122,6 +122,50 @@ describe('composição com preferências', () => {
   });
 });
 
+describe('nomes próprios (sentido vs som)', () => {
+  // O critério não é gosto: 中原 é 中(centro)+原(planície) e os caracteres
+  // DESCREVEM o lugar; 疏勒 é transcrição fonética de Kashgar e os caracteres
+  // foram escolhidos pelo som. "Planícies Centrais" e "Shule" na mesma obra são
+  // a mesma regra aplicada duas vezes, não incoerência.
+  it('mesclar é o padrão e ensina o eixo com os dois casos', () => {
+    expect(PREFERENCIAS_PADRAO.nomes_proprios).toBe('mesclar');
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).toContain('中原');
+    expect(texto).toContain('疏勒');
+    expect(texto).toContain('Planícies Centrais');
+    expect(texto).toContain('Shule');
+  });
+
+  it('mesclar cobre as nuances que o eixo sozinho não resolve', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).toContain('Gu Shenwei'); // pessoa: pinyin mesmo tendo sentido
+    expect(texto).toContain('Fortaleza do Peng Dourado'); // híbrido com classificador
+    expect(texto).toContain('jianghu'); // termo de gênero consagrado
+  });
+
+  it('pessoa fica em pinyin nos três modos — em português não se traduz nome de gente', () => {
+    for (const modo of ['mesclar', 'traduzir', 'pinyin'] as const) {
+      const texto = renderizarPreferencias(com({ nomes_proprios: modo }));
+      expect(texto.toLowerCase()).toMatch(/pessoa|nome de (gente|pessoa)/);
+    }
+  });
+
+  it('modo pinyin preserva título e cargo traduzidos', () => {
+    const texto = renderizarPreferencias(com({ nomes_proprios: 'pinyin' }));
+    expect(texto).toContain('Zhongyuan');
+    expect(texto).toContain('título e cargo');
+  });
+
+  it('modo traduzir não manda inventar sentido em transcrição fonética', () => {
+    const texto = renderizarPreferencias(com({ nomes_proprios: 'traduzir' }));
+    expect(texto).toContain('Não invente significado');
+  });
+
+  it('valor desconhecido cai no padrão, como as outras chaves', () => {
+    expect(normalizarPreferencias('{"nomes_proprios":"chute"}').nomes_proprios).toBe('mesclar');
+  });
+});
+
 describe('descreverMudancas', () => {
   it('resume só o que mudou, para virar nota de versão', () => {
     expect(descreverMudancas(PREFERENCIAS_PADRAO, PREFERENCIAS_PADRAO)).toEqual([]);

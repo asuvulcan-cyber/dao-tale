@@ -334,13 +334,15 @@ function PainelPreferencias({
   const definir = (chave: keyof PreferenciasEstilo, valor: string) =>
     setPrefs((p) => ({ ...p, [chave]: valor }) as PreferenciasEstilo);
 
-  const chavesBinarias: (keyof PreferenciasEstilo)[] = [
+  // Chaves de lista fechada (o registro é o único com opção de texto livre).
+  const chavesSimples: (keyof PreferenciasEstilo)[] = [
     'dialogo',
     'pensamento_marca',
     'pensamento_tempo',
     'mais_que_perfeito',
     'notas_tradutor',
     'onomatopeia',
+    'nomes_proprios',
   ];
 
   return (
@@ -364,7 +366,7 @@ function PainelPreferencias({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {chavesBinarias.map((chave) => (
+          {chavesSimples.map((chave) => (
             <label key={chave} className="block text-sm">
               {ROTULOS_PREFERENCIAS[chave].titulo}
               <select
@@ -379,6 +381,16 @@ function PainelPreferencias({
                   </option>
                 ))}
               </select>
+              {chave === 'nomes_proprios' && (
+                <span className="mt-1 block text-xs text-tinta-2">
+                  {prefs.nomes_proprios === 'mesclar' &&
+                    'Decide por sentido ou som: 中原 → “Planícies Centrais” (os caracteres descrevem o lugar), 疏勒 → “Shule” (é transcrição de Kashgar, não há sentido a traduzir). Pessoa fica sempre em pinyin.'}
+                  {prefs.nomes_proprios === 'traduzir' &&
+                    'Tudo que tiver sentido vai para o português. Nome de pessoa continua em pinyin, e transcrição fonética não vira significado inventado.'}
+                  {prefs.nomes_proprios === 'pinyin' &&
+                    'Tudo transliterado (Zhongyuan, Beiting, Shule). Título e cargo continuam traduzidos — em pinyin ficariam ilegíveis na frase.'}
+                </span>
+              )}
             </label>
           ))}
 

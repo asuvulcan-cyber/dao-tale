@@ -104,6 +104,7 @@ const criarPromptSchema = z.object({
       mais_que_perfeito: z.enum(['evitar', 'permitir']).optional(),
       notas_tradutor: z.enum(['permitir', 'proibir']).optional(),
       onomatopeia: z.enum(['adaptar', 'manter']).optional(),
+      nomes_proprios: z.enum(['mesclar', 'traduzir', 'pinyin']).optional(),
       registro: z.string().trim().min(1).max(200).optional(),
     })
     .optional(),

@@ -30,6 +30,7 @@ export type TempoPensamento = 'presente' | 'original';
 export type PoliticaMaisQuePerfeito = 'evitar' | 'permitir';
 export type PoliticaNotas = 'permitir' | 'proibir';
 export type PoliticaOnomatopeia = 'adaptar' | 'manter';
+export type PoliticaNomes = 'mesclar' | 'traduzir' | 'pinyin';
 
 export interface PreferenciasEstilo {
   /** Aspas duplas (padrão editorial do app) ou travessão. */
@@ -44,6 +45,9 @@ export interface PreferenciasEstilo {
   notas_tradutor: PoliticaNotas;
   /** Onomatopeia adaptada ao PT-BR ou mantida em pinyin. */
   onomatopeia: PoliticaOnomatopeia;
+  /** Nome próprio: traduzir por sentido, transliterar, ou decidir caso a caso
+   *  pelo critério sentido/som (o padrão, e o único que serve a wuxia). */
+  nomes_proprios: PoliticaNomes;
   /** Chave de REGISTROS_PREDEFINIDOS ou texto livre descrevendo o público-alvo. */
   registro: string;
 }
@@ -66,6 +70,7 @@ export const PREFERENCIAS_PADRAO: PreferenciasEstilo = {
   mais_que_perfeito: 'evitar',
   notas_tradutor: 'permitir',
   onomatopeia: 'adaptar',
+  nomes_proprios: 'mesclar',
   registro: 'jovem-adulto',
 };
 
@@ -76,6 +81,7 @@ const OPCOES = {
   mais_que_perfeito: ['evitar', 'permitir'],
   notas_tradutor: ['permitir', 'proibir'],
   onomatopeia: ['adaptar', 'manter'],
+  nomes_proprios: ['mesclar', 'traduzir', 'pinyin'],
 } as const;
 
 /** JSON guardado no banco (ou vindo de um export antigo) → preferências completas.
@@ -172,6 +178,43 @@ const ONOMATOPEIA: Record<PoliticaOnomatopeia, string> = {
     '**Onomatopeias:** mantenha o som do original transliterado em pinyin sem marcas de tom (*Peng!*, *Hong!*), em itálico, isoladas, sem aspas — não substitua por equivalente brasileiro.',
 };
 
+// Nome próprio: o eixo é SENTIDO vs SOM, não gosto.
+//
+// 中原 é 中 (centro) + 原 (planície): os caracteres descrevem o lugar, e deixá-los
+// em pinyin tira do leitor uma informação que o original entrega de graça.
+// 疏勒 é transcrição fonética de Kashgar — 疏 ("esparso") e 勒 ("rédea") foram
+// escolhidos pelo SOM e não dizem nada sobre o lugar; traduzir inventaria um
+// sentido que o original não tem. Daí "Planícies Centrais" e "Shule" na mesma obra
+// não serem incoerência, e sim a mesma regra aplicada duas vezes.
+//
+// O modo `mesclar` é o padrão porque é o único que serve ao gênero — e é também o
+// mais difícil de escrever, porque a decisão não é só lexical: depende da
+// CATEGORIA (pessoa translitera-se mesmo tendo sentido pleno) e admite forma
+// HÍBRIDA dentro de um mesmo nome (金鹏堡 → "Fortaleza do Peng Dourado").
+const NOMES: Record<PoliticaNomes, string[]> = {
+  mesclar: [
+    '**Nomes próprios — decida por sentido ou som, nesta ordem:**',
+    '1. **Pessoa** (nome, apelido, forma curta): **sempre em pinyin**, sem tom — `顾慎为` → Gu Shenwei, `欢儿` → Huan\'er. Vale mesmo quando os caracteres têm sentido pleno: em português não se traduz nome de gente.',
+    '2. **Lugar, seita, obra citada, técnica, título e cargo:** pergunte se os caracteres DESCREVEM o referente ou se são só transcrição de som.',
+    '   - **Descrevem → traduza o sentido.** `中原` (centro + planície) → Planícies Centrais; `北庭` (norte + corte) → Corte do Norte; `独步王` → Rei Incomparável.',
+    '   - **São transcrição fonética de um nome estrangeiro → mantenha em pinyin.** `疏勒` (Kashgar) → Shule. Traduzir "esparso" e "rédea" inventaria sentido que o original não tem.',
+    '3. **Forma híbrida quando o nome tem classificador:** traduza o classificador e resolva o núcleo pela regra 2. `金鹏堡` → Fortaleza do Peng Dourado; `天山` → Montanhas Celestiais.',
+    '4. **Termo de gênero já consagrado em português fica como está:** `江湖` → jianghu, `qi`, `dao`. Não traduza nem explique dentro da prosa.',
+    '5. Na dúvida entre os dois, pergunte-se: um leitor chinês recebe uma imagem ao ler este nome? Se sim, traduza. Se o nome só soa, translitere.',
+  ],
+  traduzir: [
+    '**Nomes próprios — traduza tudo o que tiver sentido.** Lugares, seitas, técnicas, títulos e obras citadas vão para o português pelo significado dos caracteres, sem deixar pinyin: `中原` → Planícies Centrais, `江湖` → submundo das artes marciais.',
+    '- **Nome de pessoa continua em pinyin** — isto vale em qualquer modo, porque em português não se traduz nome de gente.',
+    '- Nome que é pura transcrição fonética (`疏勒` = Kashgar) não tem sentido a traduzir: use a forma consagrada em português, ou o pinyin se não houver. Não invente significado a partir dos caracteres.',
+  ],
+  pinyin: [
+    '**Nomes próprios — mantenha em pinyin**, sem marcas de tom: `中原` → Zhongyuan, `北庭` → Beiting, `疏勒` → Shule, `金鹏堡` → Jinpengbao.',
+    '- Vale para pessoa, lugar, seita, técnica e obra citada.',
+    '- **Exceção: título e cargo** (`独步王`, `杨师父`) traduzem-se, porque funcionam como substantivo comum na frase e em pinyin virariam ilegíveis.',
+    '- Não acrescente glosa nem explicação entre parênteses; o glossário do livro é que dá conta disso.',
+  ],
+};
+
 /** Título da seção que o núcleo reserva para as preferências (o delta é a 6). */
 export const TITULO_SECAO_PREFERENCIAS = '## 5. PREFERÊNCIAS DE ESTILO DESTA OBRA';
 
@@ -198,6 +241,8 @@ export function renderizarPreferencias(prefs: PreferenciasEstilo): string {
     NOTAS[prefs.notas_tradutor],
     '',
     ONOMATOPEIA[prefs.onomatopeia],
+    '',
+    ...NOMES[prefs.nomes_proprios],
   ].join('\n');
 }
 
@@ -209,6 +254,10 @@ export const ROTULOS_PREFERENCIAS: Record<keyof PreferenciasEstilo, { titulo: st
   mais_que_perfeito: { titulo: 'Mais-que-perfeito simples', opcoes: { evitar: 'evitar ("fizera")', permitir: 'permitir ("fizera")' } },
   notas_tradutor: { titulo: 'Notas do tradutor (( ))', opcoes: { permitir: 'permitir', proibir: 'proibir' } },
   onomatopeia: { titulo: 'Onomatopeias', opcoes: { adaptar: 'adaptar ao PT-BR', manter: 'manter em pinyin' } },
+  nomes_proprios: {
+    titulo: 'Nomes próprios',
+    opcoes: { mesclar: 'mesclar (sentido ou som)', traduzir: 'traduzir o que tem sentido', pinyin: 'manter em pinyin' },
+  },
   registro: {
     titulo: 'Registro / público-alvo',
     opcoes: { 'jovem-adulto': 'jovem adulto (30–40)', 'adulto-literario': 'adulto literário', juvenil: 'juvenil' },
