@@ -38,6 +38,26 @@ export type Veredito = 'correto' | 'incorreto';
 export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-nova-necessaria';
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
 
+/**
+ * A correção proposta parece ser só um PEDAÇO da frase, e não a frase inteira?
+ *
+ * O contrato manda a IA devolver "a frase COMPLETA corrigida", mas ela nem
+ * sempre obedece: numa frase de três orações, o modelo devolveu apenas a oração
+ * que consertou. Aplicar aquilo apagou as outras duas em silêncio — o pior tipo
+ * de perda, porque o texto que sobra continua bem formado e não parece um erro.
+ *
+ * Heurística deliberadamente frouxa: só acusa quando a proposta é bem menor que
+ * o texto atual E a diferença é grande o bastante para não ser aperto de estilo.
+ * Encurtar de verdade é legítimo (retirar redundância), então isto pede
+ * confirmação, nunca bloqueia.
+ */
+export function propostaPareceTrecho(textoAtual: string, proposta: string): boolean {
+  const atual = textoAtual.trim().length;
+  const nova = proposta.trim().length;
+  if (atual === 0) return false;
+  return nova < atual * 0.6 && atual - nova >= 40;
+}
+
 /** Raciocínio prolongado do provedor: 'desligado' economiza saída (que é quase
  * toda a conta) e tempo; 'ligado' força mesmo onde o padrão do app economizaria.
  * Ausente/null = não mandar nada e ficar com o padrão do provedor. */

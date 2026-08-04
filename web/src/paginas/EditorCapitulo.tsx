@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { propostaPareceTrecho } from '@dao-tale/shared';
 import type {
   ApontamentoQa,
   Capitulo,
@@ -1324,8 +1325,36 @@ function PainelRevisao({
             {resultado.revisao.correcao_proposta && (
               <div className="rounded border border-ocre/50 bg-ocre-tint p-2">
                 <p className="mb-2">{resultado.revisao.correcao_proposta}</p>
+                {/* A proposta SUBSTITUI a frase inteira. Quando ela é bem menor
+                    que o texto atual, quase sempre é a IA devolvendo só o trecho
+                    que consertou — aplicar apagaria o resto sem aviso. */}
+                {propostaPareceTrecho(frase.texto_pt, resultado.revisao.correcao_proposta) && (
+                  <p className="mb-2 rounded border border-erro/40 bg-papel-alto px-2 py-1 text-xs">
+                    <strong>Atenção:</strong> a proposta é bem mais curta que a frase atual (
+                    {resultado.revisao.correcao_proposta.trim().length} contra {frase.texto_pt.trim().length}{' '}
+                    caracteres). Ela pode ser só o trecho corrigido — e aplicar <strong>substitui a frase inteira</strong>,
+                    apagando o resto. Confira antes; se for o caso, edite a frase à mão em vez de aplicar.
+                  </p>
+                )}
                 {resultado.caso.status !== 'corrigido' ? (
-                  <Botao onClick={() => aplicarCorrecao.mutate()} disabled={aplicarCorrecao.isPending}>
+                  <Botao
+                    onClick={() => {
+                      const proposta = resultado.revisao.correcao_proposta!;
+                      if (
+                        propostaPareceTrecho(frase.texto_pt, proposta) &&
+                        !window.confirm(
+                          'A correção proposta é bem mais curta que a frase atual e pode ser só um trecho dela.\n\n' +
+                            'Aplicar SUBSTITUI a frase inteira:\n\n' +
+                            `ATUAL:\n${frase.texto_pt}\n\nFICARÁ:\n${proposta}\n\n` +
+                            'Aplicar mesmo assim?',
+                        )
+                      ) {
+                        return;
+                      }
+                      aplicarCorrecao.mutate();
+                    }}
+                    disabled={aplicarCorrecao.isPending}
+                  >
                     Aplicar correção
                   </Botao>
                 ) : (
