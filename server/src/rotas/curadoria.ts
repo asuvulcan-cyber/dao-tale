@@ -1,10 +1,22 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposFrases, reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
 
-// Categoria é texto livre (o usuário cria as suas); limitada só em tamanho.
-const categoriaSchema = z.string().trim().min(1).max(30);
+// A tabela `glossario` tem CHECK em `categoria`, então valor fora da lista vira
+// violação de constraint — 500 com "CHECK constraint failed" vazando SQL para a
+// tela. O tipo em shared descreve categoria como texto livre, mas o schema do
+// banco (e o <select> da tela) só aceitam estas seis: enquanto for assim, quem
+// recusa é a rota, com mensagem que diz o que fazer.
+const categoriaSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(30)
+  .refine((v) => (CATEGORIAS_GLOSSARIO as string[]).includes(v), {
+    message: `categoria deve ser uma de: ${CATEGORIAS_GLOSSARIO.join(', ')}`,
+  });
 
 const criarEntradaSchema = z.object({
   termo_zh: z.string().min(1),
