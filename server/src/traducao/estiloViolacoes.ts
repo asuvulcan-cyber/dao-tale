@@ -43,6 +43,8 @@ const NAO_VERBOS = new Set([
   'espera', 'prepara', 'separa', 'compara', 'repara', 'dispara', 'ampara', 'declara',
   'atira', 'retira', 'admira', 'aspira', 'respira', 'inspira', 'expira', 'suspira',
   'conspira', 'transpira', 'delira', 'gira', 'vira', 'mira', 'tira', 'para', 'hora',
+  // Conjunções e advérbios em -ora, que o {2,} passou a alcançar.
+  'embora', 'outrora', 'agora', 'doravante', 'penhora', 'demora', 'melhora', 'piora',
 ]);
 
 // {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então
