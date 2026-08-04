@@ -454,25 +454,20 @@ describe('fluxo completo com provedor mock', () => {
     );
     expect(importado).toEqual({ inseridos: 2, duplicados: 1, invalidos: 0 });
 
-    // A tabela tem CHECK em `categoria`: categoria fora da lista tem de ser
-    // recusada NA ROTA, com o motivo. Antes vazava um 500 com o texto do CHECK
-    // do SQLite direto na tela.
-    const invalida = await chamar('POST', `/api/obras/${obra.id}/glossario`, {
+    // Categoria é texto livre: a tela sempre teve "+ nova categoria…", mas um
+    // CHECK no banco derrubava a gravação com 500 e SQL na cara do usuário.
+    // 'objeto' é justamente o caso real (刀/剑/枪 num wuxia).
+    const nova = await chamar('POST', `/api/obras/${obra.id}/glossario`, {
       termo_zh: '刀',
       termo_pt: 'sabre',
       categoria: 'objeto',
     });
-    expect(invalida.status).toBe(400);
-    const corpo = await json(invalida);
-    expect(corpo.erro.codigo).toBe('payload-invalido');
-    expect(corpo.erro.mensagem).toContain('categoria');
-    // E as seis válidas continuam passando.
-    const valida = await chamar('POST', `/api/obras/${obra.id}/glossario`, {
-      termo_zh: '刀',
-      termo_pt: 'sabre',
-      categoria: 'outro',
-    });
-    expect(valida.status).toBe(201);
+    expect(nova.status).toBe(201);
+    expect((await json(nova)).categoria).toBe('objeto');
+
+    // E o filtro por categoria enxerga a categoria nova.
+    const filtrado = await json(await chamar('GET', `/api/obras/${obra.id}/glossario?categoria=objeto`));
+    expect(filtrado.map((e: any) => e.termo_zh)).toEqual(['刀']);
   });
 
   it('mesclar e dividir frases renumera e religa casos de teste', async () => {
