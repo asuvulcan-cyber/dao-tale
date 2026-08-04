@@ -37,9 +37,19 @@ const NAO_VERBOS = new Set([
   'mira', 'sobra', 'cobra', 'cabeceira', 'bandeira', 'inteira', 'cegueira', 'escora', 'demora',
   'aurora', 'melhora', 'senhora', 'lavoura', 'figura', 'criatura', 'espera', 'quimera', 'pantera',
   'caldeira', 'cadeira', 'barreira', 'canseira', 'maluqueira', 'brincadeira', 'companheira',
+  // Curtas que o {2,} passou a alcançar: presente de -arar/-erar/-irar e nomes.
+  'clara', 'chora', 'cora', 'aflora', 'ignora', 'adora', 'devora', 'implora', 'explora',
+  'amara', 'avara', 'seara', 'feira', 'meira', 'peira', 'ceara', 'apara', 'jarra',
+  'espera', 'prepara', 'separa', 'compara', 'repara', 'dispara', 'ampara', 'declara',
+  'atira', 'retira', 'admira', 'aspira', 'respira', 'inspira', 'expira', 'suspira',
+  'conspira', 'transpira', 'delira', 'gira', 'vira', 'mira', 'tira', 'para', 'hora',
 ]);
 
-const RE_MQP = /\b[a-zà-úâêôãõáéíóúç]{4,}(?:ara|era|ira|ora)\b/gi;
+// {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então
+// {4,} exigia palavra de 7 letras e deixava passar as de 6 — "achara" e "ouvira"
+// escaparam da varredura do capítulo 2 justamente assim. Falso positivo aqui é
+// barato (o relatório é conferido por gente); falso negativo é o que dói.
+const RE_MQP = /\b[a-zà-úâêôãõáéíóúç]{2,}(?:ara|era|ira|ora)\b/gi;
 
 /** Verbo no mais-que-perfeito simples ("fizera")? Heurística por sufixo, com
  *  lista de exceções — pensada para ACUSAR e ser conferida, não para corrigir. */

@@ -57,3 +57,23 @@ describe('analisarEstilo', () => {
     expect(r.por_terco[2]).toBe(10);
   });
 });
+
+describe('recall do mais-que-perfeito', () => {
+  it('pega as formas de 6 letras que o quantificador antigo deixava passar', () => {
+    // "achara" e "ouvira" escaparam da varredura real do capítulo 2: o {4,}
+    // exigia 4 caracteres ANTES do sufixo, ou seja, palavra de 7+ letras.
+    const r = analisarEstilo(frases(['Ele nunca achara isso.', 'Já ouvira falar dela.']), {
+      ...PREFERENCIAS_PADRAO,
+      mais_que_perfeito: 'evitar',
+    });
+    expect(r.violacoes.map((v) => v.trecho)).toEqual(['achara', 'ouvira']);
+  });
+
+  it('continua sem acusar as curtas que não são verbo', () => {
+    const r = analisarEstilo(
+      frases(['Para na hora, espera, prepara e admira a cadeira clara de madeira.']),
+      { ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'evitar' },
+    );
+    expect(r.violacoes).toEqual([]);
+  });
+});
