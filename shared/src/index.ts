@@ -38,6 +38,35 @@ export type Veredito = 'correto' | 'incorreto';
 export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-nova-necessaria';
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
 
+/**
+ * Rótulo de regra reduzido à sua identidade, para agrupar casos do banco de
+ * testes.
+ *
+ * O contrato pede um identificador "curto e estável", mas o modelo devolve uma
+ * variação nova a cada chamada: numa mesma obra apareceram "5-mais-que-perfeito",
+ * "5.mais-que-perfeito", "5.estilo-mais-que-perfeito" e "mais-que-perfeito" para
+ * a MESMA regra. Agrupando pelo texto cru, 7 ocorrências viravam 4 grupos e o
+ * limiar de 2 nunca disparava — o refinamento dizia "nada indica lacuna
+ * sistemática" justamente quando o padrão era gritante.
+ *
+ * Normaliza: minúsculas, sem acento, sem prefixo de numeração de seção, sem
+ * pontuação, e descarta as palavras de moldura que o modelo enfeita ("estilo",
+ * "regra", "secao") — o que sobra é o miolo que identifica a regra.
+ */
+export function normalizarSecaoRegra(rotulo: string): string {
+  const semAcento = rotulo
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  const palavras = semAcento
+    .replace(/^[\s\d.\-_]+/, '') // "5-", "3.2 ", "5." …
+    .split(/[\s.\-_/]+/)
+    .filter((p) => p.length > 0 && !/^\d+$/.test(p) && !MOLDURA_REGRA.has(p));
+  return palavras.sort().join('-');
+}
+
+const MOLDURA_REGRA = new Set(['estilo', 'regra', 'regras', 'secao', 'preferencia', 'preferencias', 'de', 'da', 'do']);
+
 /** Resultado de aplicar uma correção de revisão a uma frase. */
 export type ResultadoCorrecao =
   | { tipo: 'cirurgica'; texto: string }

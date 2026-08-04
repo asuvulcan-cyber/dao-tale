@@ -404,7 +404,9 @@ export function rotasObras(db: BancoDados): Hono {
     const casos = recorrencias.flatMap((r) =>
       reposTestes
         .listar(db, obraId, { secao_regra: r.secao_regra, limite: 5 })
-        .casos.filter((caso) => caso.status === 'pendente' || caso.status === 'regra-nova-necessaria')
+        // Mesmo conjunto de status que `recorrencias` conta: corrigido é o erro
+        // que o humano validou, e é o que mais ensina.
+        .casos.filter((caso) => caso.status !== 'confirmado')
         .map((caso) => ({
           secao_regra: r.secao_regra,
           trecho_zh: caso.trecho_zh,

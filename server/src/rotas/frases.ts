@@ -188,6 +188,7 @@ export function rotasFrases(db: BancoDados): Hono {
           texto_pt_original_ia: frase.texto_pt_original_ia,
         },
         pergunta: corpo.data.pergunta,
+        rotulosConhecidos: reposTestes.rotulosDeRegra(db, obra.id),
       });
       registrarEvento(db, {
         obra_id: obra.id,

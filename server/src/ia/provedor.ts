@@ -103,6 +103,10 @@ export interface RequisicaoRevisao {
   vizinhasDepois: { texto_zh: string; texto_pt: string }[];
   frase: { texto_zh: string; texto_pt: string; texto_pt_original_ia: string | null };
   pergunta: string;
+  /** Rótulos de `secao_regra` já usados nesta obra. Vão na mensagem do usuário
+   *  para o modelo REUSAR um em vez de inventar variação nova a cada chamada —
+   *  é o que permite agrupar casos recorrentes e detectar lacuna sistemática. */
+  rotulosConhecidos?: string[];
 }
 
 export interface RespostaRevisaoProvedor extends RespostaRevisao {

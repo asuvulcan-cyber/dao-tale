@@ -32,6 +32,7 @@ import type {
 import {
   CONFIG_PADRAO,
   aplicarCorrecao,
+  normalizarSecaoRegra,
   normalizarPreferencias,
   normalizarTemperaturas,
   temperaturaValida,
@@ -1028,15 +1029,62 @@ export const reposTestes = {
     })();
   },
 
-  /** Casos não-confirmados agregados por seção/regra — alimenta o alerta de recorrência. */
+  /**
+   * Erros recorrentes agrupados por regra — alimenta o refinamento do prompt.
+   *
+   * Conta `corrigido` junto com `pendente` e `regra-nova-necessaria`. Corrigido é
+   * a evidência MAIS forte que existe: o revisor apontou o erro e o humano
+   * concordou a ponto de aplicar. Pendente é o oposto — pode ser falso positivo
+   * que ninguém julgou ainda. Excluir corrigido deixava a função cega justamente
+   * para os erros confirmados, e como o fluxo normal é corrigir direto do editor,
+   * na prática quase nada sobrava para contar. Só `confirmado` fica de fora, e
+   * esse é o único em que a IA disse que estava tudo certo.
+   *
+   * O agrupamento normaliza o rótulo (ver `normalizarSecaoRegra`): o modelo devolve
+   * "5-mais-que-perfeito", "5.mais-que-perfeito" e "mais-que-perfeito" para a mesma
+   * regra, e agrupar pelo texto cru fragmentava 7 ocorrências em 4 grupos que nunca
+   * batiam no limiar de 2.
+   */
   recorrencias(db: BancoDados, obraId: number): { secao_regra: string; casos: number }[] {
-    return db
+    const linhas = db
       .prepare(
-        `SELECT secao_regra, COUNT(*) AS casos FROM banco_testes
-         WHERE obra_id = ? AND status IN ('pendente','regra-nova-necessaria') AND secao_regra IS NOT NULL
-         GROUP BY secao_regra HAVING COUNT(*) >= 2 ORDER BY casos DESC`,
+        `SELECT secao_regra FROM banco_testes
+         WHERE obra_id = ? AND status IN ('pendente','regra-nova-necessaria','corrigido') AND secao_regra IS NOT NULL`,
       )
-      .all(obraId) as { secao_regra: string; casos: number }[];
+      .all(obraId) as { secao_regra: string }[];
+
+    // Agrupa pelo rótulo normalizado, mas devolve o rótulo ORIGINAL mais comum:
+    // é o que o usuário vê na tela e o que a busca por secao_regra encontra.
+    const grupos = new Map<string, { casos: number; rotulos: Map<string, number> }>();
+    for (const { secao_regra } of linhas) {
+      const chave = normalizarSecaoRegra(secao_regra);
+      if (!chave) continue;
+      const g = grupos.get(chave) ?? { casos: 0, rotulos: new Map() };
+      g.casos += 1;
+      g.rotulos.set(secao_regra, (g.rotulos.get(secao_regra) ?? 0) + 1);
+      grupos.set(chave, g);
+    }
+
+    return [...grupos.values()]
+      .filter((g) => g.casos >= 2)
+      .map((g) => ({
+        secao_regra: [...g.rotulos.entries()].sort((a, b) => b[1] - a[1])[0][0],
+        casos: g.casos,
+      }))
+      .sort((a, b) => b.casos - a.casos);
+  },
+
+  /** Todos os rótulos de regra já usados nesta obra, do mais frequente ao menos.
+   *  Vai no prompt de refinamento para o modelo REUSAR em vez de inventar. */
+  rotulosDeRegra(db: BancoDados, obraId: number): string[] {
+    const linhas = db
+      .prepare(
+        `SELECT secao_regra, COUNT(*) n FROM banco_testes
+         WHERE obra_id = ? AND secao_regra IS NOT NULL AND secao_regra <> 'geral'
+         GROUP BY secao_regra ORDER BY n DESC LIMIT 30`,
+      )
+      .all(obraId) as { secao_regra: string }[];
+    return linhas.map((l) => l.secao_regra);
   },
 };
 

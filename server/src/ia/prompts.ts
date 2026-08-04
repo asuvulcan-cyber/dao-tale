@@ -223,6 +223,15 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
     for (const f of req.vizinhasAntes) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);
     partes.push('');
   }
+  if (req.rotulosConhecidos && req.rotulosConhecidos.length > 0) {
+    // Sem isto o modelo devolve "5-mais-que-perfeito", "5.mais-que-perfeito" e
+    // "mais-que-perfeito" para a mesma regra, e a contagem de recorrência se
+    // fragmenta a ponto de nunca acusar lacuna nenhuma.
+    partes.push('### Rótulos de regra já usados nesta obra (REUSE um deles se a regra for a mesma):');
+    partes.push(req.rotulosConhecidos.map((r) => `- ${r}`).join('\n'));
+    partes.push('Só invente um rótulo novo se nenhum destes descrever a regra em questão.');
+    partes.push('');
+  }
   partes.push('### FRASE QUESTIONADA:');
   partes.push(`ZH: ${req.frase.texto_zh}`);
   partes.push(`PT atual: ${req.frase.texto_pt || '(sem tradução)'}`);
