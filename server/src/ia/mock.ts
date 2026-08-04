@@ -213,6 +213,10 @@ export const provedorMock: ProvedorIA = {
             '[simulado] A escolha diverge da regra de consistência do glossário; correção proposta abaixo.',
           secao_regra: 'mock-1.1-consistencia',
           correcao_proposta: `[correção simulada] ${req.frase.texto_pt || req.frase.texto_zh}`,
+          // Âncora cirúrgica: a primeira palavra do PT, que existe no texto e
+          // portanto exercita o caminho de troca pontual pela rota real.
+          trecho_pt_errado: (req.frase.texto_pt ?? '').split(/\s+/)[0] || null,
+          trecho_pt_corrigido: '[trecho simulado]',
         }
       : {
           trecho_zh: [...req.frase.texto_zh].slice(0, 8).join(''),
@@ -220,6 +224,8 @@ export const provedorMock: ProvedorIA = {
           justificativa: '[simulado] A tradução atual respeita as regras do prompt mãe.',
           secao_regra: 'geral',
           correcao_proposta: null,
+          trecho_pt_errado: null,
+          trecho_pt_corrigido: null,
         };
     return { ...dados, bruta: JSON.stringify(dados), uso: usoSimulado('revisao', req, dados) };
   },

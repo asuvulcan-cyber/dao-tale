@@ -200,6 +200,9 @@ export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'promptMae' | 
     '- justificativa: explicação objetiva citando a regra/seção do prompt da obra aplicável;',
     '- secao_regra: identificador curto e estável da seção/regra citada (ex.: "3.2-nomes-proprios"); use "geral" se nenhuma regra específica se aplica;',
     '- correcao_proposta: a frase COMPLETA corrigida em PT-BR se veredito for "incorreto"; null se "correto".',
+    '- trecho_pt_errado: o MENOR pedaço da tradução ATUAL que precisa mudar, copiado dela letra por letra (mesmos acentos e pontuação). É por ele que a correção é aplicada: o app troca SÓ esse pedaço e conserva todo o resto da frase.',
+    '- trecho_pt_corrigido: o que esse pedaço deve virar.',
+    '- Não inclua aspas de diálogo, travessão nem a pontuação final da frase no trecho, a menos que o erro seja justamente essa marca. Se o problema for a frase inteira (ordem das orações, sentido trocado), aí sim o trecho pode ser a frase toda.',
   ].join('\n');
   return { base: req.promptMae.trim(), operacional };
 }

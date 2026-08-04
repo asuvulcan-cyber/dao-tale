@@ -201,10 +201,19 @@ export const CONTRATO_REVISAO: Contrato<typeof respostaRevisaoSchema> = {
       justificativa: { type: 'string', description: 'explicação objetiva citando a regra aplicada' },
       secao_regra: { type: 'string', description: "id curto da regra citada (ex.: '3.2-nomes-proprios') ou 'geral'" },
       correcao_proposta: { type: ['string', 'null'], description: 'frase corrigida completa em PT-BR' },
+      trecho_pt_errado: {
+        type: ['string', 'null'],
+        description: 'o MENOR trecho da tradução atual que precisa mudar, copiado LETRA POR LETRA dela',
+      },
+      trecho_pt_corrigido: { type: ['string', 'null'], description: 'o que esse trecho deve virar' },
     },
     required: ['trecho_zh', 'veredito', 'justificativa', 'secao_regra'],
   },
-  notasInstrucao: ['Use null em correcao_proposta quando o veredito for "correto".'],
+  notasInstrucao: [
+    'Use null em correcao_proposta quando o veredito for "correto".',
+    'trecho_pt_errado tem de ser uma cópia EXATA de um pedaço da tradução atual (mesmos acentos, mesma pontuação, mesmas aspas), curto: só o que muda, sem a frase em volta. É por ele que a correção é aplicada, trocando apenas aquele pedaço.',
+    'NÃO inclua as aspas, o travessão ou a pontuação final da frase no trecho, a menos que sejam eles o erro.',
+  ],
 };
 
 export const CONTRATO_QA: Contrato<typeof respostaQaSchema> = {

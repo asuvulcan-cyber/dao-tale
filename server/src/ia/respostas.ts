@@ -38,6 +38,13 @@ export const respostaRevisaoSchema = z.object({
   justificativa: z.string(),
   secao_regra: z.string().default('geral'),
   correcao_proposta: z.string().nullable().default(null),
+  // Par cirúrgico: o menor trecho do PT que muda, e o que ele vira. Permite
+  // trocar SÓ o que está errado, preservando pontuação, aspas e o resto da
+  // frase — a substituição pela frase inteira já apagou orações e aspas de
+  // diálogo em casos reais. Nulo quando o modelo não coopera: aí vale o
+  // caminho antigo, com aviso.
+  trecho_pt_errado: z.string().nullable().default(null),
+  trecho_pt_corrigido: z.string().nullable().default(null),
 });
 
 // Contracapa (título/sinopse da ficha): campos prontos, sem numeração e sem

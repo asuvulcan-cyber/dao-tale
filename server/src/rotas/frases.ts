@@ -207,6 +207,8 @@ export function rotasFrases(db: BancoDados): Hono {
         justificativa: resposta.justificativa,
         secao_regra: resposta.secao_regra,
         correcao_proposta: resposta.correcao_proposta,
+        trecho_pt_errado: resposta.trecho_pt_errado ?? null,
+        trecho_pt_corrigido: resposta.trecho_pt_corrigido ?? null,
         provedor: provedorId,
         modelo,
         resposta_bruta: resposta.bruta,

@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { PROVEDORES_IDS, STATUS_CAPITULO, type EventoTraducao } from '@dao-tale/shared';
+import { PROVEDORES_IDS, STATUS_CAPITULO, normalizarPreferencias, type EventoTraducao } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposGlossario, reposObras, reposQa } from '../db/repos.js';
+import { reposCapitulos, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
+import { analisarEstilo } from '../traducao/estiloViolacoes.js';
 import { analisarCapitulo } from '../traducao/qa.js';
 import {
   cancelarJob,
@@ -77,6 +78,19 @@ export function rotasCapitulos(db: BancoDados): Hono {
       frases: reposFrases.listarPorCapitulo(db, id),
       progresso: progressoAtual(db, id),
     });
+  });
+
+  // Varredura de estilo do capítulo (sem IA, sem custo): conta violações das
+  // preferências da obra e mostra a concentração por terço. O terço é o que
+  // separa "a regra está mal escrita" de "o bloco é grande demais" — no prólogo
+  // da 死人经 as 9 ocorrências estavam TODAS no fim de uma resposta única.
+  app.get('/capitulos/:id/estilo', (c) => {
+    const id = Number(c.req.param('id'));
+    const capitulo = reposCapitulos.obter(db, id);
+    if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
+    const prompt = reposPrompts.ativo(db, capitulo.obra_id);
+    const prefs = normalizarPreferencias(prompt?.preferencias);
+    return c.json(analisarEstilo(reposFrases.listarPorCapitulo(db, id), prefs));
   });
 
   app.put('/capitulos/:id', async (c) => {

@@ -38,6 +38,49 @@ export type Veredito = 'correto' | 'incorreto';
 export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-nova-necessaria';
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
 
+/** Resultado de aplicar uma correção de revisão a uma frase. */
+export type ResultadoCorrecao =
+  | { tipo: 'cirurgica'; texto: string }
+  | { tipo: 'frase-inteira'; texto: string; encurtaMuito: boolean }
+  | { tipo: 'impossivel'; motivo: string };
+
+/**
+ * Aplica a correção trocando SÓ o trecho apontado, quando dá.
+ *
+ * A substituição pela frase inteira destruiu conteúdo em casos reais: numa
+ * frase de três orações o modelo devolveu só a que consertou (as outras duas
+ * sumiram), e numa fala ele devolveu o texto sem as aspas de diálogo. O par
+ * `trecho_pt_errado`/`trecho_pt_corrigido` existe para a troca ser cirúrgica —
+ * tudo que está fora do trecho fica intocado por construção.
+ *
+ * O trecho precisa aparecer EXATAMENTE UMA vez no texto atual. Zero vezes = o
+ * modelo não copiou de verdade (parafraseou, ou revisou um texto que mudou
+ * desde então). Mais de uma = ambíguo, e trocar a ocorrência errada é pior que
+ * não trocar. Nos dois casos caímos para a frase inteira, que aí é escolha
+ * consciente do usuário e não efeito colateral.
+ */
+export function aplicarCorrecao(
+  textoAtual: string,
+  correcao: { trecho_pt_errado?: string | null; trecho_pt_corrigido?: string | null; correcao_proposta?: string | null },
+): ResultadoCorrecao {
+  const errado = correcao.trecho_pt_errado?.trim();
+  const corrigido = correcao.trecho_pt_corrigido;
+  if (errado && corrigido != null) {
+    const primeira = textoAtual.indexOf(errado);
+    if (primeira >= 0 && textoAtual.indexOf(errado, primeira + 1) === -1) {
+      return {
+        tipo: 'cirurgica',
+        texto: textoAtual.slice(0, primeira) + corrigido + textoAtual.slice(primeira + errado.length),
+      };
+    }
+  }
+  const inteira = correcao.correcao_proposta;
+  if (inteira == null || inteira.trim() === '') {
+    return { tipo: 'impossivel', motivo: 'A revisão não trouxe correção aplicável.' };
+  }
+  return { tipo: 'frase-inteira', texto: inteira, encurtaMuito: propostaPareceTrecho(textoAtual, inteira) };
+}
+
 /**
  * A correção proposta parece ser só um PEDAÇO da frase, e não a frase inteira?
  *
@@ -213,6 +256,9 @@ export interface CasoTeste {
   justificativa: string;
   secao_regra: string | null;
   correcao_proposta: string | null;
+  /** Par cirúrgico (ver `aplicarCorrecao`); nulo nos casos anteriores a ele. */
+  trecho_pt_errado: string | null;
+  trecho_pt_corrigido: string | null;
   status: StatusCasoTeste;
   provedor: string;
   modelo: string;
@@ -580,6 +626,10 @@ export interface RespostaRevisao {
   justificativa: string;
   secao_regra: string;
   correcao_proposta: string | null;
+  /** Par cirúrgico: o menor trecho do PT que muda e o que ele vira. A correção
+   * é aplicada por aqui (ver `aplicarCorrecao`); nulo = modelo não cooperou. */
+  trecho_pt_errado?: string | null;
+  trecho_pt_corrigido?: string | null;
 }
 
 // ── Tradução (progresso via SSE) ───────────────────────────────────────────

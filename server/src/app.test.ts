@@ -98,10 +98,20 @@ describe('fluxo completo com provedor mock', () => {
     expect(revisao.caso.status).toBe('pendente');
     expect(revisao.caso.correcao_proposta).toBeTruthy();
 
-    // Aplicar correção com um clique
+    // Aplicar correção com um clique. A troca é CIRÚRGICA: quando a revisão traz
+    // o par trecho_errado/trecho_corrigido, só aquele pedaço muda e o resto da
+    // frase sobrevive — substituir pela proposta inteira já apagou orações e
+    // aspas de diálogo em casos reais.
+    const antesDaCorrecao = frases[1].texto_pt as string;
+    expect(revisao.caso.trecho_pt_errado).toBeTruthy();
     const aplicado = await json(await chamar('POST', `/api/testes/${revisao.caso.id}/aplicar-correcao`));
     expect(aplicado.caso.status).toBe('corrigido');
-    expect(aplicado.frase.texto_pt).toBe(revisao.caso.correcao_proposta);
+    expect(aplicado.frase.texto_pt).toBe(
+      antesDaCorrecao.replace(revisao.caso.trecho_pt_errado, revisao.caso.trecho_pt_corrigido),
+    );
+    // O que estava fora do trecho continua lá — é isto que a troca cirúrgica garante.
+    expect(aplicado.frase.texto_pt).toContain(antesDaCorrecao.slice(antesDaCorrecao.indexOf(' ') + 1));
+    expect(aplicado.frase.texto_pt).not.toBe(revisao.caso.correcao_proposta);
 
     // Revisão com veredito correto → confirmado automaticamente
     const revisao2 = await json(

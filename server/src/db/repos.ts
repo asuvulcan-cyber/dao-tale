@@ -29,7 +29,13 @@ import type {
   PreferenciasEstilo,
   TemperaturasPapel,
 } from '@dao-tale/shared';
-import { CONFIG_PADRAO, normalizarPreferencias, normalizarTemperaturas, temperaturaValida } from '@dao-tale/shared';
+import {
+  CONFIG_PADRAO,
+  aplicarCorrecao,
+  normalizarPreferencias,
+  normalizarTemperaturas,
+  temperaturaValida,
+} from '@dao-tale/shared';
 import { comporPromptMae } from './promptPadraoInicial.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
@@ -971,8 +977,8 @@ export const reposTestes = {
       .prepare(
         `INSERT INTO banco_testes
           (frase_id, obra_id, trecho_zh, pergunta, veredito, justificativa, secao_regra,
-           correcao_proposta, status, provedor, modelo, resposta_bruta)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           correcao_proposta, trecho_pt_errado, trecho_pt_corrigido, status, provedor, modelo, resposta_bruta)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         dados.frase_id,
@@ -983,6 +989,8 @@ export const reposTestes = {
         dados.justificativa,
         dados.secao_regra,
         dados.correcao_proposta,
+        dados.trecho_pt_errado ?? null,
+        dados.trecho_pt_corrigido ?? null,
         status,
         dados.provedor,
         dados.modelo,
@@ -1000,14 +1008,19 @@ export const reposTestes = {
   aplicarCorrecao(db: BancoDados, id: number): { caso: CasoTeste; frase: Frase } | 'sem-correcao' | undefined {
     const caso = this.obter(db, id);
     if (!caso) return undefined;
-    if (!caso.correcao_proposta) return 'sem-correcao';
+    const frase = reposFrases.obter(db, caso.frase_id);
+    if (!frase) return undefined;
+    // Troca só o trecho apontado quando ele ancora no texto atual; a frase
+    // inteira é o caminho de reserva, não o normal (ver `aplicarCorrecao`).
+    const resultado = aplicarCorrecao(frase.texto_pt ?? '', caso);
+    if (resultado.tipo === 'impossivel') return 'sem-correcao';
     return db.transaction(() => {
       // M3: aceitar a correção do Protocolo de Revisão é uma decisão humana —
       // marca editado_manualmente para que "sobrescrever preservando editadas"
       // não reabra a frase e a IA não apague a correção; e conta certo na
       // métrica de edição do checkpoint (doc 09 §4).
       db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(
-        caso.correcao_proposta,
+        resultado.texto,
         caso.frase_id,
       );
       db.prepare("UPDATE banco_testes SET status = 'corrigido' WHERE id = ?").run(id);

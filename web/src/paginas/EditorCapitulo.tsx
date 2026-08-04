@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { propostaPareceTrecho } from '@dao-tale/shared';
+import { aplicarCorrecao as aplicarCorrecao_previa, propostaPareceTrecho } from '@dao-tale/shared';
 import type {
   ApontamentoQa,
   Capitulo,
@@ -1136,10 +1136,13 @@ function PainelRevisao({
   });
 
   const aplicarCorrecao = useMutation({
-    mutationFn: () => api('POST', `/testes/${resultado!.caso.id}/aplicar-correcao`),
-    onSuccess: () => {
-      if (resultado?.revisao.correcao_proposta) {
-        aoEditarTexto(frase.texto_pt, resultado.revisao.correcao_proposta, frase.id);
+    // O servidor devolve a frase já gravada: o texto pode ser a troca cirúrgica
+    // (só o trecho errado) e não a proposta inteira, então quem manda é ele.
+    mutationFn: () =>
+      api<{ frase: Frase }>('POST', `/testes/${resultado!.caso.id}/aplicar-correcao`),
+    onSuccess: (dados) => {
+      if (dados?.frase?.texto_pt) {
+        aoEditarTexto(frase.texto_pt, dados.frase.texto_pt, frase.id);
       }
       clienteQuery.invalidateQueries({ queryKey: ['capitulo', capituloId] });
       clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
@@ -1328,7 +1331,8 @@ function PainelRevisao({
                 {/* A proposta SUBSTITUI a frase inteira. Quando ela é bem menor
                     que o texto atual, quase sempre é a IA devolvendo só o trecho
                     que consertou — aplicar apagaria o resto sem aviso. */}
-                {propostaPareceTrecho(frase.texto_pt, resultado.revisao.correcao_proposta) && (
+                {aplicarCorrecao_previa(frase.texto_pt, resultado.revisao).tipo === 'frase-inteira' &&
+                  propostaPareceTrecho(frase.texto_pt, resultado.revisao.correcao_proposta) && (
                   <p className="mb-2 rounded border border-erro/40 bg-papel-alto px-2 py-1 text-xs">
                     <strong>Atenção:</strong> a proposta é bem mais curta que a frase atual (
                     {resultado.revisao.correcao_proposta.trim().length} contra {frase.texto_pt.trim().length}{' '}
@@ -1340,7 +1344,9 @@ function PainelRevisao({
                   <Botao
                     onClick={() => {
                       const proposta = resultado.revisao.correcao_proposta!;
+                      const previa = aplicarCorrecao_previa(frase.texto_pt, resultado.revisao);
                       if (
+                        previa.tipo === 'frase-inteira' &&
                         propostaPareceTrecho(frase.texto_pt, proposta) &&
                         !window.confirm(
                           'A correção proposta é bem mais curta que a frase atual e pode ser só um trecho dela.\n\n' +
