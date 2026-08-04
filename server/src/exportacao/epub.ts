@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import { cabecalhoPt, partirInline, type ParagrafoRemontado } from '@dao-tale/shared';
+import { agruparGlossario, TITULO_GLOSSARIO } from './glossarioLivro.js';
+import { cabecalhoPt, partirInline, type EntradaGlossario, type ParagrafoRemontado } from '@dao-tale/shared';
 import { cssEpub } from './estilo.js';
 import { montarZip, type EntradaZip } from './zip.js';
 
@@ -33,6 +34,8 @@ export interface ObraEpub {
 export interface DadosEpub {
   obra: ObraEpub;
   capitulos: CapituloEpub[];
+  /** Apêndice de glossário; vazio = o livro sai sem ele. */
+  glossario?: EntradaGlossario[];
   capa?: { dados: Buffer; mime: string };
   /** Injetável para o teste: é a única parte não determinística (dcterms:modified). */
   geradoEm?: Date;
@@ -141,11 +144,30 @@ function rostoXhtml(obra: ObraEpub): string {
   return paginaXhtml(obra.titulo, partes.join('\n'));
 }
 
+function glossarioXhtml(entradas: EntradaGlossario[]): string {
+  const secoes = agruparGlossario(entradas)
+    .map((g) => {
+      const itens = g.entradas
+        .map(
+          (e) =>
+            `<dt>${escaparTexto(e.termo_pt)} <span class="zh">${escaparTexto(e.termo_zh)}</span></dt>` +
+            (e.nota ? `\n<dd>${escaparTexto(e.nota)}</dd>` : '<dd></dd>'),
+        )
+        .join('\n');
+      return `<h2>${escaparTexto(g.rotulo)}</h2>\n<dl class="glossario">\n${itens}\n</dl>`;
+    })
+    .join('\n');
+  return paginaXhtml(
+    TITULO_GLOSSARIO,
+    `<h1>${escaparTexto(TITULO_GLOSSARIO)}</h1>\n<div class="ornamento"></div>\n${secoes}`,
+  );
+}
+
 function capaXhtml(arquivo: string): string {
   return paginaXhtml('Capa', `<div class="capa"><img src="${escaparAtributo(arquivo)}" alt="Capa"/></div>`);
 }
 
-function navXhtml(obra: ObraEpub, capitulos: CapituloEpub[], temCapa: boolean): string {
+function navXhtml(obra: ObraEpub, capitulos: CapituloEpub[], temCapa: boolean, temGlossario = false): string {
   const itens = capitulos
     .map((c) => `<li><a href="${nomeArquivoCapitulo(c.numero)}">${escaparTexto(cabecalhoPt(c))}</a></li>`)
     .join('\n');
@@ -157,6 +179,7 @@ function navXhtml(obra: ObraEpub, capitulos: CapituloEpub[], temCapa: boolean): 
 <ol>
 <li><a href="rosto.xhtml">${escaparTexto(obra.titulo)}</a></li>
 ${itens}
+${temGlossario ? `<li><a href="glossario.xhtml">${escaparTexto(TITULO_GLOSSARIO)}</a></li>` : ''}
 </ol>
 </nav>
 <nav epub:type="landmarks" id="landmarks" hidden="hidden">
@@ -199,6 +222,7 @@ ${pontos}
 }
 
 function opf(dados: DadosEpub, uuid: string, arquivoCapa: string | null): string {
+  const temGlossario = (dados.glossario ?? []).length > 0;
   const { obra, capitulos } = dados;
   const modificado = (dados.geradoEm ?? new Date()).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
@@ -229,6 +253,9 @@ function opf(dados: DadosEpub, uuid: string, arquivoCapa: string | null): string
     `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>`,
     `<item id="estilo" href="estilo.css" media-type="text/css"/>`,
     `<item id="rosto" href="rosto.xhtml" media-type="application/xhtml+xml"/>`,
+    ...(temGlossario
+      ? [`<item id="glossario" href="glossario.xhtml" media-type="application/xhtml+xml"/>`]
+      : []),
   ];
   if (arquivoCapa && dados.capa) {
     itens.push(
@@ -247,6 +274,8 @@ function opf(dados: DadosEpub, uuid: string, arquivoCapa: string | null): string
     `<itemref idref="rosto"/>`,
     `<itemref idref="nav"/>`,
     ...capitulos.map((c) => `<itemref idref="cap-${c.numero}"/>`),
+    // Glossário fecha o livro: é apêndice de consulta, não leitura corrida.
+    ...(temGlossario ? [`<itemref idref="glossario"/>`] : []),
   ];
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -271,6 +300,8 @@ export function montarEpub(dados: DadosEpub): Buffer {
   const uuid = uuidObra(dados.obra, capitulos);
   const extensao = dados.capa ? EXTENSAO_POR_MIME[dados.capa.mime] : undefined;
   const arquivoCapa = dados.capa && extensao ? `capa.${extensao}` : null;
+  const glossario = dados.glossario ?? [];
+  const temGlossario = glossario.length > 0;
 
   const entradas: EntradaZip[] = [
     // Exigência do OCF: primeira entrada, sem compressão, sem extra field.
@@ -285,11 +316,12 @@ export function montarEpub(dados: DadosEpub): Buffer {
 </container>
 `,
     },
-    { nome: `${DIR}/conteudo.opf`, dados: opf({ ...dados, capitulos }, uuid, arquivoCapa) },
+    { nome: `${DIR}/conteudo.opf`, dados: opf({ ...dados, capitulos, glossario }, uuid, arquivoCapa) },
     { nome: `${DIR}/estilo.css`, dados: cssEpub() },
-    { nome: `${DIR}/nav.xhtml`, dados: navXhtml(dados.obra, capitulos, !!arquivoCapa) },
+    { nome: `${DIR}/nav.xhtml`, dados: navXhtml(dados.obra, capitulos, !!arquivoCapa, temGlossario) },
     { nome: `${DIR}/toc.ncx`, dados: ncx(dados.obra, capitulos, uuid) },
     { nome: `${DIR}/rosto.xhtml`, dados: rostoXhtml(dados.obra) },
+    ...(temGlossario ? [{ nome: `${DIR}/glossario.xhtml`, dados: glossarioXhtml(glossario) }] : []),
   ];
   if (arquivoCapa && dados.capa) {
     entradas.push(

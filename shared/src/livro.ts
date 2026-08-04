@@ -55,6 +55,9 @@ export interface EscopoExportacao {
   ate?: number;
   /** Lista explícita; quando presente, vence `de`/`ate`. */
   numeros?: number[];
+  /** Apêndice de glossário no livro. Padrão true: num wuxia traduzido, o
+   *  vocabulário de nomes, seitas e técnicas é parte do que o leitor precisa. */
+  glossario?: boolean;
 }
 
 export const ESCOPO_PADRAO: EscopoExportacao = { status: STATUS_LEGIVEIS };

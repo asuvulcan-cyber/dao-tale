@@ -12,10 +12,16 @@ import { Botao } from '../App';
 // filtrarPorEscopo — a MESMA função que o servidor aplica — então o que o painel
 // promete é exatamente o que entra no arquivo.
 
-type Formato = 'epub' | 'md' | 'md-bilingue';
+type Formato = 'epub' | 'pdf' | 'md' | 'md-bilingue';
 
 const FORMATOS: { id: Formato; rotulo: string; explicacao: string }[] = [
   { id: 'epub', rotulo: 'EPUB', explicacao: 'Livro para e-reader, com capa, sumário e metadados.' },
+  {
+    id: 'pdf',
+    rotulo: 'PDF',
+    explicacao:
+      'Abre o livro já paginado (A5, numeração e títulos correntes) numa aba nova; salve em PDF com Ctrl+P. A paginação leva alguns segundos em obras longas.',
+  },
   { id: 'md', rotulo: 'Markdown', explicacao: 'Obra inteira em um .md, só o português.' },
   { id: 'md-bilingue', rotulo: 'Markdown bilíngue', explicacao: 'Cada parágrafo em chinês e português.' },
 ];
@@ -23,6 +29,7 @@ const FORMATOS: { id: Formato; rotulo: string; explicacao: string }[] = [
 export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitulos: CapituloResumo[] }) {
   const [formato, setFormato] = useState<Formato>('epub');
   const [todosStatus, setTodosStatus] = useState(false);
+  const [comGlossario, setComGlossario] = useState(true);
   const [de, setDe] = useState('');
   const [ate, setAte] = useState('');
 
@@ -41,7 +48,8 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
   if (escopo.de !== undefined) consulta.set('de', String(escopo.de));
   if (escopo.ate !== undefined) consulta.set('ate', String(escopo.ate));
   if (formato === 'md-bilingue') consulta.set('formato', 'bilingue');
-  const rota = formato === 'epub' ? 'epub' : 'markdown';
+  if (!comGlossario) consulta.set('glossario', '0');
+  const rota = formato === 'epub' ? 'epub' : formato === 'pdf' ? 'livro-html' : 'markdown';
   const url = `/api/obras/${obraId}/${rota}?${consulta.toString()}`;
 
   const faixa =
@@ -78,6 +86,15 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
         >
           incluir não terminados
         </button>
+        <button
+          type="button"
+          className="ferramenta"
+          aria-pressed={comGlossario}
+          title="Acrescenta o glossário da obra como apêndice, agrupado por categoria"
+          onClick={() => setComGlossario((v) => !v)}
+        >
+          com glossário
+        </button>
         <label className="flex items-center gap-1.5 text-sm text-tinta-2">
           de
           <input
@@ -105,8 +122,12 @@ export function PainelExportacao({ obraId, capitulos }: { obraId: string; capitu
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {selecionados.length > 0 ? (
           // download deixa o navegador salvar o arquivo sem trocar de página.
-          <a href={url} download className="rounded bg-acao px-3 py-1.5 text-sm font-medium text-papel-alto hover:bg-acao-forte">
-            Baixar {formato === 'epub' ? '.epub' : '.md'}
+          <a
+            href={url}
+            {...(formato === 'pdf' ? { target: '_blank', rel: 'noreferrer' } : { download: true })}
+            className="rounded bg-acao px-3 py-1.5 text-sm font-medium text-papel-alto hover:bg-acao-forte"
+          >
+            {formato === 'pdf' ? 'Abrir para imprimir' : `Baixar ${formato === 'epub' ? '.epub' : '.md'}`}
           </a>
         ) : (
           <Botao disabled>Baixar</Botao>

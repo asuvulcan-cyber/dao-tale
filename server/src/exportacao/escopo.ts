@@ -1,3 +1,4 @@
+import type { EntradaGlossario } from '@dao-tale/shared';
 import {
   ESCOPO_PADRAO,
   filtrarPorEscopo,
@@ -7,7 +8,7 @@ import {
   type StatusCapitulo,
 } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposObras } from '../db/repos.js';
+import { reposCapitulos, reposFrases, reposGlossario, reposObras } from '../db/repos.js';
 import type { CapituloEpub, ObraEpub } from './epub.js';
 
 // Leitura dos parâmetros de escopo da rota e coleta do conteúdo no banco. O
@@ -54,6 +55,10 @@ export function lerEscopo(consulta: Record<string, string | undefined>): EscopoE
     return { erro: 'O intervalo está invertido: "de" é maior que "ate".' };
   }
 
+  // Apêndice de glossário: entra por padrão (é o que dá ao leitor o vocabulário
+  // da obra); `glossario=0` tira.
+  if (consulta.glossario !== undefined) escopo.glossario = consulta.glossario !== '0' && consulta.glossario !== 'false';
+
   if (consulta.numeros) {
     const numeros = lerNumeros(consulta.numeros);
     if ('erro' in numeros) return numeros;
@@ -68,6 +73,9 @@ export interface ConteudoExportacao {
   obra: ObraEpub;
   capitulos: CapituloEpub[];
   capa?: { dados: Buffer; mime: string };
+  /** Glossário da obra como apêndice do livro. Vazio quando o leitor pediu sem
+   *  (`glossario=0`) ou quando a obra não tem termos catalogados. */
+  glossario: EntradaGlossario[];
   /** Total de capítulos da obra, para a mensagem de escopo vazio. */
   total: number;
 }
@@ -113,6 +121,7 @@ export function coletarConteudo(db: BancoDados, obraId: number, escopo: EscopoEx
       paragrafos: remontarParagrafos(reposFrases.listarPorCapitulo(db, c.id)),
     })),
     capa: capa ? { dados: capa.capa, mime: capa.mime } : undefined,
+    glossario: escopo.glossario === false ? [] : reposGlossario.listar(db, obraId),
     total: todos.length,
   };
 }

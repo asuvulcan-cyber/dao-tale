@@ -1,5 +1,6 @@
-import { cabecalhoPt } from '@dao-tale/shared';
+import { cabecalhoPt, type EntradaGlossario } from '@dao-tale/shared';
 import type { CapituloEpub, ObraEpub } from './epub.js';
+import { glossarioMarkdown } from './glossarioLivro.js';
 
 // Markdown da obra inteira — o companheiro simples do EPUB (doc 12 §5). O
 // download por capítulo já existe; aqui é a obra concatenada, em PT ou bilíngue.
@@ -10,6 +11,7 @@ export function montarMarkdown(
   obra: ObraEpub,
   capitulos: CapituloEpub[],
   formato: FormatoMarkdown = 'pt',
+  glossario: EntradaGlossario[] = [],
 ): string {
   const partes: string[] = [`# ${obra.titulo}`];
   if (obra.titulo_original) partes.push(`*${obra.titulo_original}*`);
@@ -37,6 +39,12 @@ export function montarMarkdown(
     } else {
       for (const p of cap.paragrafos) if (p.pt) partes.push(p.pt);
     }
+  }
+
+  const apendice = glossarioMarkdown(glossario);
+  if (apendice) {
+    partes.push('---');
+    partes.push(apendice);
   }
 
   return `${partes.join('\n\n')}\n`;

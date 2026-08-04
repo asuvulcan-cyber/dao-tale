@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { BancoDados } from '../db/index.js';
 import { coletarConteudo, lerEscopo, nomeArquivo, type ConteudoExportacao } from '../exportacao/escopo.js';
 import { montarEpub } from '../exportacao/epub.js';
+import { montarHtmlImpressao } from '../exportacao/pdf.js';
 import { montarMarkdown } from '../exportacao/markdown.js';
 
 // Exportação da obra inteira como livro (doc 12 §5). Duas rotas GET, só leitura,
@@ -52,7 +53,7 @@ export function rotasExportacao(db: BancoDados): Hono {
     const { conteudo } = pronto;
 
     const formato = c.req.query('formato') === 'bilingue' ? 'bilingue' : 'pt';
-    const md = montarMarkdown(conteudo.obra, conteudo.capitulos, formato);
+    const md = montarMarkdown(conteudo.obra, conteudo.capitulos, formato, conteudo.glossario);
     const nome = nomeArquivo(
       conteudo.obra,
       conteudo.capitulos,
@@ -61,6 +62,23 @@ export function rotasExportacao(db: BancoDados): Hono {
     return c.body(md, 200, {
       'Content-Type': 'text/markdown; charset=utf-8',
       'Content-Disposition': `attachment; filename="${nome}"`,
+    });
+  });
+
+  // Livro para PDF: HTML único e paginado (Paged.js embutido). O navegador
+  // imprime — ver a justificativa em exportacao/pdf.ts.
+  app.get('/obras/:id/livro-html', (c) => {
+    const pronto = preparar(c);
+    if (!pronto.ok) return pronto.resposta;
+    const { conteudo } = pronto;
+
+    const html = montarHtmlImpressao(conteudo);
+    const nome = nomeArquivo(conteudo.obra, conteudo.capitulos, 'html');
+    // `inline`: abre numa aba e o usuário imprime dali. Baixar um HTML e ter de
+    // achá-lo no disco para depois abrir seria um passo a mais sem ganho.
+    return c.body(html, 200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `inline; filename="${nome}"`,
     });
   });
 

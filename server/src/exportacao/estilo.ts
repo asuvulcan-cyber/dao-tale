@@ -73,6 +73,25 @@ strong { font-weight: 600; }
   margin: 0 0 0.25em;
 }
 
+/* Glossário como apêndice (doc 12 §5): lista de definição, termo em destaque e
+   o chinês ao lado — é peça de consulta, não de leitura corrida. */
+.glossario { margin: 0 0 1.4em; }
+.glossario dt {
+  font-weight: 600;
+  margin: 0.8em 0 0.15em;
+}
+.glossario dt .zh {
+  color: var(--cor-tinta-2);
+  display: inline;
+  font-size: 0.9em;
+  font-weight: 400;
+  margin: 0 0 0 0.4em;
+}
+.glossario dd {
+  color: var(--cor-tinta-2);
+  margin: 0 0 0 1.2em;
+}
+
 .rosto { margin-top: 20%; text-align: center; }
 .rosto h1 {
   font-size: 2em;
