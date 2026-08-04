@@ -11,6 +11,7 @@ import {
 } from './promptPadraoInicial.js';
 import { reposLotes } from './repos.js';
 import { sanearConfiguracoes } from './configuracoes.js';
+import { unificarRotulosDeRegra } from './rotulosRegra.js';
 import { fazerBackupSincrono } from './backup.js';
 
 export type BancoDados = Database.Database;
@@ -60,6 +61,11 @@ export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMig
     console.log(
       `[dao-tale] configuração "${ajuste.chave}" estava fora da faixa aceita hoje: ${ajuste.de} → ${ajuste.para}.`,
     );
+  }
+  // Rótulos de regra equivalentes viram um só (ver rotulosRegra.ts).
+  const unificados = unificarRotulosDeRegra(db);
+  if (unificados > 0) {
+    console.log(`[dao-tale] ${unificados} caso(s) do banco de testes tiveram o rótulo de regra unificado.`);
   }
   // Lotes de uma sessão anterior não sobrevivem ao processo (doc 09 §5).
   reposLotes.marcarInterrompidosNoBoot(db);

@@ -974,6 +974,11 @@ export const reposTestes = {
     dados: Omit<CasoTeste, 'id' | 'criado_em' | 'status'> & { resposta_bruta: string },
   ): CasoTeste {
     const status: StatusCasoTeste = dados.veredito === 'correto' ? 'confirmado' : 'pendente';
+    // Converge o rótulo: se a obra já usa uma grafia equivalente ("5-mais-que-
+    // perfeito" quando o modelo devolveu "5.mais-que-perfeito"), grava a que já
+    // existe. Assim o filtro por seção no Banco de Testes acha os casos todos,
+    // em vez de espalhá-los por quatro rótulos que dizem a mesma coisa.
+    const secao_regra = dados.secao_regra ? rotuloConvergido(db, dados.obra_id, dados.secao_regra) : dados.secao_regra;
     const info = db
       .prepare(
         `INSERT INTO banco_testes
@@ -988,7 +993,7 @@ export const reposTestes = {
         dados.pergunta,
         dados.veredito,
         dados.justificativa,
-        dados.secao_regra,
+        secao_regra,
         dados.correcao_proposta,
         dados.trecho_pt_errado ?? null,
         dados.trecho_pt_corrigido ?? null,
@@ -1074,6 +1079,11 @@ export const reposTestes = {
       .sort((a, b) => b.casos - a.casos);
   },
 
+  /** Rótulo equivalente já em uso na obra, se houver; senão o próprio. */
+  rotuloConvergidoDe(db: BancoDados, obraId: number, rotulo: string): string {
+    return rotuloConvergido(db, obraId, rotulo);
+  },
+
   /** Todos os rótulos de regra já usados nesta obra, do mais frequente ao menos.
    *  Vai no prompt de refinamento para o modelo REUSAR em vez de inventar. */
   rotulosDeRegra(db: BancoDados, obraId: number): string[] {
@@ -1087,6 +1097,21 @@ export const reposTestes = {
     return linhas.map((l) => l.secao_regra);
   },
 };
+
+/** Rótulo de regra equivalente já usado na obra (o mais frequente), ou o próprio
+ *  quando é inédito. Mantém a grafia que a obra já consagrou em vez de deixar o
+ *  modelo criar uma variação por chamada. */
+function rotuloConvergido(db: BancoDados, obraId: number, rotulo: string): string {
+  const alvo = normalizarSecaoRegra(rotulo);
+  if (!alvo) return rotulo;
+  const usados = db
+    .prepare(
+      `SELECT secao_regra, COUNT(*) n FROM banco_testes
+       WHERE obra_id = ? AND secao_regra IS NOT NULL GROUP BY secao_regra ORDER BY n DESC`,
+    )
+    .all(obraId) as { secao_regra: string }[];
+  return usados.find((u) => normalizarSecaoRegra(u.secao_regra) === alvo)?.secao_regra ?? rotulo;
+}
 
 // ── Configurações (chave-valor) ────────────────────────────────────────────
 

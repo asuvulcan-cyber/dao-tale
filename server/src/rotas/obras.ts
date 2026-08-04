@@ -7,6 +7,7 @@ import {
   MODOS_THINKING,
   TEMPERATURA_MAX,
   normalizarPreferencias,
+  preferenciaQueCobre,
   resolverTemperatura,
   type Configuracoes,
   type EventoLote,
@@ -395,9 +396,34 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
-    const recorrencias = reposTestes.recorrencias(db, obraId);
+    const todasRecorrencias = reposTestes.recorrencias(db, obraId);
+    if (todasRecorrencias.length === 0) {
+      return c.json({ erro: { codigo: 'sem-recorrencias', mensagem: 'Nenhuma seção/regra com 2+ casos recorrentes no banco de testes — nada indica lacuna sistemática do prompt.' } }, 409);
+    }
+
+    // Recorrência que é CHAVE (diálogo, mais-que-perfeito, registro…) não vira
+    // diretriz: o próprio prompt de refinamento proíbe propor regra sobre elas.
+    // Filtrar aqui evita pagar uma chamada cuja resposta já se sabe: na 死人经
+    // foram três chamadas seguidas para ouvir "nenhuma regra sustentada", com 7
+    // dos 10 casos sendo mais-que-perfeito.
+    const porPreferencia = todasRecorrencias
+      .map((r) => ({ ...r, preferencia: preferenciaQueCobre(r.secao_regra) }))
+      .filter((r) => r.preferencia !== null);
+    const recorrencias = todasRecorrencias.filter((r) => preferenciaQueCobre(r.secao_regra) === null);
     if (recorrencias.length === 0) {
-      return c.json({ erro: { codigo: 'sem-recorrencias', mensagem: 'Nenhuma seção/regra com 2+ casos não-confirmados no banco de testes — nada indica lacuna sistemática do prompt.' } }, 409);
+      const lista = porPreferencia.map((r) => `${r.secao_regra} (${r.casos})`).join(', ');
+      return c.json(
+        {
+          erro: {
+            codigo: 'so-preferencias',
+            mensagem:
+              `As recorrências desta obra são preferências de estilo, não lacunas de diretriz: ${lista}. ` +
+              'Isso se resolve virando a chave em "Preferências de estilo" (ou o erro é do modelo desobedecendo uma regra que já existe), ' +
+              'não escrevendo diretriz nova — por isso nem gastei a chamada.',
+          },
+        },
+        409,
+      );
     }
 
     // Até 5 casos por seção recorrente mantêm a chamada enxuta e representativa.

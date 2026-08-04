@@ -39,6 +39,30 @@ export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-n
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
 
 /**
+ * A regra recorrente é, na verdade, uma CHAVE das preferências da obra?
+ *
+ * Diálogo, marcação do pensamento, mais-que-perfeito, nota do tradutor,
+ * onomatopeia e registro não se resolvem escrevendo diretriz: são toggles da
+ * Seção 5. O prompt de refinamento já proíbe propor regra sobre eles — mas a
+ * proibição só era descoberta DEPOIS da chamada paga. Na 死人经 isso custou três
+ * chamadas seguidas para ouvir "nenhuma regra sustentada": 7 dos 10 casos
+ * recorrentes eram mais-que-perfeito, ou seja, predestinados a não render nada.
+ *
+ * Devolve a chave de preferência coberta, ou null quando o caso é mesmo
+ * candidato a virar diretriz nova.
+ */
+export function preferenciaQueCobre(rotulo: string): keyof PreferenciasEstilo | null {
+  const n = normalizarSecaoRegra(rotulo);
+  if (/perfeito/.test(n)) return 'mais_que_perfeito';
+  if (/dialogo|aspas|travessao/.test(n)) return 'dialogo';
+  if (/pensamento/.test(n)) return 'pensamento_marca';
+  if (/onomatopeia/.test(n)) return 'onomatopeia';
+  if (/registro|publico|leitor/.test(n)) return 'registro';
+  if (/tradutor|\bnota\b|notas/.test(n)) return 'notas_tradutor';
+  return null;
+}
+
+/**
  * Rótulo de regra reduzido à sua identidade, para agrupar casos do banco de
  * testes.
  *
