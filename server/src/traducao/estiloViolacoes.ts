@@ -54,8 +54,10 @@ function violacaoDialogo(texto: string, modo: PreferenciasEstilo['dialogo']): st
   return null;
 }
 
-/** Aspas asiáticas que deveriam ter sido convertidas, em qualquer configuração. */
-function violacaoAspasAsiaticas(texto: string): string | null {
+/** Aspas que a regra manda converter para retas: tanto as asiáticas (「」『』)
+ *  quanto as curvas tipográficas (“” ‘’). A tabela de conversão do prompt lista
+ *  as duas famílias, então as duas contam. */
+function violacaoAspasNaoRetas(texto: string): string | null {
   const m = texto.match(/[「」『』“”‘’][^\n]{0,40}/);
   return m ? m[0] : null;
 }
@@ -77,8 +79,8 @@ export function analisarEstilo(
     const dialogo = violacaoDialogo(t, prefs.dialogo);
     if (dialogo) violacoes.push({ ordem: f.ordem, regra: `dialogo-${prefs.dialogo}`, trecho: dialogo });
 
-    const asiaticas = violacaoAspasAsiaticas(t);
-    if (asiaticas) violacoes.push({ ordem: f.ordem, regra: 'aspas-asiaticas', trecho: asiaticas });
+    const naoRetas = violacaoAspasNaoRetas(t);
+    if (naoRetas) violacoes.push({ ordem: f.ordem, regra: 'aspas-nao-retas', trecho: naoRetas });
   }
 
   // Terços por POSIÇÃO no capítulo, que é o eixo que revela o decaimento.

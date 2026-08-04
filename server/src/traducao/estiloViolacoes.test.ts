@@ -35,9 +35,16 @@ describe('analisarEstilo', () => {
     expect(r.violacoes.map((v) => v.regra)).toContain('dialogo-aspas');
   });
 
-  it('acusa aspas asiáticas não convertidas', () => {
-    const r = analisarEstilo(frases(['「不可能」, disse ele.']), PREFERENCIAS_PADRAO);
-    expect(r.violacoes.map((v) => v.regra)).toContain('aspas-asiaticas');
+  it('acusa aspas não convertidas, asiáticas ou curvas', () => {
+    for (const texto of ['「不可能」, disse ele.', 'Chamavam-no de ‘Rei Incomparável’.', 'Ele disse “nome”.']) {
+      const r = analisarEstilo(frases([texto]), PREFERENCIAS_PADRAO);
+      expect(r.violacoes.map((v) => v.regra)).toContain('aspas-nao-retas');
+    }
+  });
+
+  it('não acusa aspas retas, que são a forma pedida', () => {
+    const r = analisarEstilo(frases(['Ele disse "nome" e depois \'outro\'.']), PREFERENCIAS_PADRAO);
+    expect(r.violacoes).toHaveLength(0);
   });
 
   it('mostra a concentração por terço — o que separa regra ruim de bloco grande', () => {
