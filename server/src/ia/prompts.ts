@@ -121,7 +121,11 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
     partes.push('');
   }
   partes.push('### Frases a traduzir:');
-  if (req.titulo) partes.push(`[-1] ${req.titulo} (título do capítulo — traduza como título)`);
+  if (req.titulo)
+    partes.push(
+      `[-1] ${req.titulo} (título do capítulo — traduza SÓ o título, sem "Capítulo N": a numeração é posta pelo aplicativo. ` +
+        'Se o original for só a designação, sem nome — 第一章, 楔子 —, devolva a designação traduzida: "Prólogo", "Capítulo 1".)',
+    );
   for (const f of req.frases) partes.push(`[${f.ordem}] ${f.texto_zh}`);
   if (req.proximas.length > 0) {
     partes.push('');

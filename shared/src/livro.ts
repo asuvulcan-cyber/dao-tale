@@ -42,10 +42,30 @@ export interface CapituloComTitulo {
   titulo_pt: string | null;
 }
 
-/** "Capítulo 118 — Título traduzido" (cai para o título zh, e daí só o número). */
+/** O título traduzido já se anuncia sozinho ("Capítulo 3: …", "Prólogo — …")?
+ *
+ *  Acontece porque o original chinês carrega a designação no próprio título
+ *  (第一章 = "capítulo um"), e traduzi-la é o certo. Só que o aplicativo prefixa
+ *  a numeração dele por cima, e o resultado saía "Capítulo 1 — Capítulo 1:
+ *  Deixando a Propriedade" na leitura, no sumário e no EPUB.
+ *
+ *  Deliberadamente restrito: "Capítulo" só conta com número/algarismo logo
+ *  depois, para um título legítimo como "Capítulo do Sangue" não perder a
+ *  numeração. As designações avulsas (prólogo, epílogo…) valem sozinhas. */
+const RE_AUTODESIGNADO =
+  /^\s*(?:cap[íi]tulo|cap\.)\s*[\dIVXLCivxlc]+\b|^\s*(?:pr[óo]logo|ep[íi]logo|interl[úu]dio|pref[áa]cio|introdu[çc][ãa]o|ap[êe]ndice|extra)\b/i;
+
+export function tituloSeAnuncia(titulo: string): boolean {
+  return RE_AUTODESIGNADO.test(titulo);
+}
+
+/** "Capítulo 118 — Título traduzido" (cai para o título zh, e daí só o número).
+ *  Título que já se anuncia sozinho não é prefixado de novo. */
 export function cabecalhoPt(capitulo: CapituloComTitulo): string {
   const titulo = capitulo.titulo_pt || capitulo.titulo;
-  return titulo ? `Capítulo ${capitulo.numero} — ${titulo}` : `Capítulo ${capitulo.numero}`;
+  if (!titulo) return `Capítulo ${capitulo.numero}`;
+  // Título que já traz a própria designação manda; prefixar de novo duplicaria.
+  return tituloSeAnuncia(titulo) ? titulo : `Capítulo ${capitulo.numero} — ${titulo}`;
 }
 
 /** Escopo da exportação: quais capítulos entram no livro (doc 12 §5). */
