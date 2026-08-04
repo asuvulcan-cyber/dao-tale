@@ -55,12 +55,19 @@ export interface PreferenciasEstilo {
 /** Público-alvo e o que ele implica de vocabulário e conectivo. O default
     reproduz o que estava fixo no cabeçalho do núcleo antigo. */
 export const REGISTROS_PREDEFINIDOS: Record<string, string> = {
+  // O público de webnovel traduzida tem NÚCLEO em 18–25 anos; 30–40 é a cauda,
+  // não o alvo. Descrever o limite superior como se fosse o leitor médio puxava
+  // o texto para um registro mais formal do que o gênero pede.
   'jovem-adulto':
-    'público jovem adulto (até 30–40 anos) — vocabulário contemporâneo e conectivos de fala corrente ("mas", "então", "só que", "aí") no lugar de formalismos repetidos ("no entanto", "portanto"); sem gíria datada',
+    'leitor de webnovel — núcleo de 18 a 25 anos, lendo em série no celular. Período curto a médio e ritmo rápido; ' +
+    'vocabulário contemporâneo, com os conectivos da fala ("mas", "só que", "então", "aí") no lugar dos formais repetidos ' +
+    '("no entanto", "portanto", "outrossim"); termo de gênero preservado (jianghu, qi, dao), que este leitor já conhece e prefere. ' +
+    'NÃO simplifique nem explique demais: é leitor voraz do gênero, e o que ele cobra é consistência de nomes e termos, não facilidade. ' +
+    'Gíria: só onde o ORIGINAL é gíria, e sempre a de uso corrente; na dúvida entre uma gíria e a forma neutra, escolha a neutra',
   'adulto-literario':
     'leitor adulto de ficção literária — vocabulário amplo, período longo permitido e conectivos formais aceitos quando o ritmo pedir; sem coloquialismo forçado',
   juvenil:
-    'público juvenil — frases mais curtas, vocabulário simples e direto, sem termo raro desnecessário',
+    'público juvenil (12–16) — frases curtas, vocabulário simples e direto, sem termo raro desnecessário; o que for violento ou adulto no original permanece, só a linguagem é que é acessível',
 };
 
 export const PREFERENCIAS_PADRAO: PreferenciasEstilo = {
@@ -157,11 +164,24 @@ const PENSAMENTO_EXEMPLO: Record<MarcaPensamento, string> = {
   aspas: '`"Não há saída", pensou ele.` / `"O que isso significa?" pensou Lin Feng.`',
 };
 
+// Regra de PROCEDIMENTO, não de proibição. A versão anterior dizia "evite a
+// forma simples" e enterrava a melhor saída (o perfeito simples) no meio da
+// frase: no capítulo 2 da 死人经 deu 11,7% de violação, toda em trecho denso de
+// anterioridade. Proibição diz o que não fazer; ordem de escolha diz o que fazer.
+// A ordem importa: converter tudo para "tinha + particípio" empilha perífrase e
+// produz prosa PIOR que a violação — daí o perfeito simples vir primeiro.
 const MAIS_QUE_PERFEITO: Record<PoliticaMaisQuePerfeito, string> = {
-  evitar:
-    '**Mais-que-perfeito:** use a forma composta ("tinha feito") ou o perfeito simples ("fez"); evite a forma simples ("fizera"), que soa livresca.',
-  permitir:
-    '**Mais-que-perfeito:** a forma simples ("fizera", "dissera") é permitida quando o ritmo pedir; alterne com a composta ("tinha feito") sem empilhar.',
+  evitar: [
+    '**Anterioridade (o "mais-que-perfeito"):** quando a frase narra algo ANTERIOR ao momento da cena, escolha nesta ordem:',
+    '1. **Perfeito simples**, sempre que um advérbio ou o próprio contexto já marquem a anterioridade — `nunca aprendeu esgrima`, `treinou anos antes disso`. É a forma mais curta e mais natural: prefira-a sempre que couber.',
+    '2. **"tinha" ou "havia" + particípio**, quando a anterioridade precisa mesmo ser explicitada — `tinha aprendido com o pai`, `havia herdado o temperamento`. **Alterne os dois auxiliares:** três "tinha" seguidos pesam mais do que a forma que eles substituem.',
+    '3. **Nunca a forma simples** — `aprendera`, `fizera`, `dissera`, `estivera`. Soa livresca e destoa do registro desta obra.',
+    'Num trecho denso em passado anterior (contar o treino, a origem, o que ficou para trás), resolva a maioria no perfeito simples e reserve a perífrase para onde a anterioridade for o ponto da frase.',
+  ].join('\n'),
+  permitir: [
+    '**Anterioridade (o "mais-que-perfeito"):** as três formas estão liberadas — perfeito simples (`aprendeu`), composta (`tinha/havia aprendido`) e simples (`aprendera`).',
+    'Escolha pelo ritmo, sem empilhar a mesma: alterne, e prefira o perfeito simples quando o contexto já marcar a anterioridade.',
+  ].join('\n'),
 };
 
 const NOTAS: Record<PoliticaNotas, string> = {

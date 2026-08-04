@@ -39,16 +39,21 @@ describe('renderizarPreferencias', () => {
     expect(renderizarPreferencias(p)).toBe(renderizarPreferencias({ ...p }));
   });
 
+  // O princípio "default = comportamento de hoje" vale para as convenções
+  // (diálogo, pensamento, notas, onomatopeia). O registro é a exceção
+  // deliberada: o texto antigo descrevia a CAUDA do público (30–40) como se
+  // fosse o alvo, e isso puxava a prosa para um registro mais formal do que o
+  // gênero pede. Corrigir um erro de fato não é mudar de comportamento à toa.
   it('o padrão reproduz as regras que o núcleo antigo dava', () => {
     const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
     expect(texto).toContain('aspas duplas retas');
     expect(texto).toContain('"Não há saída", disse ele.');
     expect(texto).toContain('sempre em *itálico*');
     expect(texto).toContain('sempre no **presente**');
-    expect(texto).toContain('evite a forma simples ("fizera")');
+    expect(texto).toContain('Nunca a forma simples');
     expect(texto).toContain('permitidas no formato `((texto))`');
     expect(texto).toContain('adapte para o equivalente sonoro natural do PT-BR');
-    expect(texto).toContain('jovem adulto (até 30–40 anos)');
+    expect(texto).toContain('leitor de webnovel');
     expect(preferenciasSaoPadrao(PREFERENCIAS_PADRAO)).toBe(true);
   });
 
@@ -75,7 +80,7 @@ describe('renderizarPreferencias', () => {
   });
 
   it('as demais chaves invertem o texto que emitem', () => {
-    expect(renderizarPreferencias(com({ mais_que_perfeito: 'permitir' }))).toContain('é permitida quando o ritmo pedir');
+    expect(renderizarPreferencias(com({ mais_que_perfeito: 'permitir' }))).toContain('as três formas estão liberadas');
     expect(renderizarPreferencias(com({ notas_tradutor: 'proibir' }))).toContain('**Notas do tradutor:** proibidas');
     expect(renderizarPreferencias(com({ onomatopeia: 'manter' }))).toContain('transliterado em pinyin');
     expect(renderizarPreferencias(com({ registro: 'juvenil' }))).toContain('público juvenil');
@@ -119,6 +124,57 @@ describe('composição com preferências', () => {
     const aspas = comporPromptMae(NUCLEO_ENXUTO, 'd', PREFERENCIAS_PADRAO);
     const travessao = comporPromptMae(NUCLEO_ENXUTO, 'd', com({ dialogo: 'travessao' }));
     expect(travessao).not.toBe(aspas);
+  });
+});
+
+describe('anterioridade: procedimento em vez de proibição', () => {
+  // A redação antiga era negativa ("evite a forma simples") e enterrava a melhor
+  // saída no meio da frase. Deu 11,7% de violação no capítulo 2 da 死人经, toda em
+  // trecho denso de anterioridade — e converter tudo para "tinha + particípio"
+  // empilharia perífrase, produzindo prosa pior que a violação.
+  it('põe o perfeito simples em PRIMEIRO, antes da perífrase', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    const perfeito = texto.indexOf('Perfeito simples');
+    const perifrase = texto.indexOf('"tinha" ou "havia"');
+    const proibicao = texto.indexOf('Nunca a forma simples');
+    expect(perfeito).toBeGreaterThan(-1);
+    expect(perfeito).toBeLessThan(perifrase);
+    expect(perifrase).toBeLessThan(proibicao);
+  });
+
+  it('oferece os DOIS auxiliares e avisa do empilhamento', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).toContain('havia');
+    expect(texto).toMatch(/alterne os dois auxiliares/i);
+    expect(texto).toMatch(/denso em passado anterior/i);
+  });
+
+  it('permitir libera as três formas sem virar vale-tudo', () => {
+    const texto = renderizarPreferencias(com({ mais_que_perfeito: 'permitir' }));
+    expect(texto).toContain('as três formas estão liberadas');
+    expect(texto).toMatch(/sem empilhar/i);
+  });
+});
+
+describe('registro: o público real de webnovel', () => {
+  it('descreve o NÚCLEO da faixa, não o limite superior', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).toContain('18 a 25');
+    // O texto antigo dizia "até 30–40 anos", tratando a cauda como alvo.
+    expect(texto).not.toContain('30–40');
+  });
+
+  it('manda preservar termo de gênero e proíbe simplificar', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).toContain('jianghu');
+    expect(texto).toMatch(/n[ãa]o simplifique/i);
+  });
+
+  it('troca "sem gíria datada" por um critério verificável', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).not.toContain('gíria datada');
+    // Procedimento: só onde o original é gíria; na dúvida, a forma neutra.
+    expect(texto).toMatch(/na d[úu]vida.*neutra/i);
   });
 });
 
