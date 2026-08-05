@@ -161,12 +161,19 @@ export function rotasCapitulos(db: BancoDados): Hono {
   app.post('/capitulos/:id/qa', async (c) => {
     const id = Number(c.req.param('id'));
     const forcar = c.req.query('forcar') === '1';
-    const r = await analisarCapitulo(db, id, { forcar });
-    if (!r.ok) {
-      const status = r.codigo === 'par-igual' ? 409 : r.codigo === 'sem-par' ? 400 : 400;
-      return c.json({ erro: { codigo: r.codigo ?? 'qa', mensagem: r.erro } }, status);
+    try {
+      const r = await analisarCapitulo(db, id, { forcar });
+      if (!r.ok) {
+        const status = r.codigo === 'par-igual' ? 409 : r.codigo === 'provedor' ? 502 : 400;
+        return c.json({ erro: { codigo: r.codigo ?? 'qa', mensagem: r.erro } }, status);
+      }
+      return c.json({ ok: true, apontamentos: r.apontamentos, qa: reposQa.listar(db, id) });
+    } catch (e) {
+      // Sem este catch, uma exceção do provedor subia para o Hono e o cliente
+      // ficava pendurado até o timeout dele — foi o que aconteceu na primeira
+      // execução real da QA, com 4 minutos de espera e resposta vazia.
+      return c.json({ erro: { codigo: 'qa', mensagem: `Falha na QA: ${(e as Error).message}` } }, 502);
     }
-    return c.json({ ok: true, apontamentos: r.apontamentos, qa: reposQa.listar(db, id) });
   });
 
   app.put('/qa/:id', async (c) => {

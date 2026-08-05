@@ -6,6 +6,19 @@ import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { ParParaQa, RequisicaoQa } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 import { registrarEvento } from '../telemetria/registrar.js';
+import { ErroProvedor } from '../ia/provedor.js';
+
+// Espera entre tentativas. A QA é uma chamada por bloco como a tradução, e o
+// mesmo tipo de erro transitório acontece nela — só que aqui não havia retry
+// nenhum: um "o modelo não devolveu a resposta estruturada" no 3º bloco
+// derrubava o capítulo inteiro e jogava fora os blocos já PAGOS.
+const BACKOFF_QA_MS = [2000, 4000, 8000];
+let backoffQaTeste: number[] | null = null;
+/** Somente para testes: encurta as esperas entre tentativas. */
+export function _backoffQaTeste(ms: number[] | null): void {
+  backoffQaTeste = ms;
+}
+const esperarMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Passada de QA por segunda IA (doc 09 §6). A IA só aponta; nada é escrito nas
 // frases sem decisão humana. Roda sob demanda (rota) ou ao fim de um capítulo
@@ -13,7 +26,7 @@ import { registrarEvento } from '../telemetria/registrar.js';
 
 export type ResultadoQa =
   | { ok: true; apontamentos: number }
-  | { ok: false; erro: string; codigo?: 'par-igual' | 'sem-par' | 'sem-frases' };
+  | { ok: false; erro: string; codigo?: 'par-igual' | 'sem-par' | 'sem-frases' | 'provedor' };
 
 /** Par do QA: provedor_qa → par da revisão (doc 08 §5) → nada. Modelo resolvido. */
 export function resolverParQa(config: Configuracoes): ParProvedor | null {
@@ -107,7 +120,32 @@ export async function analisarCapitulo(
     // faltava contá-la (o indicador de cota subestimava o consumo quando o QA
     // rodava). Contada ANTES da chamada, como nos outros papéis.
     reposUso.registrar(db, par.provedor, par.modelo);
-    const resposta = await provedor.analisarQa(chave, req);
+    let resposta;
+    for (let tentativa = 0; ; tentativa++) {
+      try {
+        resposta = await provedor.analisarQa(chave, req);
+        break;
+      } catch (e) {
+        const erro = e instanceof ErroProvedor ? e : new ErroProvedor(String((e as Error).message ?? e), 'transitorio');
+        // Fatal (chave, crédito) não melhora esperando; transitório sim, e é o
+        // que mais aparece — modelo devolvendo JSON malformado.
+        const backoff = backoffQaTeste ?? BACKOFF_QA_MS;
+        if (erro.tipo === 'fatal' || tentativa >= backoff.length) {
+          // Guarda o que já foi apurado ANTES de desistir: os blocos anteriores
+          // foram pagos e os apontamentos deles valem por si.
+          if (coletados.length > 0) reposQa.substituirPendentes(db, capituloId, par.provedor, par.modelo, coletados);
+          return {
+            ok: false,
+            erro:
+              `A QA falhou no bloco ${bloco + 1}: ${erro.message}` +
+              (coletados.length > 0 ? ` Os ${coletados.length} apontamento(s) dos blocos anteriores foram guardados.` : ''),
+            codigo: 'provedor',
+          };
+        }
+        await esperarMs(backoff[tentativa]);
+        reposUso.registrar(db, par.provedor, par.modelo);
+      }
+    }
     // Doc 11 §4: o QA é a compra separada mais cara do pipeline (~+140% projetado
     // no doc 09 §15) — cada bloco entra no livro-caixa para o número virar real.
     registrarEvento(db, {

@@ -3,13 +3,17 @@ import type { RequisicaoQa } from '../ia/provedor.js';
 import { abrirBanco, type BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposObras, reposQa, reposUso } from '../db/repos.js';
 import { reposEventos } from '../db/eventosIa.js';
-import { analisarCapitulo, resolverParQa } from './qa.js';
+import { _backoffQaTeste, analisarCapitulo, resolverParQa } from './qa.js';
+import { ErroProvedor } from '../ia/provedor.js';
 
 // Bateria do QA (doc 09 §6): provedor-espião que devolve apontamentos
 // programados, para verificar persistência, regra do par igual e triagem.
 
 let apontamentosResposta: any[] = [];
 const reqRecebidas: RequisicaoQa[] = [];
+/** Falhas programadas: a n-ésima chamada lança o erro posto aqui. */
+let falharNaChamada: { n: number; erro: Error } | null = null;
+let chamadas = 0;
 
 vi.mock('../credenciais/index.js', () => ({ obterChave: async () => 'chave' }));
 
@@ -20,6 +24,8 @@ vi.mock('../ia/fabrica.js', () => ({
     precisaChave: true,
     modeloPadrao: `${id}-v1`,
     async analisarQa(_chave: string | null, req: RequisicaoQa) {
+      chamadas++;
+      if (falharNaChamada && chamadas >= falharNaChamada.n) throw falharNaChamada.erro;
       reqRecebidas.push(req);
       return {
         apontamentos: apontamentosResposta,
@@ -37,6 +43,9 @@ beforeEach(() => {
   db = abrirBanco(':memory:');
   apontamentosResposta = [];
   reqRecebidas.length = 0;
+  falharNaChamada = null;
+  chamadas = 0;
+  _backoffQaTeste([1, 1, 1]); // esperas de 1 ms: o teste mede comportamento, não relógio
 });
 
 function capituloTraduzido() {
@@ -183,5 +192,33 @@ describe('analisarCapitulo', () => {
     reposConfig.definir(db, { provedor_qa: 'gemini', modelo_qa: 'g', glossario_relevante: true });
     await analisarCapitulo(db, cap.id);
     expect(reqRecebidas[0].glossarioNoUsuario).toBe(true);
+  });
+});
+
+describe('resiliência da QA — a falha da primeira execução real', () => {
+  it('erro do provedor não deixa a rota sem resposta: volta ok:false com motivo', async () => {
+    const { cap } = capituloTraduzido();
+    reposConfig.definir(db, { provedor_qa: 'gemini', modelo_qa: 'g' });
+    // O que aconteceu de verdade: o Gemini devolveu JSON que o parser recusou.
+    falharNaChamada = { n: 1, erro: new ErroProvedor('O modelo não devolveu a resposta estruturada esperada.', 'transitorio') };
+
+    const r = await analisarCapitulo(db, cap.id, {});
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.codigo).toBe('provedor');
+      expect(r.erro).toContain('não devolveu a resposta estruturada');
+    }
+  });
+
+  it('erro fatal desiste na hora, sem gastar as esperas', async () => {
+    const { cap } = capituloTraduzido();
+    reposConfig.definir(db, { provedor_qa: 'gemini', modelo_qa: 'g' });
+    falharNaChamada = { n: 1, erro: new ErroProvedor('Chave inválida.', 'fatal') };
+
+    const antes = Date.now();
+    const r = await analisarCapitulo(db, cap.id, {});
+    expect(r.ok).toBe(false);
+    // Fatal não melhora esperando: nada de backoff.
+    expect(Date.now() - antes).toBeLessThan(1500);
   });
 });
