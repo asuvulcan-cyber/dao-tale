@@ -140,9 +140,15 @@ empilham: quem está fora da lista não vê a bancada nem com a senha certa.
 npm run ips                          # o que está permitido hoje
 npm run ips -- permitir 189.5.4.3    # um endereço
 npm run ips -- permitir 2804:14d:baa::/48   # uma faixa (IPv6 doméstico muda o final sozinho)
-npm run ips -- remover 189.5.4.3
-npm run ips -- desligar              # esvazia = volta a aceitar de qualquer lugar
+npm run ips -- remover 189.5.4.3     # tira UM — é o que se quer quase sempre
+npm run ips -- desligar              # APAGA A LISTA INTEIRA; pede confirmação
 ```
+
+> `desligar` mostra o que vai perder e exige a palavra por extenso, e sem
+> terminal (script, `ssh comando`) ele **cancela** em vez de apagar — `--sim`
+> força, para quem realmente precisa automatizar. A proteção existe porque o
+> tropeço já aconteceu: um `desligar` usado para desfazer um IP de teste levou
+> junto o IP real do dono. O comando para tirar uma entrada é `remover`.
 
 A lista vive em `<dados>/ips-permitidos.json` (0600) e é **relida a cada requisição**:
 acrescentar um IP vale na hora, sem reiniciar o serviço.

@@ -531,10 +531,12 @@ function FichaObra() {
           </p>
         </div>
       </div>
+      {/* FORA do modo de edição: publicar não é "editar a ficha", é a decisão
+          mais consequente da tela — e ficava invisível atrás do ✎. */}
+      <PainelPublicacao />
       {editando && (
         <>
           <DetalhesObra />
-          <PainelPublicacao />
           <PreferenciasObra />
         </>
       )}
@@ -780,68 +782,73 @@ function PainelPublicacao() {
 
   if (!obra) return null;
 
+  // Uma linha só no repouso: esta é a tela dos capítulos, e a vitrine não pode
+  // empurrar a lista para baixo. O texto que explica o que vai acontecer aparece
+  // no momento em que importa — ao confirmar.
   return (
-    <div className="mt-4 rounded-lg border border-linha bg-papel-alto p-4">
-      <p className="olho">Vitrine pública</p>
+    <div className="mt-4 rounded-lg border border-linha bg-papel-alto px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="olho">Vitrine pública</p>
+        <Etiqueta cor={obra.publica ? 'jade' : 'neutro'}>{obra.publica ? 'No ar' : 'Privada'}</Etiqueta>
 
-      {obra.publica ? (
-        <>
-          <p className="mt-2 text-sm">
-            No ar. Qualquer pessoa com o endereço lê{' '}
-            <strong>
-              {finalizados.length} {finalizados.length === 1 ? 'capítulo' : 'capítulos'}
-            </strong>
-            {naoFinalizados > 0 && (
-              <>
-                {' '}
-                — os outros {naoFinalizados} ficam de fora até você marcá-los como{' '}
-                <em>finalizado</em>
-              </>
-            )}
-            .
-          </p>
-          <p className="mt-1 text-sm">
-            <a href={`/ler/${obraId}`} target="_blank" rel="noreferrer" className="text-jade-forte underline">
-              Abrir a página pública
+        <span className="min-w-0 flex-1 text-sm text-tinta-2">
+          {obra.publica ? (
+            <>
+              {finalizados.length} {finalizados.length === 1 ? 'capítulo publicado' : 'capítulos publicados'}
+              {naoFinalizados > 0 && ` · ${naoFinalizados} fora, à espera de "finalizado"`}
+            </>
+          ) : (
+            'Só você vê esta obra.'
+          )}
+        </span>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {obra.publica && (
+            <a href={`/ler/${obraId}`} target="_blank" rel="noreferrer" className="ferramenta">
+              Abrir página
             </a>
-          </p>
-          <div className="mt-3 flex items-center gap-3">
+          )}
+          {obra.publica ? (
             <Botao variante="secundario" onClick={() => mudar.mutate(false)} disabled={mudar.isPending}>
               Tirar do ar
             </Botao>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="mt-2 text-sm text-tinta-2">
-            Esta obra é privada. Publicando, quem abrir o endereço sem senha passa a ler os capítulos
-            marcados como <em>finalizado</em> — hoje{' '}
-            <strong>
-              {finalizados.length} de {(capitulos ?? []).length}
-            </strong>
-            . Glossário, prompts, custos e o texto em chinês continuam só seus.
-          </p>
-          {finalizados.length === 0 ? (
-            <p className="mt-3 text-sm text-tinta-2">
-              Nenhum capítulo está <em>finalizado</em> ainda — sem isso a obra não apareceria para
-              ninguém. Marque ao menos um antes de publicar.
-            </p>
-          ) : confirmando ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <span className="text-sm">Publicar {finalizados.length} capítulo(s)?</span>
-              <Botao onClick={() => mudar.mutate(true)} disabled={mudar.isPending}>
-                {mudar.isPending ? 'Publicando…' : 'Sim, publicar'}
-              </Botao>
-              <Botao variante="secundario" onClick={() => setConfirmando(false)}>
-                Cancelar
-              </Botao>
-            </div>
           ) : (
-            <div className="mt-3">
-              <Botao onClick={() => setConfirmando(true)}>Publicar obra</Botao>
-            </div>
+            finalizados.length > 0 &&
+            !confirmando && <Botao onClick={() => setConfirmando(true)}>Publicar obra</Botao>
           )}
-        </>
+        </div>
+      </div>
+
+      {/* Sem capítulo finalizado, publicar não faria efeito nenhum: a obra não
+          apareceria para ninguém. Melhor explicar do que oferecer um botão que
+          não muda nada. */}
+      {!obra.publica && finalizados.length === 0 && (
+        <p className="mt-2 text-sm text-tinta-2">
+          Nenhum capítulo está <em>finalizado</em> ainda. Marque ao menos um para poder publicar —
+          só esse status vai para a rua.
+        </p>
+      )}
+
+      {!obra.publica && confirmando && (
+        <div className="mt-3 border-t border-linha pt-3">
+          <p className="text-sm">
+            Quem abrir o endereço <strong>sem senha</strong> passa a ler{' '}
+            <strong>
+              {finalizados.length} de {(capitulos ?? []).length}{' '}
+              {(capitulos ?? []).length === 1 ? 'capítulo' : 'capítulos'}
+            </strong>{' '}
+            — só os marcados como <em>finalizado</em>. Glossário, prompt, custos e o texto em chinês
+            continuam só seus, e tirar do ar é um clique.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Botao onClick={() => mudar.mutate(true)} disabled={mudar.isPending}>
+              {mudar.isPending ? 'Publicando…' : 'Sim, publicar'}
+            </Botao>
+            <Botao variante="secundario" onClick={() => setConfirmando(false)}>
+              Cancelar
+            </Botao>
+          </div>
+        </div>
       )}
 
       {erro && <p className="mt-2 text-sm text-erro">{erro}</p>}

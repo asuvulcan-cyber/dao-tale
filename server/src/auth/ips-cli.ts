@@ -1,3 +1,4 @@
+import readline from 'node:readline';
 import { diretorioDados } from '../config.js';
 import { caminhoIps, entradaValida, gravarIps, listaIps } from './ips.js';
 
@@ -10,8 +11,8 @@ import { caminhoIps, entradaValida, gravarIps, listaIps } from './ips.js';
 const USO = `Uso:
   npm run ips                          lista o que está permitido
   npm run ips -- permitir <ip|faixa>   acrescenta (ex.: 189.5.4.3, 2804:abc::/48)
-  npm run ips -- remover <ip|faixa>    tira da lista
-  npm run ips -- desligar              esvazia a lista = volta a aceitar de qualquer lugar
+  npm run ips -- remover <ip|faixa>    tira UM endereço — é o que você quer quase sempre
+  npm run ips -- desligar              APAGA A LISTA INTEIRA (pede confirmação)
 
 Lista VAZIA significa trava DESLIGADA: qualquer endereço pode tentar a senha.
 O loopback (127.0.0.1) sempre passa — é por ele que este comando funciona.
@@ -33,14 +34,57 @@ function mostrar(): void {
   console.log('\n(e o loopback, sempre)');
 }
 
-function main(): void {
-  const [comando, valor] = process.argv.slice(2);
+/** Pergunta no terminal. Devolve '' quando não há terminal (rodando em script). */
+function perguntar(rotulo: string): Promise<string> {
+  if (!process.stdin.isTTY) return Promise.resolve('');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolver) =>
+    rl.question(rotulo, (resposta) => {
+      rl.close();
+      resolver(resposta.trim());
+    }),
+  );
+}
+
+/** `desligar` apaga a lista INTEIRA — e é fácil chamá-lo querendo tirar só uma
+ *  entrada. Aconteceu de verdade: um `desligar` para desfazer um IP de teste
+ *  levou junto o IP real do dono. Por isso ele mostra o que vai perder, pede a
+ *  palavra por extenso, e o texto aponta para o `remover`, que quase sempre é o
+ *  comando certo. `--sim` existe para scripts, onde não há quem confirme. */
+async function desligar(forcado: boolean): Promise<void> {
+  const atual = listaIps();
+
+  if (atual.length === 0) {
+    console.log('A lista já está vazia — a trava está desligada. Nada a fazer.');
+    return;
+  }
+
+  console.log(`Isto APAGA os ${atual.length} endereço(s) da lista:`);
+  for (const ip of atual) console.log(`  • ${ip}`);
+  console.log('\nA bancada volta a aceitar tentativas de senha de QUALQUER lugar do mundo.');
+  console.log(`Para tirar só um endereço, cancele e use:  npm run ips -- remover ${atual[0]}\n`);
+
+  if (!forcado) {
+    const resposta = await perguntar('Digite "desligar" para confirmar: ');
+    if (resposta !== 'desligar') {
+      console.log('Cancelado. Nada foi alterado.');
+      return;
+    }
+  }
+
+  gravarIps([]);
+  console.log('\nTrava desligada: a lista está vazia e qualquer endereço pode tentar a senha.');
+}
+
+async function main(): Promise<void> {
+  const argumentos = process.argv.slice(2);
+  const forcado = argumentos.includes('--sim');
+  const [comando, valor] = argumentos.filter((a) => a !== '--sim');
 
   if (!comando) return mostrar();
 
   if (comando === 'desligar') {
-    gravarIps([]);
-    console.log('Trava desligada: a lista está vazia e qualquer endereço pode tentar a senha.');
+    await desligar(forcado);
     return;
   }
 
@@ -87,4 +131,7 @@ function main(): void {
   process.exit(1);
 }
 
-main();
+main().catch((e) => {
+  console.error(`Falhou: ${(e as Error).message}`);
+  process.exit(1);
+});
