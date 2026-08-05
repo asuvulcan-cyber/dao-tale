@@ -66,6 +66,18 @@ function violacaoDialogo(texto: string, modo: PreferenciasEstilo['dialogo']): st
   return null;
 }
 
+/** Vírgula do inciso DENTRO das aspas — convenção do inglês, não do português.
+ *  Em PT-BR a vírgula pertence à frase que emoldura a fala, então fica depois
+ *  das aspas: `"Não há saída", disse ele.` Escapou por muito tempo porque a
+ *  própria regra do prompt se contradizia (a prosa dizia "dentro", o exemplo
+ *  mostrava fora), e o modelo seguia ora uma, ora outra. */
+function violacaoVirgulaNaAspa(texto: string, modo: PreferenciasEstilo['dialogo']): string | null {
+  if (modo !== 'aspas') return null;
+  // vírgula colada no fecho das aspas seguida de verbo de elocução em minúscula
+  const m = texto.match(/,"\s+[a-zà-ÿ][a-zà-ÿ]+/);
+  return m ? m[0].slice(0, 40) : null;
+}
+
 /** Aspas que a regra manda converter para retas: tanto as asiáticas (「」『』)
  *  quanto as curvas tipográficas (“” ‘’). A tabela de conversão do prompt lista
  *  as duas famílias, então as duas contam. */
@@ -93,6 +105,9 @@ export function analisarEstilo(
 
     const naoRetas = violacaoAspasNaoRetas(t);
     if (naoRetas) violacoes.push({ ordem: f.ordem, regra: 'aspas-nao-retas', trecho: naoRetas });
+
+    const virgula = violacaoVirgulaNaAspa(t, prefs.dialogo);
+    if (virgula) violacoes.push({ ordem: f.ordem, regra: 'virgula-dentro-da-aspa', trecho: virgula });
   }
 
   // Terços por POSIÇÃO no capítulo, que é o eixo que revela o decaimento.

@@ -129,7 +129,7 @@ const DIALOGO: Record<ModoDialogo, string[]> = {
   aspas: [
     '**Diálogo — aspas duplas.** Toda fala vai entre aspas duplas retas (" "), nunca travessão. Aspas asiáticas convertem: 「」 e “” → " " ; 『』 e ‘’ → \' \'.',
     '- O verbo de elocução (*dicendi*: dizer, perguntar, gritar, murmurar) fica sempre em **minúscula** depois da fala.',
-    '- Fala terminada em ponto: o ponto vira **vírgula**, dentro das aspas. — `"Não há saída", disse ele.`',
+    '- Fala terminada em ponto: o ponto **desaparece** e a vírgula do inciso vai **depois** das aspas de fechamento — ela pertence à frase que emoldura, não à fala. — `"Não há saída", disse ele.` (nunca `"Não há saída," disse ele.`, que é convenção do inglês)',
     '- Fala terminada em ? ! …: a pontuação se mantém, sem vírgula. — `"Quem está aí?" perguntou ela.`',
     '- Inciso no meio, com a fala continuando depois: vírgula antes e depois do inciso, cada trecho de fala com suas aspas. — `"Não há saída", disse ele, "e você sabe."`',
     '- Ação que não é elocução (sorrir, virar-se, erguer a espada) não é inciso: a fala fecha com **ponto dentro das aspas** e a ação é frase nova. — `"Fala." Ele sorriu.`',

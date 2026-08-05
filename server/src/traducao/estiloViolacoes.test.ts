@@ -77,3 +77,31 @@ describe('recall do mais-que-perfeito', () => {
     expect(r.violacoes).toEqual([]);
   });
 });
+
+describe('vírgula do inciso', () => {
+  it('acusa a vírgula DENTRO das aspas (convenção do inglês)', () => {
+    const r = analisarEstilo(frases(['"Os da família Gu devem voltar," disse o homem de preto.']), {
+      ...PREFERENCIAS_PADRAO,
+      dialogo: 'aspas',
+    });
+    expect(r.violacoes.map((v) => v.regra)).toContain('virgula-dentro-da-aspa');
+  });
+
+  it('aceita a forma portuguesa, com a vírgula depois das aspas', () => {
+    const r = analisarEstilo(frases(['"Os da família Gu devem voltar", disse o homem de preto.']), {
+      ...PREFERENCIAS_PADRAO,
+      dialogo: 'aspas',
+    });
+    expect(r.violacoes).toEqual([]);
+  });
+
+  it('não acusa ponto de interrogação, que fica dentro por pertencer à fala', () => {
+    const r = analisarEstilo(frases(['"Quem está aí?" perguntou ela.']), { ...PREFERENCIAS_PADRAO, dialogo: 'aspas' });
+    expect(r.violacoes).toEqual([]);
+  });
+
+  it('não se aplica ao modo travessão', () => {
+    const r = analisarEstilo(frases(['"algo," disse ele.']), { ...PREFERENCIAS_PADRAO, dialogo: 'travessao' });
+    expect(r.violacoes.map((v) => v.regra)).not.toContain('virgula-dentro-da-aspa');
+  });
+});
