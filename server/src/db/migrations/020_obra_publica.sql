@@ -1,0 +1,12 @@
+-- Vitrine pública (doc 14): a obra sai do sigilo por um ato explícito.
+--
+-- Todo o resto do app é single-user atrás de senha. A vitrine é a única
+-- superfície que responde sem cookie, e por isso o padrão é 0: uma obra nova,
+-- um `restaurar` de backup ou um import de JSON antigo nascem PRIVADOS. Publicar
+-- é uma decisão que alguém precisa tomar clicando — nunca um efeito colateral.
+--
+-- Nota deliberada: a coluna vive na OBRA, não no capítulo. Publicar capítulo a
+-- capítulo dobraria a chance de vazar o errado, e o recorte por capítulo já
+-- existe e é mais seguro — só sai o que está em 'finalizado', o status que o
+-- usuário marca quando termina a revisão humana.
+ALTER TABLE obras ADD COLUMN publica INTEGER NOT NULL DEFAULT 0;

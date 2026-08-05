@@ -16,6 +16,8 @@ export * from './preferenciasEstilo.js';
 // Temperatura por papel (doc 08 §13): amostragem, não texto — por isso fica na
 // configuração e na obra, e não na versão do prompt.
 export * from './temperatura.js';
+// Vitrine pública (doc 14): os únicos formatos que saem sem sessão.
+export * from './publico.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
@@ -180,6 +182,9 @@ export interface Obra {
    * raciocínio — e saída é ~99% da conta. */
   thinking: ModoThinking | null;
   fase_traducao: FaseTraducao;
+  /** Obra visível na vitrine pública, sem sessão (doc 14). Padrão false, e só
+   * os capítulos em 'finalizado' saem. */
+  publica: boolean;
   criado_em: string;
   atualizado_em: string;
 }

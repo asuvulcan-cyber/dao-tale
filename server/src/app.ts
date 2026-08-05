@@ -11,6 +11,7 @@ import { rotasCuradoria } from './rotas/curadoria.js';
 import { rotasComparador } from './rotas/comparador.js';
 import { rotasExportacao } from './rotas/exportacao.js';
 import { protecaoOrigem } from './rotas/protecaoOrigem.js';
+import { rotasPublicas } from './rotas/publico.js';
 import { exigirSessao, rotasSessao } from './rotas/sessao.js';
 import type { OpcoesLimite } from './auth/limite.js';
 
@@ -55,6 +56,11 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
   // Login/logout/status ficam ANTES da guarda — são a porta, não o cômodo.
   app.route('/api', rotasSessao(opcoes.limiteLogin));
 
+  // Vitrine pública (doc 14), também antes da guarda: leitura das obras que o
+  // dono marcou como públicas, capítulos em 'finalizado', sem sessão. É a única
+  // outra porta aberta, e a lista de rotas dela cabe numa tela de propósito.
+  app.route('/api', rotasPublicas(db));
+
   // Daqui para baixo, em modo hospedado, tudo exige sessão (doc 13 §3).
   app.use('/api/*', exigirSessao());
 
@@ -70,6 +76,12 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
     console.error('[erro não tratado]', erro);
     return c.json({ erro: { codigo: 'interno', mensagem: erro.message } }, 500);
   });
+
+  // Publicar não é o mesmo que indexar (doc 14 §6). A vitrine existe para o dono
+  // mandar o link a quem ele quiser; virar resultado de busca é uma decisão
+  // separada, e mais difícil de desfazer do que de tomar. Padrão: fora do índice.
+  // Para permitir buscadores, troque o Disallow por "Allow: /".
+  app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
   // Interface compilada (web/dist), com fallback SPA para index.html.
   app.get('*', (c) => {

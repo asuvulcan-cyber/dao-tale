@@ -63,10 +63,18 @@ function paraFrase(l: any): Frase {
 
 // Colunas sem o BLOB da capa (pesado e sem lugar em JSON); tem_capa o resume.
 const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.autor, o.sinopse, o.tags, o.provedor_padrao,
-  o.modelo_padrao, o.temperatura, o.thinking, o.fase_traducao, o.criado_em, o.atualizado_em, (o.capa IS NOT NULL) AS tem_capa`;
+  o.modelo_padrao, o.temperatura, o.thinking, o.fase_traducao, o.publica, o.criado_em, o.atualizado_em,
+  (o.capa IS NOT NULL) AS tem_capa`;
 
-function paraObra<T extends { tags: unknown; tem_capa: unknown }>(linha: T): T & { tags: string[]; tem_capa: boolean } {
-  return { ...linha, tags: JSON.parse((linha.tags as string) || '[]'), tem_capa: !!linha.tem_capa };
+function paraObra<T extends { tags: unknown; tem_capa: unknown; publica: unknown }>(
+  linha: T,
+): T & { tags: string[]; tem_capa: boolean; publica: boolean } {
+  return {
+    ...linha,
+    tags: JSON.parse((linha.tags as string) || '[]'),
+    tem_capa: !!linha.tem_capa,
+    publica: !!linha.publica,
+  };
 }
 
 export const reposObras = {
@@ -132,6 +140,7 @@ export const reposObras = {
         | 'modelo_padrao'
         | 'temperatura'
         | 'thinking'
+        | 'publica'
       >
     >,
   ): Obra | undefined {
@@ -139,7 +148,7 @@ export const reposObras = {
     if (!atual) return undefined;
     db.prepare(
       `UPDATE obras SET titulo = ?, titulo_original = ?, autor = ?, sinopse = ?, tags = ?, provedor_padrao = ?, modelo_padrao = ?,
-        temperatura = ?, thinking = ?, atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+        temperatura = ?, thinking = ?, publica = ?, atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
     ).run(
       campos.titulo ?? atual.titulo,
       campos.titulo_original !== undefined ? campos.titulo_original : atual.titulo_original,
@@ -151,6 +160,9 @@ export const reposObras = {
       // Guarda de fronteira: valor fora da faixa aceita não vira chamada rejeitada.
       campos.temperatura !== undefined ? temperaturaValida(campos.temperatura) : atual.temperatura,
       campos.thinking !== undefined ? campos.thinking : atual.thinking,
+      // Publicar/despublicar passa por aqui como qualquer campo, mas o padrão
+      // ao OMITIR é sempre "mantém o que estava" — nunca "publica".
+      (campos.publica !== undefined ? campos.publica : atual.publica) ? 1 : 0,
       id,
     );
     return this.obter(db, id);

@@ -13,7 +13,7 @@ import {
   type PromptPadrao,
   type ProvedorId,
 } from '@dao-tale/shared';
-import { api } from '../api';
+import { api, mensagemDeErro } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CAPITULO_ROTULO } from '../App';
 import { SeletorModelo } from '../componentes/SeletorModelo';
 import { PainelExportacao } from '../componentes/ExportarObra';
@@ -534,6 +534,7 @@ function FichaObra() {
       {editando && (
         <>
           <DetalhesObra />
+          <PainelPublicacao />
           <PreferenciasObra />
         </>
       )}
@@ -740,6 +741,110 @@ function DetalhesObra() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Vitrine pública (doc 14). Publicar é o único botão do app que muda o que
+    ESTRANHOS veem, então ele diz exatamente o que vai sair antes de sair — e
+    despublicar é um clique, sem confirmação: desfazer nunca deve ser mais
+    difícil do que fazer. */
+function PainelPublicacao() {
+  const { obraId } = useParams();
+  const clienteQuery = useQueryClient();
+  const [erro, setErro] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
+
+  const { data: obra } = useQuery({
+    queryKey: ['obra', obraId],
+    queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
+  });
+  const { data: capitulos } = useQuery({
+    queryKey: ['capitulos', obraId],
+    queryFn: () => api<CapituloResumo[]>('GET', `/obras/${obraId}/capitulos`),
+  });
+
+  const finalizados = (capitulos ?? []).filter((c) => c.status === 'finalizado');
+  const naoFinalizados = (capitulos ?? []).length - finalizados.length;
+
+  const mudar = useMutation({
+    mutationFn: (publica: boolean) => api<Obra>('PUT', `/obras/${obraId}`, { publica }),
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['obra', obraId] });
+      clienteQuery.invalidateQueries({ queryKey: ['obras'] });
+      setErro('');
+      setConfirmando(false);
+    },
+    onError: (e) => setErro(mensagemDeErro(e)),
+  });
+
+  if (!obra) return null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-linha bg-papel-alto p-4">
+      <p className="olho">Vitrine pública</p>
+
+      {obra.publica ? (
+        <>
+          <p className="mt-2 text-sm">
+            No ar. Qualquer pessoa com o endereço lê{' '}
+            <strong>
+              {finalizados.length} {finalizados.length === 1 ? 'capítulo' : 'capítulos'}
+            </strong>
+            {naoFinalizados > 0 && (
+              <>
+                {' '}
+                — os outros {naoFinalizados} ficam de fora até você marcá-los como{' '}
+                <em>finalizado</em>
+              </>
+            )}
+            .
+          </p>
+          <p className="mt-1 text-sm">
+            <a href={`/ler/${obraId}`} target="_blank" rel="noreferrer" className="text-jade-forte underline">
+              Abrir a página pública
+            </a>
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <Botao variante="secundario" onClick={() => mudar.mutate(false)} disabled={mudar.isPending}>
+              Tirar do ar
+            </Botao>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-tinta-2">
+            Esta obra é privada. Publicando, quem abrir o endereço sem senha passa a ler os capítulos
+            marcados como <em>finalizado</em> — hoje{' '}
+            <strong>
+              {finalizados.length} de {(capitulos ?? []).length}
+            </strong>
+            . Glossário, prompts, custos e o texto em chinês continuam só seus.
+          </p>
+          {finalizados.length === 0 ? (
+            <p className="mt-3 text-sm text-tinta-2">
+              Nenhum capítulo está <em>finalizado</em> ainda — sem isso a obra não apareceria para
+              ninguém. Marque ao menos um antes de publicar.
+            </p>
+          ) : confirmando ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className="text-sm">Publicar {finalizados.length} capítulo(s)?</span>
+              <Botao onClick={() => mudar.mutate(true)} disabled={mudar.isPending}>
+                {mudar.isPending ? 'Publicando…' : 'Sim, publicar'}
+              </Botao>
+              <Botao variante="secundario" onClick={() => setConfirmando(false)}>
+                Cancelar
+              </Botao>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <Botao onClick={() => setConfirmando(true)}>Publicar obra</Botao>
+            </div>
+          )}
+        </>
+      )}
+
+      {erro && <p className="mt-2 text-sm text-erro">{erro}</p>}
     </div>
   );
 }

@@ -58,6 +58,9 @@ const atualizarObraSchema = z.object({
   temperatura: z.number().min(0).max(TEMPERATURA_MAX).nullable().optional(),
   // Raciocínio do provedor nesta obra; null = o padrão dele.
   thinking: z.enum(MODOS_THINKING).nullable().optional(),
+  // Vitrine pública (doc 14). Booleano estrito e sem `nullable`: publicar é um
+  // sim ou um não explícito, e omitir mantém o que estava.
+  publica: z.boolean().optional(),
 });
 
 const MIMES_CAPA = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);

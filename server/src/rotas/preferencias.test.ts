@@ -4,6 +4,7 @@ import { abrirBanco, type BancoDados } from '../db/index.js';
 import { criarApp } from '../app.js';
 import { exportarObra, importarObra } from '../db/portabilidade.js';
 import { reposPrompts, reposPromptPadrao } from '../db/repos.js';
+import { _thinkingMock, _zerarCacheMock } from '../ia/mock.js';
 import type { Hono } from 'hono';
 
 // Preferências de estilo pela API (doc 08 §12): virar uma chave é criar uma versão
@@ -137,6 +138,28 @@ describe('preferências de estilo na API', () => {
       expect(res.ok).toBe(true);
       expect(res.metricas).toMatchObject({ aquele: expect.any(Number), demonstrativos: expect.any(Number) });
     }
+  });
+
+  it('o comparador herda o thinking da obra — senão mede raciocínio contra prosa', async () => {
+    // Medido na 死人经: o comparador rodava a obra `thinking: desligado` com
+    // raciocínio ligado e gastava 13–20 mil tokens de saída por bloco de 20
+    // frases, contra 1,4 mil do job. Comparar prompts assim compara outra coisa.
+    _zerarCacheMock();
+    const obra = await obraComDelta();
+    await chamar('PUT', `/api/obras/${obra.id}`, { thinking: 'desligado' });
+    await chamar('POST', `/api/obras/${obra.id}/comparar`, {
+      texto_zh: '林风举起剑。',
+      alvos: [{ provedor: 'mock', modelo: 'mock-v1' }],
+    });
+    expect(_thinkingMock('traducao')).toBe('desligado');
+
+    await chamar('PUT', `/api/obras/${obra.id}`, { thinking: null });
+    _zerarCacheMock();
+    await chamar('POST', `/api/obras/${obra.id}/comparar`, {
+      texto_zh: '林风举起剑。',
+      alvos: [{ provedor: 'mock', modelo: 'mock-v1' }],
+    });
+    expect(_thinkingMock('traducao')).toBeUndefined();
   });
 
   it('núcleo inexistente no alvo vira erro daquele alvo, não 500 da rota', async () => {

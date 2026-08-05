@@ -3,13 +3,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { EstadoSessao } from '@dao-tale/shared';
 import { EVENTO_SESSAO_EXPIRADA } from '../api';
 import { CHAVE_SESSAO, usarSessao } from '../sessao';
-import { Login } from '../paginas/Login';
 
 // Portão do modo hospedado (doc 13 §3). Em modo local o servidor responde
 // `autenticado: true` e este componente é um passa-direto — a experiência de
 // desktop não muda em nada.
+//
+// Com a vitrine (doc 14) o portão deixou de ser "bancada ou login" e passou a
+// ser "bancada ou vitrine": sem sessão, o visitante recebe um roteador
+// DIFERENTE, que não conhece as rotas da bancada. A separação é de conveniência
+// para o visitante, não é a trava — quem barra o acesso aos dados é
+// `exigirSessao` no servidor, e nenhuma tela da vitrine sabe pedir outra coisa.
 
-export function PortaoSessao({ children }: { children: React.ReactNode }) {
+export function PortaoSessao({ children, vitrine }: { children: React.ReactNode; vitrine: React.ReactNode }) {
   const cliente = useQueryClient();
   const { data, isPending, isError, error, refetch } = usarSessao();
 
@@ -42,17 +47,7 @@ export function PortaoSessao({ children }: { children: React.ReactNode }) {
   }
 
   if (!data.autenticado) {
-    return (
-      <Login
-        senhaDefinida={data.senha_definida}
-        aoEntrar={() => {
-          // Cache limpo: o que estava na tela foi carregado sem sessão (ou é de
-          // outra sessão) e precisa ser buscado de novo.
-          cliente.clear();
-          void refetch();
-        }}
-      />
-    );
+    return <>{vitrine}</>;
   }
 
   return <>{children}</>;

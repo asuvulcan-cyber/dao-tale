@@ -14,6 +14,7 @@ const SECOES = [
   { id: 'cotas', titulo: 'Cotas e uso' },
   { id: 'economia', titulo: 'Economizando tokens' },
   { id: 'dados', titulo: 'Backup e dados' },
+  { id: 'publicar', titulo: 'Publicar uma obra' },
 ];
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: React.ReactNode }) {
@@ -384,6 +385,41 @@ export function Docs() {
           <p>
             Cada obra também pode ser exportada/importada como arquivo JSON (na lista de obras), e capítulos prontos
             saem em Markdown pelo editor.
+          </p>
+        </Secao>
+
+        <Secao id="publicar" titulo="Publicar uma obra">
+          <p>
+            Quando o app está hospedado com senha, ele pode mostrar uma <strong>vitrine</strong> para quem abrir o
+            endereço sem entrar: uma estante com as obras publicadas e um leitor limpo. É o único pedaço do Dao Tale
+            que responde sem senha.
+          </p>
+          <Sub>Precisa dos dois sins</Sub>
+          <Passos
+            itens={[
+              <>
+                A <strong>obra</strong> precisa estar publicada — o botão fica na aba de capítulos, em{' '}
+                <em>Editar detalhes</em>.
+              </>,
+              <>
+                O <strong>capítulo</strong> precisa estar com status <em>finalizado</em>. Rascunho, traduzido e
+                revisado ficam de fora.
+              </>,
+            ]}
+          />
+          <p>
+            Publicar uma obra não publica o que ainda está sendo revisado: capítulo novo só aparece na rua quando você
+            o marca como finalizado. <strong>Tirar do ar</strong> é um clique e vale na hora.
+          </p>
+          <Sub>O que a vitrine nunca mostra</Sub>
+          <p>
+            Glossário, prompt mãe, custos, banco de testes, termos sugeridos, o texto original em chinês e os
+            downloads (EPUB, PDF, Markdown) continuam só seus. O visitante lê o português na tela e nada mais — nem
+            consegue ver quantos capítulos inéditos existem.
+          </p>
+          <p>
+            Buscadores são desencorajados por padrão (<code>robots.txt</code>), porque publicar é para mandar o link a
+            quem você quiser; aparecer no Google é outra decisão.
           </p>
         </Secao>
       </div>

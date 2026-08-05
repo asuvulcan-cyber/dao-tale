@@ -86,6 +86,12 @@ export function rotasComparador(db: BancoDados): Hono {
       // 1.0 de antes espalhava as execuções do MESMO prompt tanto quanto a
       // diferença entre dois prompts.
       temperatura: resolverTemperatura(config.temperaturas, 'traducao', obra.temperatura),
+      // Mesmo argumento vale para o thinking, e aqui doía mais: sem repassar o
+      // modo da obra, `reasoning_effort: 'none'` nunca era enviado (compat.ts) e
+      // o comparador media com raciocínio ligado uma obra que traduz com ele
+      // desligado. Medido na 死人经: 13–20 mil tokens de saída por bloco de 20
+      // frases, contra 1,4 mil do job — dez vezes, comparando coisas diferentes.
+      thinking: obra.thinking ?? undefined,
       glossario,
       glossarioNoUsuario: config.glossario_relevante,
       caudaAnterior: [],
