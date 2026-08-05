@@ -1125,6 +1125,35 @@ function rotuloConvergido(db: BancoDados, obraId: number, rotulo: string): strin
   return usados.find((u) => normalizarSecaoRegra(u.secao_regra) === alvo)?.secao_regra ?? rotulo;
 }
 
+// ── Estilo dispensado (trinca frase+regra+trecho já conferida) ────────────
+
+export const reposEstiloIgnorado = {
+  /** Chaves `frase|regra|trecho` ignoradas no capítulo — para filtrar a varredura. */
+  doCapitulo(db: BancoDados, capituloId: number): Set<string> {
+    const linhas = db
+      .prepare(
+        `SELECT i.frase_id, i.regra, i.trecho FROM estilo_ignorado i
+         JOIN frases f ON f.id = i.frase_id WHERE f.capitulo_id = ?`,
+      )
+      .all(capituloId) as { frase_id: number; regra: string; trecho: string }[];
+    return new Set(linhas.map((l) => `${l.frase_id}|${l.regra}|${l.trecho}`));
+  },
+
+  dispensar(db: BancoDados, fraseId: number, regra: string, trecho: string): void {
+    db.prepare(
+      'INSERT INTO estilo_ignorado (frase_id, regra, trecho) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
+    ).run(fraseId, regra, trecho);
+  },
+
+  restaurar(db: BancoDados, fraseId: number, regra: string, trecho: string): void {
+    db.prepare('DELETE FROM estilo_ignorado WHERE frase_id = ? AND regra = ? AND trecho = ?').run(
+      fraseId,
+      regra,
+      trecho,
+    );
+  },
+};
+
 // ── Consistência dispensada (par frase+termo já conferido) ────────────────
 
 export const reposConsistencia = {

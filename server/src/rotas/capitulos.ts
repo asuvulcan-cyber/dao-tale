@@ -3,7 +3,7 @@ import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { PROVEDORES_IDS, STATUS_CAPITULO, normalizarPreferencias, type EventoTraducao } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConsistencia, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa } from '../db/repos.js';
+import { reposCapitulos, reposConsistencia, reposEstiloIgnorado, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
@@ -90,7 +90,42 @@ export function rotasCapitulos(db: BancoDados): Hono {
     if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
     const prompt = reposPrompts.ativo(db, capitulo.obra_id);
     const prefs = normalizarPreferencias(prompt?.preferencias);
-    return c.json(analisarEstilo(reposFrases.listarPorCapitulo(db, id), prefs));
+    const frases = reposFrases.listarPorCapitulo(db, id);
+    const relatorio = analisarEstilo(frases, prefs);
+
+    // A varredura trabalha por `ordem` (é o eixo do `por_terco`); a tela precisa
+    // do id para pular até a frase e para dispensar. O de-para é aqui, e não
+    // dentro de analisarEstilo, que segue puro para as medições e comparações.
+    const idPorOrdem = new Map(frases.map((f) => [f.ordem, f.id]));
+    const ignoradas = reposEstiloIgnorado.doCapitulo(db, id);
+    const visiveis = relatorio.violacoes
+      .map((v) => ({ ...v, frase_id: idPorOrdem.get(v.ordem) ?? null }))
+      .filter((v) => v.frase_id == null || !ignoradas.has(`${v.frase_id}|${v.regra}|${v.trecho}`));
+
+    // `por_terco` é recontado sobre o que sobrou: se contasse o dispensado, o
+    // gráfico diria uma coisa e a lista outra.
+    const por_terco: [number, number, number] = [0, 0, 0];
+    for (const v of visiveis) {
+      const i = frases.length === 0 ? 0 : Math.min(2, Math.floor((v.ordem / frases.length) * 3));
+      por_terco[i] += 1;
+    }
+    return c.json({ ...relatorio, violacoes: visiveis, por_terco, ignoradas: ignoradas.size });
+  });
+
+  // Ignorar um alerta de estilo: some da lista e da contagem, sem tocar no
+  // texto. Por TRINCA (frase, regra, trecho).
+  app.post('/frases/:id/estilo/dispensar', async (c) => {
+    const corpo = z
+      .object({ regra: z.string().min(1), trecho: z.string().min(1), desfazer: z.boolean().optional() })
+      .safeParse(await c.req.json());
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const fraseId = Number(c.req.param('id'));
+    if (!reposFrases.obter(db, fraseId))
+      return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
+    const { regra, trecho, desfazer } = corpo.data;
+    if (desfazer) reposEstiloIgnorado.restaurar(db, fraseId, regra, trecho);
+    else reposEstiloIgnorado.dispensar(db, fraseId, regra, trecho);
+    return c.json({ ok: true });
   });
 
   // Dispensar uma ocorrência: "já conferi, aqui está certo". Por PAR

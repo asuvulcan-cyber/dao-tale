@@ -47,6 +47,21 @@ interface ViolacaoConsistencia {
   texto_pt: string;
 }
 
+interface ViolacaoEstilo {
+  frase_id: number | null;
+  ordem: number;
+  regra: string;
+  trecho: string;
+}
+
+const REGRA_ESTILO_ROTULO: Record<string, string> = {
+  'mais-que-perfeito': 'Mais-que-perfeito simples',
+  'aspas-nao-retas': 'Aspas não retas',
+  'virgula-dentro-da-aspa': 'Vírgula dentro das aspas',
+  'dialogo-aspas': 'Travessão numa obra de aspas',
+  'dialogo-travessao': 'Aspas numa obra de travessão',
+};
+
 // ── Modos de visualização do capítulo (item 9 do backlog) ───────────────────
 const MODOS_EDITOR = [
   { id: 'segmentado', rotulo: 'Segmentado' },
@@ -113,6 +128,7 @@ export function EditorCapitulo() {
   const [erroJob, setErroJob] = useState('');
   const [provedorEscolhido, setProvedorEscolhido] = useState('');
   const [mostrarConsistencia, setMostrarConsistencia] = useState(false);
+  const [mostrarEstilo, setMostrarEstilo] = useState(false);
   const [mostrarQa, setMostrarQa] = useState(false);
   // Correção rápida (troca de termo detectada numa edição manual) — o banner
   // oferece aplicar a mesma troca nas outras frases do capítulo/obra.
@@ -537,6 +553,7 @@ export function EditorCapitulo() {
         aoAlternarTermos={() => setMarcarTermos((v) => !v)}
         consistenciaDisponivel={frases.some((f) => f.status_traducao === 'traduzida') && !emExecucao}
         aoAbrirConsistencia={() => setMostrarConsistencia(true)}
+        aoAbrirEstilo={() => setMostrarEstilo(true)}
         tamanho={tamanhoLeitura}
         aoMudarTamanho={setTamanhoLeitura}
         largura={larguraLeitura}
@@ -693,6 +710,20 @@ export function EditorCapitulo() {
         />
       )}
 
+      {mostrarEstilo && (
+        <ModalEstilo
+          capituloId={capituloId!}
+          aoFechar={() => setMostrarEstilo(false)}
+          aoIrParaFrase={(fraseId) => {
+            setMostrarEstilo(false);
+            setFraseSelecionada(fraseId);
+            requestAnimationFrame(() =>
+              document.getElementById(`frase-${fraseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+            );
+          }}
+        />
+      )}
+
       {mostrarQa && (
         <ModalQa
           capituloId={capituloId!}
@@ -805,6 +836,7 @@ function PaletaEditor({
   aoAlternarTermos,
   consistenciaDisponivel,
   aoAbrirConsistencia,
+  aoAbrirEstilo,
   tamanho,
   aoMudarTamanho,
   largura,
@@ -816,6 +848,7 @@ function PaletaEditor({
   aoAlternarTermos: () => void;
   consistenciaDisponivel: boolean;
   aoAbrirConsistencia: () => void;
+  aoAbrirEstilo: () => void;
   tamanho: number;
   aoMudarTamanho: React.Dispatch<React.SetStateAction<number>>;
   largura: LarguraLeitura;
@@ -855,6 +888,15 @@ function PaletaEditor({
               <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
                 <circle cx="8" cy="8" r="6.2" />
                 <path d="m5.2 8.2 2 2 3.6-4" />
+              </svg>
+            </BotaoTrilho>
+          )}
+          {consistenciaDisponivel && (
+            <BotaoTrilho rotulo="Estilo da obra" onClick={aoAbrirEstilo}>
+              <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <path d="M3 12.5 8.5 3l2 5.5" />
+                <path d="M5.5 9.5h4.2" />
+                <path d="M12 12.5h1.5" />
               </svg>
             </BotaoTrilho>
           )}
@@ -907,6 +949,11 @@ function PaletaEditor({
         {consistenciaDisponivel && (
           <button type="button" className="ferramenta" onClick={aoAbrirConsistencia}>
             Consistência
+          </button>
+        )}
+        {consistenciaDisponivel && (
+          <button type="button" className="ferramenta" onClick={aoAbrirEstilo}>
+            Estilo
           </button>
         )}
         {mostrarTexto && (
@@ -1532,6 +1579,103 @@ function ModalConsistencia({
                   demais — aparecem dentro de palavras comuns); prefira cadastrar o composto (ex.: 人级 em vez de 人).
                 </>
               )}
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Varredura de estilo: determinística, sem IA e sem custo — ela já achava tudo
+ *  isso, só não tinha onde aparecer, e o revisor relia o capítulo à mão
+ *  procurando o que uma regex encontra em milissegundos. */
+function ModalEstilo({
+  capituloId,
+  aoFechar,
+  aoIrParaFrase,
+}: {
+  capituloId: string;
+  aoFechar: () => void;
+  aoIrParaFrase: (fraseId: number) => void;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['estilo', capituloId],
+    queryFn: () =>
+      api<{ frases_total: number; violacoes: ViolacaoEstilo[]; por_terco: [number, number, number]; ignoradas: number }>(
+        'GET',
+        `/capitulos/${capituloId}/estilo`,
+      ),
+    staleTime: 0,
+  });
+  const clienteQuery = useQueryClient();
+  const ignorar = useMutation({
+    mutationFn: (d: { frase_id: number; regra: string; trecho: string }) =>
+      api('POST', `/frases/${d.frase_id}/estilo/dispensar`, { regra: d.regra, trecho: d.trecho }),
+    onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['estilo', capituloId] }),
+  });
+
+  return (
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
+      <div className="max-h-[80vh] w-[42rem] max-w-full space-y-3 overflow-auto cartao p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <h3 className="font-semibold">Estilo da obra</h3>
+          <button onClick={aoFechar} className="text-tinta-2 hover:text-tinta">
+            ✕
+          </button>
+        </div>
+        {isLoading && <p className="text-sm text-tinta-2">Verificando…</p>}
+        {data && (
+          <>
+            <p className="text-sm text-tinta-2">
+              {data.frases_total} frase{data.frases_total === 1 ? '' : 's'} ·{' '}
+              {data.violacoes.length === 0 ? (
+                <span className="font-medium text-jade-forte">nada fora das preferências.</span>
+              ) : (
+                <span className="font-medium text-selo-forte">{data.violacoes.length} fora das preferências:</span>
+              )}
+              {data.ignoradas > 0 && <> · {data.ignoradas} ignorada{data.ignoradas === 1 ? '' : 's'}</>}
+            </p>
+            {data.violacoes.length > 0 && (
+              /* Concentração no fim acusa bloco grande demais (decaimento ao
+                 longo de uma geração longa); espalhado acusa outra coisa. */
+              <p className="text-xs text-tinta-2">
+                Por terço do capítulo: {data.por_terco[0]} · {data.por_terco[1]} · {data.por_terco[2]}
+                {data.por_terco[2] > data.por_terco[0] + data.por_terco[1] && ' — concentrado no fim, típico de bloco grande demais.'}
+              </p>
+            )}
+            <div className="space-y-2">
+              {data.violacoes.map((v, i) => (
+                <div key={i} className="rounded border border-selo/40 bg-selo-tint p-3 text-sm">
+                  <p className="mb-2">
+                    <span className="font-medium">“{v.trecho}”</span> — {REGRA_ESTILO_ROTULO[v.regra] ?? v.regra} (frase{' '}
+                    {v.ordem + 1})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {v.frase_id != null && (
+                      <>
+                        <Botao variante="secundario" onClick={() => aoIrParaFrase(v.frase_id!)}>
+                          Ir à frase
+                        </Botao>
+                        <Botao
+                          variante="secundario"
+                          onClick={() => ignorar.mutate({ frase_id: v.frase_id!, regra: v.regra, trecho: v.trecho })}
+                          disabled={ignorar.isPending}
+                        >
+                          Ignorar alerta
+                        </Botao>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-tinta-2">
+              Heurística por sufixo: sinaliza, não julga. <strong>Ignorar alerta</strong> tira daqui e da contagem
+              sem tocar no texto. Palavras que caem aqui sempre (nome de árvore, advérbio) são caso para a lista de
+              exceções da varredura, que conserta para todas as obras de uma vez — não para ignorar uma a uma. E a
+              varredura não vê tudo: <em>fora</em>, <em>era</em>, <em>vira</em> e <em>dera</em> são ambíguas demais
+              para acusar, então continuam por sua conta.
             </p>
           </>
         )}

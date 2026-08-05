@@ -984,3 +984,51 @@ describe('operação e durabilidade (doc 10)', () => {
     expect(depois.backups.ultimo).toBe(corpo.backup.em);
   });
 });
+
+describe('varredura de estilo na API', () => {
+  it('lista as violações com a frase, e ignorar tira da lista e da contagem', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Obra',
+        prompt_inicial: { versao: '1.0', conteudo: 'p' },
+      }),
+    );
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, { numero: 1, texto_origem: '甲说。乙走了。' }),
+    );
+    const capId = criado.capitulo.id;
+    await chamar('POST', `/api/capitulos/${capId}/traduzir`, { provedor: 'mock', sobrescrever: true });
+    for (let i = 0; i < 100; i++) {
+      const det = await json(await chamar('GET', `/api/capitulos/${capId}`));
+      if (!det.progresso.em_execucao && det.frases[0].status_traducao === 'traduzida') break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const frases = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases;
+    await chamar('PATCH', `/api/frases/${frases[0].id}`, { texto_pt: 'Ele cumprira a promessa.' });
+
+    const antes = await json(await chamar('GET', `/api/capitulos/${capId}/estilo`));
+    expect(antes.violacoes).toHaveLength(1);
+    // A tela precisa do id para pular até a frase e para dispensar.
+    expect(antes.violacoes[0]).toMatchObject({ regra: 'mais-que-perfeito', trecho: 'cumprira', frase_id: frases[0].id });
+
+    await chamar('POST', `/api/frases/${frases[0].id}/estilo/dispensar`, {
+      regra: 'mais-que-perfeito',
+      trecho: 'cumprira',
+    });
+    const depois = await json(await chamar('GET', `/api/capitulos/${capId}/estilo`));
+    expect(depois.violacoes).toHaveLength(0);
+    expect(depois.ignoradas).toBe(1);
+    // O texto NÃO foi tocado: ignorar apaga o alerta, não a prosa.
+    const aindaLa = (await json(await chamar('GET', `/api/capitulos/${capId}`))).frases[0];
+    expect(aindaLa.texto_pt).toBe('Ele cumprira a promessa.');
+    // por_terco recontado sobre o que sobrou, senão o gráfico contradiz a lista.
+    expect(depois.por_terco).toEqual([0, 0, 0]);
+
+    await chamar('POST', `/api/frases/${frases[0].id}/estilo/dispensar`, {
+      regra: 'mais-que-perfeito',
+      trecho: 'cumprira',
+      desfazer: true,
+    });
+    expect((await json(await chamar('GET', `/api/capitulos/${capId}/estilo`))).violacoes).toHaveLength(1);
+  });
+});
