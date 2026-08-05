@@ -8,6 +8,7 @@
     "start": "tsx src/index.ts",
     "restaurar": "tsx src/db/restaurar-cli.ts",
     "senha": "tsx src/auth/senha-cli.ts",
+    "ips": "tsx src/auth/ips-cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

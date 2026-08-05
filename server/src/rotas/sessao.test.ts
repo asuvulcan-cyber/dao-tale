@@ -64,7 +64,7 @@ describe('modo local — nada de login (regressão)', () => {
 
   it('o status de sessão diz "autenticado" para a interface não pedir senha', async () => {
     const estado = await (await app.request('http://localhost/api/sessao')).json();
-    expect(estado).toEqual({ modo: 'local', autenticado: true, senha_definida: false });
+    expect(estado).toEqual({ modo: 'local', autenticado: true, senha_definida: false, pode_entrar: true });
   });
 
   it('login em modo local é recusado com explicação, não com senha errada', async () => {
@@ -100,7 +100,10 @@ describe('modo hospedado — sessão obrigatória', () => {
     const r = await pedir('GET', '/api/sessao');
     expect(r.status).toBe(200);
     const estado = await r.json();
-    expect(estado).toEqual({ modo: 'hospedado', autenticado: false, senha_definida: true });
+    // `pode_entrar` é true porque a lista de IPs (doc 14 §7) vem desligada; o
+    // que o status conta continua sendo só o que a interface precisa para se
+    // desenhar, sem caminho de dados nem versão.
+    expect(estado).toEqual({ modo: 'hospedado', autenticado: false, senha_definida: true, pode_entrar: true });
     expect(JSON.stringify(estado)).not.toContain(dir);
     expect(r.headers.get('cache-control')).toBe('no-store');
   });

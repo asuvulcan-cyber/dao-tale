@@ -12,6 +12,7 @@ import { rotasComparador } from './rotas/comparador.js';
 import { rotasExportacao } from './rotas/exportacao.js';
 import { protecaoOrigem } from './rotas/protecaoOrigem.js';
 import { rotasPublicas } from './rotas/publico.js';
+import { travaIp, travaIpNoLogin } from './rotas/travaIp.js';
 import { exigirSessao, rotasSessao } from './rotas/sessao.js';
 import type { OpcoesLimite } from './auth/limite.js';
 
@@ -58,6 +59,10 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
   // (doc 10 §3 → doc 13 §1). Antes de qualquer rota.
   app.use('/api/*', protecaoOrigem());
 
+  // Trava de IP no LOGIN (doc 14 §7), antes do freio de tentativas: quem está
+  // fora da lista não gasta nem uma tentativa, e recebe 404 sem mensagem.
+  app.use('/api/sessao', travaIpNoLogin());
+
   // Login/logout/status ficam ANTES da guarda — são a porta, não o cômodo.
   app.route('/api', rotasSessao(opcoes.limiteLogin));
 
@@ -66,7 +71,9 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
   // outra porta aberta, e a lista de rotas dela cabe numa tela de propósito.
   app.route('/api', rotasPublicas(db));
 
-  // Daqui para baixo, em modo hospedado, tudo exige sessão (doc 13 §3).
+  // Daqui para baixo é bancada. Duas travas em série: de onde (a lista de IPs,
+  // que responde 404 seco) e quem (a sessão, que responde 401).
+  app.use('/api/*', travaIp());
   app.use('/api/*', exigirSessao());
 
   app.route('/api', rotasSistema(db));

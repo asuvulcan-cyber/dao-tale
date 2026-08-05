@@ -131,7 +131,61 @@ O que protege o material inédito não é isto: é o §2.
 
 ---
 
-## 7. O que este passo NÃO faz
+## 7. Trava de IP na bancada
+
+A senha responde *quem é você*. A lista de IPs responde *de onde você pode nem tentar*. Elas
+empilham: quem está fora da lista não vê a bancada nem com a senha certa.
+
+```sh
+npm run ips                          # o que está permitido hoje
+npm run ips -- permitir 189.5.4.3    # um endereço
+npm run ips -- permitir 2804:14d:baa::/48   # uma faixa (IPv6 doméstico muda o final sozinho)
+npm run ips -- remover 189.5.4.3
+npm run ips -- desligar              # esvazia = volta a aceitar de qualquer lugar
+```
+
+A lista vive em `<dados>/ips-permitidos.json` (0600) e é **relida a cada requisição**:
+acrescentar um IP vale na hora, sem reiniciar o serviço.
+
+**A resposta a quem está de fora é `404` sem corpo.** Não é 403 e não tem mensagem — a
+pedido, e é a escolha certa: um 403 com texto anuncia que existe uma lista, o que só ensina
+o visitante a tentar de outro lugar. Para quem está fora, a bancada não existe. A interface
+acompanha: `GET /api/sessao` devolve `pode_entrar: false` e a vitrine deixa de desenhar o
+botão *entrar*; a rota `/entrar` redireciona para a estante sem mostrar campo de senha.
+
+### As três defesas contra se trancar do lado de fora
+
+Esta é a funcionalidade com maior chance de virar contra o dono. IP residencial muda
+sozinho, e dado móvel muda o tempo todo (CGNAT).
+
+1. **Lista vazia = trava desligada.** É o padrão, e é o estado de quem atualiza a versão:
+   ninguém acorda trancado porque instalou o app novo.
+2. **Loopback sempre passa.** Quem está *dentro* da máquina nunca é barrado — é por ali que
+   se conserta, e é o que faz o `npm run ips` funcionar mesmo com a lista errada.
+3. **Só se administra por SSH.** Não há tela no app para editar a própria lista de acesso,
+   de propósito: dá para se expulsar e perder a chave junto.
+
+Preso do lado de fora? SSH na máquina e:
+
+```sh
+cd /opt/dao-tale
+sudo -u daotale DAO_TALE_DIR=/var/lib/dao-tale npm run ips -- permitir $(curl -s https://api.ipify.org)
+```
+
+> **Prefira faixa a endereço exato.** `189.5.4.0/24` ou `2804:14d:baa::/48` sobrevive à
+> troca de IP dentro da mesma operadora/região; `189.5.4.3` te tranca no dia em que o modem
+> reiniciar. E lembre que a trava não protege contra quem estiver na *sua* faixa.
+
+### O que a trava resolve de quebra
+
+O teto global de 30 tentativas por 15 minutos do freio de login (doc 13 §3) era um botão de
+incômodo que qualquer estranho podia apertar: gastar as 30 e deixar o dono sem conseguir
+entrar. Com a lista ligada, quem está fora recebe 404 **antes** do freio e não gasta
+tentativa nenhuma — o teto global passa a contar só quem já tem permissão de chegar.
+
+---
+
+## 8. O que este passo NÃO faz
 
 - **Nenhum controle de banda.** Só o login tem freio. Um visitante insistente consegue bater
   bastante na vitrine, e o `better-sqlite3` é síncrono. Para uso pessoal, com o endereço
@@ -143,7 +197,7 @@ O que protege o material inédito não é isto: é o §2.
 
 ---
 
-## 8. Verificação executada
+## 9. Verificação executada
 
 `server/src/rotas/publico.test.ts` — 22 testes, todos sem cookie:
 

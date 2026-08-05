@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ObraPublica } from '@dao-tale/shared';
 import { api } from '../api';
 import { BotaoTema, Marca } from '../App';
+import { usarSessao } from '../sessao';
 
 // Vitrine pública (doc 14): a porta da rua. É o que qualquer pessoa vê ao abrir
 // o domínio sem senha — a estante das obras publicadas, e nada além disso.
@@ -12,6 +13,9 @@ import { BotaoTema, Marca } from '../App';
 // componente estaria pedindo algo que não devia existir para ele.
 
 export function Biblioteca() {
+  const { data: sessao } = usarSessao();
+  const podeEntrar = sessao?.pode_entrar ?? false;
+
   const { data: obras, isPending, isError } = useQuery({
     queryKey: ['publico', 'obras'],
     queryFn: () => api<ObraPublica[]>('GET', '/publico/obras'),
@@ -27,10 +31,14 @@ export function Biblioteca() {
           <div className="flex items-center gap-2">
             <BotaoTema />
             {/* Discreto de propósito: a porta de serviço não é atração da
-                vitrine, mas o dono precisa dela em qualquer aparelho. */}
-            <Link to="/entrar" className="ferramenta text-tinta-2" title="Entrar na bancada">
-              entrar
-            </Link>
+                vitrine, mas o dono precisa dela em qualquer aparelho. Some por
+                completo para quem está fora da lista de IPs (doc 14 §7) — não
+                adianta oferecer uma porta que vai responder 404. */}
+            {podeEntrar && (
+              <Link to="/entrar" className="ferramenta text-tinta-2" title="Entrar na bancada">
+                entrar
+              </Link>
+            )}
           </div>
         </div>
       </header>

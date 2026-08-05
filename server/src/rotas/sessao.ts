@@ -12,22 +12,12 @@ import {
   verificarToken,
 } from '../auth/sessao.js';
 import { criarLimitador, type OpcoesLimite } from '../auth/limite.js';
+import { ipCliente } from './travaIp.js';
+import { ipPermitido } from '../auth/ips.js';
 
 // Rotas e guarda de sessão (doc 13 §3). Em modo local nada disto entra em ação:
 // `exigirSessao` é um passa-direto e o status responde "autenticado", para a
 // interface não desenhar tela de login numa máquina que nunca teve senha.
-
-function ipCliente(c: Context): string {
-  // X-Forwarded-For só é digno de fé atrás do NOSSO proxy (modo hospedado, Caddy
-  // em loopback). Em modo local, aceitar o header deixaria qualquer um forjar o
-  // IP e escapar do rate-limit.
-  if (ehHospedado()) {
-    const encaminhado = c.req.header('x-forwarded-for');
-    if (encaminhado) return encaminhado.split(',')[0].trim();
-  }
-  const socket = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket;
-  return socket?.remoteAddress ?? 'desconhecido';
-}
 
 function sessaoValida(c: Context): { ok: boolean; geracao?: number; expira_em?: number } {
   const token = lerCookie(c.req.header('cookie'));
@@ -76,6 +66,7 @@ export function rotasSessao(opcoesLimite: OpcoesLimite = {}): Hono {
       modo: modoOperacao(),
       autenticado: ehHospedado() ? sessaoValida(c).ok : true,
       senha_definida: senhaDefinida(),
+      pode_entrar: ipPermitido(ipCliente(c)),
     };
     c.header('Cache-Control', 'no-store');
     return c.json(estado);

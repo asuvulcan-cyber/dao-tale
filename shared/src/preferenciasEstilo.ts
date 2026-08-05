@@ -178,13 +178,20 @@ const PENSAMENTO_EXEMPLO: Record<MarcaPensamento, string> = {
 // marca a anterioridade no advérbio e o modelo marcava DE NOVO no verbo. Dizer
 // "quando um advérbio já marcar" pede um julgamento sobre o português pronto;
 // nomear os marcadores do original vira reconhecimento de padrão na fonte.
+//
+// O passo 3 descreve a forma proibida pelo SUFIXO em vez de citar verbos. A
+// versão anterior citava `aprendera`, `fizera`, `dissera`, `estivera` — e numa
+// varredura de 22 modelos (5 provedores, 6 famílias sem parentesco) rodando o
+// mesmo trecho, 20 produziram justamente `dissera`. Duas leituras possíveis:
+// citar a palavra a planta, ou `dissera` é só o mais-que-perfeito sintético mais
+// frequente do português e aflora sozinho. Descrever sem nomear separa as duas.
 const MAIS_QUE_PERFEITO: Record<PoliticaMaisQuePerfeito, string> = {
   evitar: [
     '**Anterioridade (o "mais-que-perfeito"):** quando a frase narra algo ANTERIOR ao momento da cena, escolha nesta ordem:',
     '1. **Perfeito simples**, sempre que um advérbio ou o próprio contexto já marquem a anterioridade — `nunca aprendeu esgrima`, `treinou anos antes disso`. É a forma mais curta e mais natural: prefira-a sempre que couber.',
     '   **Gatilho no original:** se o chinês trouxer 曾经, 已经, 从来(没), 向来, 从小, 自幼, 早已 ou o aspecto 过, a anterioridade **já está** no advérbio português que os traduz (`certa vez`, `já`, `nunca`, `sempre`, `desde pequeno`) — então o verbo vai no perfeito simples e **não** se marca de novo. `从来没关心过` → `nunca se importou`, nunca `nunca se importara`.',
     '2. **"tinha" ou "havia" + particípio**, quando a anterioridade precisa mesmo ser explicitada — `tinha aprendido com o pai`, `havia herdado o temperamento`. **Alterne os dois auxiliares:** três "tinha" seguidos pesam mais do que a forma que eles substituem.',
-    '3. **Nunca a forma simples** — `aprendera`, `fizera`, `dissera`, `estivera`. Soa livresca e destoa do registro desta obra.',
+    '3. **Nunca a forma simples** — a de uma palavra só, terminada em *-ara*, *-era* ou *-ira*. Soa livresca e destoa do registro desta obra.',
     'Num trecho denso em passado anterior (contar o treino, a origem, o que ficou para trás), resolva a maioria no perfeito simples e reserve a perífrase para onde a anterioridade for o ponto da frase.',
   ].join('\n'),
   permitir: [

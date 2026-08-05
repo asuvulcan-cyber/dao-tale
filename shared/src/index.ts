@@ -667,6 +667,10 @@ export interface EstadoSessao {
   modo: 'local' | 'hospedado';
   autenticado: boolean;
   senha_definida: boolean;
+  /** Este endereço pode ao menos TENTAR a senha (doc 14 §7). Falso quando há
+   * lista de IPs e o visitante está fora dela — a interface então não desenha o
+   * botão de entrar nem a rota /entrar. */
+  pode_entrar: boolean;
 }
 
 export interface InfoBackup {

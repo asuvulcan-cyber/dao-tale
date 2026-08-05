@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Navigate } from 'react-router-dom';
 import { usarSessao } from '../sessao';
 import { Login } from './Login';
 
@@ -11,7 +12,12 @@ import { Login } from './Login';
 // para a lista de obras.
 export function Entrar() {
   const cliente = useQueryClient();
-  const { data, refetch } = usarSessao();
+  const { data, refetch, isPending } = usarSessao();
+
+  // Fora da lista de IPs (doc 14 §7): nem o formulário aparece. O servidor já
+  // responderia 404 ao POST; mostrar o campo de senha só ensinaria a insistir.
+  if (isPending) return <p className="p-6 text-sm text-tinta-2">Carregando…</p>;
+  if (data && !data.pode_entrar) return <Navigate to="/" replace />;
 
   return (
     <Login
