@@ -109,13 +109,25 @@ editou um componente comum. O que a rua vê cabe em um arquivo.
 
 ## 6. Publicar ≠ indexar
 
-`GET /robots.txt` responde `Disallow: /`. A vitrine serve para o dono **mandar o link** a
-quem ele quiser; aparecer em buscador é outra decisão, e bem mais difícil de desfazer do que
-de tomar (cache de buscador sobrevive à despublicação). Para liberar, troque a linha em
-`app.ts` por `Allow: /`.
+A vitrine serve para o dono **mandar o link** a quem ele quiser; aparecer em buscador é outra
+decisão, e bem mais difícil de desfazer do que de tomar (cache de buscador sobrevive à
+despublicação). São duas medidas, e é preciso as duas:
 
-`robots.txt` é convenção, não cadeado: ele orienta buscadores que o respeitam. Quem quiser
-raspar o site, raspa. O que protege o material inédito não é isto — é o §2.
+| Medida | O que faz |
+|---|---|
+| `GET /robots.txt` → `Disallow: /` | pede que o buscador **não leia** as páginas |
+| `X-Robots-Tag: noindex, nofollow` em toda resposta | manda o buscador **não indexar** |
+
+Parecem redundantes e não são. `Disallow` impede a *varredura*, não a *indexação*: uma URL
+citada em outro site pode entrar no resultado de busca mesmo sem nunca ter sido lida — a
+armadilha clássica de quem confia só no `robots.txt`. O cabeçalho é a instrução explícita de
+não indexar, e vale para o crawler que chegar por qualquer caminho.
+
+Para liberar buscadores um dia, é preciso desfazer **as duas** (e o `Disallow` primeiro: um
+crawler que não pode ler a página nunca vê o cabeçalho que a libera).
+
+Nada disso é cadeado — orienta quem respeita a convenção. Quem quiser raspar o site, raspa.
+O que protege o material inédito não é isto: é o §2.
 
 ---
 

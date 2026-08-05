@@ -102,6 +102,31 @@ export function BotaoSair() {
   );
 }
 
+/** Selo e nome. Único lugar onde a marca é desenhada: a bancada e a vitrine
+    pública (doc 14) mostram exatamente a mesma coisa — quem chega pelo link não
+    pode ter a impressão de estar num site meia-boca de outra pessoa. É puro
+    enfeite, sem dado nenhum, por isso é o raro componente que as duas
+    superfícies compartilham. */
+export function Selo() {
+  return (
+    <span
+      className="grid size-8 shrink-0 place-items-center rounded-selo bg-selo font-zh text-lg leading-none text-papel-alto"
+      aria-hidden
+    >
+      道
+    </span>
+  );
+}
+
+export function Marca() {
+  return (
+    <>
+      <Selo />
+      <span className="font-display text-xl font-semibold tracking-tight">Dao Tale</span>
+    </>
+  );
+}
+
 export function Casca() {
   return (
     <div className="min-h-screen bg-papel text-tinta">
@@ -110,13 +135,7 @@ export function Casca() {
             de espremer o título até sumir (doc 13 §7). */}
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
           <Link to="/" className="flex items-center gap-2.5">
-            <span
-              className="grid size-8 place-items-center rounded-selo bg-selo font-zh text-lg leading-none text-papel-alto"
-              aria-hidden
-            >
-              道
-            </span>
-            <span className="font-display text-xl font-semibold tracking-tight">Dao Tale</span>
+            <Marca />
             <TarjaInstancia />
           </Link>
           <nav className="flex items-center gap-3 whitespace-nowrap text-sm sm:gap-4">

@@ -44,6 +44,11 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
       c.res.headers.set('X-Content-Type-Options', 'nosniff');
       c.res.headers.set('Referrer-Policy', 'same-origin');
       c.res.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+      // Fora do índice (doc 14 §6). O `Disallow` do robots.txt sozinho tem um
+      // furo conhecido: ele impede a VARREDURA, não a indexação — uma URL
+      // citada em outro site pode entrar no resultado de busca mesmo sem nunca
+      // ter sido lida. Só o cabeçalho é uma instrução de "não indexe".
+      c.res.headers.set('X-Robots-Tag', 'noindex, nofollow');
     } catch {
       /* resposta congelada — sem cabeçalho extra, sem quebrar a requisição */
     }

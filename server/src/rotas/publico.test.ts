@@ -228,6 +228,22 @@ describe('a vitrine não afrouxa a porta de trás', () => {
   });
 });
 
+describe('fora do índice dos buscadores', () => {
+  it('robots.txt pede para não varrer', async () => {
+    const r = await pedir('/robots.txt');
+    expect(r.status).toBe(200);
+    expect(await r.text()).toContain('Disallow: /');
+  });
+
+  it('toda resposta manda não indexar — inclusive a página e a vitrine', async () => {
+    const { obraId } = semear({ publica: true });
+    for (const rota of ['/', '/api/publico/obras', `/api/publico/obras/${obraId}/capitulos/1`]) {
+      const r = await pedir(rota);
+      expect(r.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    }
+  });
+});
+
 describe('regras de aparecer na estante', () => {
   it('obra pública SEM capítulo finalizado não aparece nem abre', async () => {
     const obraId = Number(

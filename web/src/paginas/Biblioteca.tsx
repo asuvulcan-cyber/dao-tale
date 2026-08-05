@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { ObraPublica } from '@dao-tale/shared';
 import { api } from '../api';
-import { BotaoTema } from '../App';
+import { BotaoTema, Marca } from '../App';
 
 // Vitrine pública (doc 14): a porta da rua. É o que qualquer pessoa vê ao abrir
 // o domínio sem senha — a estante das obras publicadas, e nada além disso.
@@ -21,7 +21,9 @@ export function Biblioteca() {
     <div className="min-h-screen bg-papel text-tinta">
       <header className="border-b border-linha bg-papel-alto">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-          <span className="font-display text-lg font-semibold">Dao Tale</span>
+          <Link to="/" className="flex items-center gap-2.5">
+            <Marca />
+          </Link>
           <div className="flex items-center gap-2">
             <BotaoTema />
             {/* Discreto de propósito: a porta de serviço não é atração da

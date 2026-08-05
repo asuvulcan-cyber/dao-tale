@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { partirInline, type CapituloPublico, type CapituloPublicoDetalhe, type ObraPublica } from '@dao-tale/shared';
 import { api } from '../api';
-import { BotaoTema, MenuMais } from '../App';
+import { BotaoTema, MenuMais, Selo } from '../App';
 
 // Leitor da vitrine pública (doc 14). É primo do `Leitor.tsx` da bancada e
 // PROPOSITALMENTE não compartilha componente com ele: são duas superfícies com
@@ -112,8 +112,11 @@ export function LeitorPublico() {
     >
       <header className="sticky top-0 z-20 border-b border-linha bg-papel-alto/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
-          <Link to="/" className="ferramenta shrink-0" title="Voltar para a estante">
-            ‹ Estante
+          {/* Selo em vez de "‹ Estante": no celular a barra do leitor é
+              disputada, e o mesmo toque serve de marca e de volta. */}
+          <Link to="/" className="flex shrink-0 items-center gap-1.5" title="Voltar para a estante">
+            <Selo />
+            <span className="hidden text-sm text-tinta-2 sm:inline">Estante</span>
           </Link>
           <span className="min-w-0 flex-1 truncate font-display text-sm text-tinta-2">
             {obra?.titulo ?? '…'}
