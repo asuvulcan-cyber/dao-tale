@@ -176,14 +176,26 @@ Passo 4; a restauração continua sendo `npm run restaurar`.
 
 ```sh
 # 1. Sistema e usuário de serviço (sem shell, sem home)
-sudo apt update && sudo apt install -y git curl caddy unattended-upgrades chromium
-sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin daotale
+sudo apt update && sudo apt install -y git curl unattended-upgrades
 
-#    `chromium` é só para a exportação em PDF, que roda um navegador headless.
-#    Sem ele, a rota /pdf devolve 503 explicando, e o caminho do HTML para
-#    imprimir continua funcionando — o resto do app não depende dele.
-#    Em distro que empacota como `chromium-browser`, ajuste o nome; se o
-#    executável tiver outro caminho, aponte com DAO_TALE_NAVEGADOR.
+#    ⚠️ CADDY não está nos repositórios do Ubuntu 22.04 — precisa do oficial:
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install -y caddy
+
+#    ⚠️ CHROMIUM no Ubuntu vem como SNAP, e snap não funciona sob a unit
+#    endurecida (ProtectSystem=strict, PrivateTmp). Use o .deb do Google:
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+  | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] \
+  https://dl.google.com/linux/chrome/deb/ stable main' \
+  | sudo tee /etc/apt/sources.list.d/google-chrome.list
+sudo apt update && sudo apt install -y google-chrome-stable
+#    (é só para o PDF; sem ele a rota /pdf devolve 503 e o HTML segue valendo)
+sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin daotale
 
 # 2. Node 22 — EXIGÊNCIA, não preferência: o gerador de PDF fala DevTools
 #    Protocol pelo WebSocket embutido, que só existe a partir do 22.
