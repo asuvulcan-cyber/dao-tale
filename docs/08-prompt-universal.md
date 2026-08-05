@@ -568,3 +568,96 @@ Com a tradução em 0.3, repetir o mesmo alvo no comparador passa a medir o prom
 não o sorteio — que era a condição que faltava para o §12.5 dar um veredito honesto
 sobre o núcleo enxuto. Também barateia o teste: menos execuções bastam para ver o
 sinal.
+
+---
+
+## 14. Varredura de estilo e as contradições encontradas (2026-08-04)
+
+### 14.1 O que a varredura mede
+
+`GET /capitulos/:id/estilo` conta violações das preferências da obra por leitura de
+texto — sem IA, sem custo, determinística (`server/src/traducao/estiloViolacoes.ts`).
+O campo que mais informa é `por_terco`: concentração no **fim** acusa decaimento ao
+longo de uma geração longa (bloco grande demais); distribuição **espalhada** acusa
+regra ambígua ou conteúdo que puxa para o erro.
+
+### 14.2 Série medida na 死人经
+
+Sobre o texto **cru da IA** (`texto_pt_original_ia`), mais-que-perfeito simples:
+
+| Capítulo | Configuração | Frases | Violações | % | Por terço |
+|---|---|---|---|---|---|
+| Prólogo | bloco 120 · thinking ON | 76 | 18 | 23,7% | 6/9/**13** |
+| Capítulo 1 | bloco 20 · thinking OFF | 58 | 2 | 3,4% | 2/0/0 |
+| Capítulo 2 | bloco 20 · thinking OFF | 77 | 11 | 14,3% | 4/5/2 |
+
+O prólogo mostra o decaimento clássico (mais que dobra do primeiro ao último terço).
+O capítulo 2 é um pico de **conteúdo**: é o capítulo do histórico marcial, denso em
+anterioridade (从未学过, 浸淫数十年, 学会了), onde a forma simples é o default
+literário do português e o puxão é mais forte.
+
+**Aviso sobre estes números:** a primeira medição reportou 15,8% / 3,4% / 11,7%. O
+detector usava `{4,}` antes do sufixo, o que exige palavra de 7+ letras e deixava
+passar `achara`, `ouvira`, `matara`. Corrigido para `{2,}` com a lista de exceções
+crescida. Qualquer comparação anterior a 2026-08-04 está subestimada.
+
+### 14.3 Custo e tempo (mesma obra, deepseek-v4-flash)
+
+| | Prólogo | Capítulo 1 |
+|---|---|---|
+| Chamadas | 1 | 3 |
+| Tokens de saída | 32.477 | 5.643 |
+| Saída por frase | 427 | 97 |
+| Tempo | ~10 min | ~40 s |
+| Custo por frase | US$ 0,000120 | US$ 0,0000495 |
+
+Com thinking ligado, **86% dos tokens de saída eram raciocínio** (medido por sonda:
+`completion_tokens: 182`, `completion_tokens_details.reasoning_tokens: 161`). Saída é
+~99% da conta, então desligar o raciocínio é a maior economia disponível. Entrada
+sobe com blocos menores (o prompt é reenviado por bloco), mas continua irrelevante
+perto da saída.
+
+### 14.4 Três contradições internas encontradas nos prompts
+
+Todas com a mesma assinatura: duas instruções corretas isoladamente, incompatíveis
+juntas, e saída que oscila entre elas sem motivo aparente.
+
+1. **`Hierarquia: Conteúdo > Glossário (lei suprema)`** — a precedência se nega na
+   mesma linha. Resolvido para `Glossário > Conteúdo > Forma`, com o que cada nível
+   significa.
+2. **Seção 2 mandando "manter a sonoridade do original" nos locais** enquanto a
+   Seção 5 manda traduzir quando os caracteres descrevem. A Seção 2 passou a cuidar
+   só da capitalização.
+3. **`o ponto vira vírgula, dentro das aspas — "Não há saída", disse ele.`** — a
+   prosa descrevia a convenção do inglês, o exemplo mostrava a portuguesa. O modelo
+   seguiu a prosa no trecho cirúrgico e o exemplo na frase inteira, na mesma
+   resposta.
+
+**Lição de método:** ao escrever ou revisar regra, conferir **prosa contra exemplo**
+como passo separado. As três passariam por uma revisão que lesse só um dos dois.
+
+### 14.5 Por que a regra de anterioridade é hierarquia e não proibição
+
+A redação anterior era `evite a forma simples ("fizera")` — negativa, com a melhor
+saída (o perfeito simples) enterrada no meio da frase. Deu 14,3% de violação no
+capítulo denso.
+
+Ao corrigir as 13 ocorrências à mão, **12 pediram perfeito simples** (`nunca
+aprendeu`, `foi ele quem ensinou`), porque a anterioridade já estava marcada por
+"nunca", "desde a infância", "afinal". Só uma pediu perífrase.
+
+Isso condena a correção automática: um conversor que trocasse todo `aprendera` por
+`tinha aprendido` produziria treze perífrases empilhadas — prosa **pior** que a
+violação que ele conserta. Daí a regra pôr o perfeito simples em primeiro, oferecer
+`havia` como alternativa a `tinha`, e avisar contra o empilhamento.
+
+### 14.6 Pontos cegos que permanecem
+
+A varredura não acusa, por ambiguidade irredutível: **`fora`** (preposição/verbo),
+**`era`** (imperfeito de *ser*), **`vira`** (presente de *virar*), **`dera`**. São
+mais-que-perfeito em muitos casos e exigem leitura humana — as ocorrências do
+prólogo só apareceram lendo o capítulo à mão.
+
+E nenhum teste automático pega **tradução fluente e errada**: o caso mais grave da
+obra foi 刀 (sabre) e 剑 (espada) colapsando na mesma palavra, tornando a frase
+autocontraditória. Só a leitura ZH↔PT pega.
