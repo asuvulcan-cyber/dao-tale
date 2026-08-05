@@ -81,6 +81,17 @@ describe('renderizarPreferencias', () => {
     expect(aspas).not.toContain('*Não há saída*, pensou ele.');
   });
 
+  it('dá ao "evitar" um gatilho do lado do chinês, não só do português', () => {
+    // Medido no capítulo 3 da 死人经: frase com marcador de anterioridade no ZH
+    // violava a 41% contra 13% nas demais. O passo 1 só dizia "quando um advérbio
+    // já marcar", que é julgamento sobre o PT pronto — e falhava justo ali.
+    const texto = renderizarPreferencias(com({ mais_que_perfeito: 'evitar' }));
+    for (const marcador of ['曾经', '已经', '从来', '向来', '从小', '自幼', '早已']) {
+      expect(texto).toContain(marcador);
+    }
+    expect(texto).toContain('nunca se importou');
+  });
+
   it('as demais chaves invertem o texto que emitem', () => {
     expect(renderizarPreferencias(com({ mais_que_perfeito: 'permitir' }))).toContain('as três formas estão liberadas');
     expect(renderizarPreferencias(com({ notas_tradutor: 'proibir' }))).toContain('**Notas do tradutor:** proibidas');

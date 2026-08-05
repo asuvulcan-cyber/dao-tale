@@ -30,6 +30,24 @@ describe('analisarEstilo', () => {
     expect(r.violacoes).toHaveLength(0);
   });
 
+  it('acusa mais-que-perfeito de verbo com hiato, que o sufixo sem acento deixava passar', () => {
+    // Um "saíra" real passou batido no capítulo 3 da 死人经: a alternação exigia
+    // as letras "ira" e a forma traz "íra".
+    const r = analisarEstilo(frases(['A cabeça saíra.', 'Ele caíra ali.', 'Possuíra o livro.']), {
+      ...PREFERENCIAS_PADRAO,
+      mais_que_perfeito: 'evitar',
+    });
+    expect(r.violacoes.map((v) => v.trecho)).toEqual(['saíra', 'caíra', 'Possuíra']);
+  });
+
+  it('não confunde nome de árvore em -eira com verbo', () => {
+    const r = analisarEstilo(frases(['A romãzeira ao lado da palmeira e da figueira.']), {
+      ...PREFERENCIAS_PADRAO,
+      mais_que_perfeito: 'evitar',
+    });
+    expect(r.violacoes).toHaveLength(0);
+  });
+
   it('acusa travessão numa obra configurada com aspas', () => {
     const r = analisarEstilo(frases(['— Matem todos!']), { ...PREFERENCIAS_PADRAO, dialogo: 'aspas' });
     expect(r.violacoes.map((v) => v.regra)).toContain('dialogo-aspas');

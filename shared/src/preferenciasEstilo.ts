@@ -170,10 +170,19 @@ const PENSAMENTO_EXEMPLO: Record<MarcaPensamento, string> = {
 // anterioridade. Proibição diz o que não fazer; ordem de escolha diz o que fazer.
 // A ordem importa: converter tudo para "tinha + particípio" empilha perífrase e
 // produz prosa PIOR que a violação — daí o perfeito simples vir primeiro.
+//
+// O gatilho pelo CHINÊS no passo 1 saiu da medição do capítulo 3 da 死人经:
+// frase cujo ZH traz marcador lexical de anterioridade (曾经/已经/从来/向来/从小)
+// violava a 41%, contra 13% nas demais — três vezes mais. Ou seja, o ponto em
+// que o passo 1 mais se aplica era justamente onde ele mais falhava: o chinês
+// marca a anterioridade no advérbio e o modelo marcava DE NOVO no verbo. Dizer
+// "quando um advérbio já marcar" pede um julgamento sobre o português pronto;
+// nomear os marcadores do original vira reconhecimento de padrão na fonte.
 const MAIS_QUE_PERFEITO: Record<PoliticaMaisQuePerfeito, string> = {
   evitar: [
     '**Anterioridade (o "mais-que-perfeito"):** quando a frase narra algo ANTERIOR ao momento da cena, escolha nesta ordem:',
     '1. **Perfeito simples**, sempre que um advérbio ou o próprio contexto já marquem a anterioridade — `nunca aprendeu esgrima`, `treinou anos antes disso`. É a forma mais curta e mais natural: prefira-a sempre que couber.',
+    '   **Gatilho no original:** se o chinês trouxer 曾经, 已经, 从来(没), 向来, 从小, 自幼, 早已 ou o aspecto 过, a anterioridade **já está** no advérbio português que os traduz (`certa vez`, `já`, `nunca`, `sempre`, `desde pequeno`) — então o verbo vai no perfeito simples e **não** se marca de novo. `从来没关心过` → `nunca se importou`, nunca `nunca se importara`.',
     '2. **"tinha" ou "havia" + particípio**, quando a anterioridade precisa mesmo ser explicitada — `tinha aprendido com o pai`, `havia herdado o temperamento`. **Alterne os dois auxiliares:** três "tinha" seguidos pesam mais do que a forma que eles substituem.',
     '3. **Nunca a forma simples** — `aprendera`, `fizera`, `dissera`, `estivera`. Soa livresca e destoa do registro desta obra.',
     'Num trecho denso em passado anterior (contar o treino, a origem, o que ficou para trás), resolva a maioria no perfeito simples e reserve a perífrase para onde a anterioridade for o ponto da frase.',

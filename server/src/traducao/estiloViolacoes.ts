@@ -27,7 +27,7 @@ export interface RelatorioEstilo {
   por_terco: [number, number, number];
 }
 
-/** Palavras que terminam em -ara/-era/-ira/-ora sem serem mais-que-perfeito.
+/** Palavras que terminam em -ara/-era/-ira/-ora/-íra sem serem mais-que-perfeito.
  *  Lista de substantivos/adjetivos comuns — o que escapar aqui vira falso
  *  positivo visível no relatório, nunca correção automática silenciosa. */
 const NAO_VERBOS = new Set([
@@ -45,13 +45,23 @@ const NAO_VERBOS = new Set([
   'conspira', 'transpira', 'delira', 'gira', 'vira', 'mira', 'tira', 'para', 'hora',
   // Conjunções e advérbios em -ora, que o {2,} passou a alcançar.
   'embora', 'outrora', 'agora', 'doravante', 'penhora', 'demora', 'melhora', 'piora',
+  // Árvores e plantas em -eira/-zeira: classe produtiva, então cabe uma lista.
+  // "romãzeira" apareceu como violação fantasma no capítulo 3 da 死人经.
+  'romãzeira', 'palmeira', 'oliveira', 'figueira', 'videira', 'macieira', 'laranjeira',
+  'bananeira', 'mangueira', 'trepadeira', 'roseira', 'amoreira',
 ]);
 
 // {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então
 // {4,} exigia palavra de 7 letras e deixava passar as de 6 — "achara" e "ouvira"
 // escaparam da varredura do capítulo 2 justamente assim. Falso positivo aqui é
 // barato (o relatório é conferido por gente); falso negativo é o que dói.
-const RE_MQP = /\b[a-zà-úâêôãõáéíóúç]{2,}(?:ara|era|ira|ora)\b/gi;
+//
+// O "íra" existe porque exigir as letras literais "ira" deixava escapar todo
+// mais-que-perfeito de verbo com hiato — saíra, caíra, possuíra, atraíra,
+// destruíra. Havia um "saíra" real no capítulo 3 da 死人经 que só a leitura
+// humana pegou: o falso negativo que o comentário acima diz ser o que dói,
+// acontecendo na prática.
+const RE_MQP = /\b[a-zà-úâêôãõáéíóúç]{2,}(?:ara|era|ira|ora|íra)\b/gi;
 
 /** Verbo no mais-que-perfeito simples ("fizera")? Heurística por sufixo, com
  *  lista de exceções — pensada para ACUSAR e ser conferida, não para corrigir. */
