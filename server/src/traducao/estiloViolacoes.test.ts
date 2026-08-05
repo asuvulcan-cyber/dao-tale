@@ -36,7 +36,7 @@ describe('analisarEstilo', () => {
   });
 
   it('acusa aspas não convertidas, asiáticas ou curvas', () => {
-    for (const texto of ['「不可能」, disse ele.', 'Chamavam-no de ‘Rei Incomparável’.', 'Ele disse “nome”.']) {
+    for (const texto of ['「不可能」, disse ele.', 'Chamavam-no de ‘Sabre Celeste’.', 'Ele disse “nome”.']) {
       const r = analisarEstilo(frases([texto]), PREFERENCIAS_PADRAO);
       expect(r.violacoes.map((v) => v.regra)).toContain('aspas-nao-retas');
     }

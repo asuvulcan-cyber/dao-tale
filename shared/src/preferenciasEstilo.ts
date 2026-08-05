@@ -210,15 +210,15 @@ const ONOMATOPEIA: Record<PoliticaOnomatopeia, string> = {
 // O modo `mesclar` é o padrão porque é o único que serve ao gênero — e é também o
 // mais difícil de escrever, porque a decisão não é só lexical: depende da
 // CATEGORIA (pessoa translitera-se mesmo tendo sentido pleno) e admite forma
-// HÍBRIDA dentro de um mesmo nome (金鹏堡 → "Fortaleza do Peng Dourado").
+// HÍBRIDA dentro de um mesmo nome (少林寺 → "Templo Shaolin").
 const NOMES: Record<PoliticaNomes, string[]> = {
   mesclar: [
     '**Nomes próprios — decida por sentido ou som, nesta ordem:**',
-    '1. **Pessoa** (nome, apelido, forma curta): **sempre em pinyin**, sem tom — `顾慎为` → Gu Shenwei, `欢儿` → Huan\'er. Vale mesmo quando os caracteres têm sentido pleno: em português não se traduz nome de gente.',
+    '1. **Pessoa** (nome, apelido, forma curta): **sempre em pinyin**, sem tom — `铁心` → Tie Xin, `小青` → Xiao Qing. Vale mesmo quando os caracteres têm sentido pleno: em português não se traduz nome de gente.',
     '2. **Lugar, seita, obra citada, técnica, título e cargo:** pergunte se os caracteres DESCREVEM o referente ou se são só transcrição de som.',
-    '   - **Descrevem → traduza o sentido.** `中原` (centro + planície) → Planícies Centrais; `北庭` (norte + corte) → Corte do Norte; `独步王` → Rei Incomparável.',
+    '   - **Descrevem → traduza o sentido.** `中原` (centro + planície) → Planícies Centrais; `北庭` (norte + corte) → Corte do Norte; `天刀` → Sabre Celeste.',
     '   - **São transcrição fonética de um nome estrangeiro → mantenha em pinyin.** `疏勒` (Kashgar) → Shule. Traduzir "esparso" e "rédea" inventaria sentido que o original não tem.',
-    '3. **Forma híbrida quando o nome tem classificador:** traduza o classificador e resolva o núcleo pela regra 2. `金鹏堡` → Fortaleza do Peng Dourado; `天山` → Montanhas Celestiais.',
+    '3. **Forma híbrida quando o nome tem classificador:** traduza o classificador e resolva o núcleo pela regra 2. `少林寺` → Templo Shaolin; `天山` → Montanhas Celestiais.',
     '4. **Termo de gênero já consagrado em português fica como está:** `江湖` → jianghu, `qi`, `dao`. Não traduza nem explique dentro da prosa.',
     '5. Na dúvida entre os dois, pergunte-se: um leitor chinês recebe uma imagem ao ler este nome? Se sim, traduza. Se o nome só soa, translitere.',
   ],
@@ -228,7 +228,7 @@ const NOMES: Record<PoliticaNomes, string[]> = {
     '- Nome que é pura transcrição fonética (`疏勒` = Kashgar) não tem sentido a traduzir: use a forma consagrada em português, ou o pinyin se não houver. Não invente significado a partir dos caracteres.',
   ],
   pinyin: [
-    '**Nomes próprios — mantenha em pinyin**, sem marcas de tom: `中原` → Zhongyuan, `北庭` → Beiting, `疏勒` → Shule, `金鹏堡` → Jinpengbao.',
+    '**Nomes próprios — mantenha em pinyin**, sem marcas de tom: `中原` → Zhongyuan, `北庭` → Beiting, `疏勒` → Shule, `少林寺` → Shaolinsi.',
     '- Vale para pessoa, lugar, seita, técnica e obra citada.',
     '- **Exceção: título e cargo** (`独步王`, `杨师父`) traduzem-se, porque funcionam como substantivo comum na frase e em pinyin virariam ilegíveis.',
     '- Não acrescente glosa nem explicação entre parênteses; o glossário do livro é que dá conta disso.',

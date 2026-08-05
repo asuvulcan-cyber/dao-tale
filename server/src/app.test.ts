@@ -33,8 +33,8 @@ describe('fluxo completo com provedor mock', () => {
     // Obra com prompt mãe e glossário inicial
     const obra = await json(
       await chamar('POST', '/api/obras', {
-        titulo: 'Dez Dias Até o Fim',
-        titulo_original: '十日终焉',
+        titulo: 'A Torre de Bronze',
+        titulo_original: '青铜塔',
         prompt_inicial: { versao: '1.0', conteudo: 'Traduza com fidelidade ao tom sombrio.' },
         glossario_inicial: [{ termo_zh: '终焉', termo_pt: 'Fim Derradeiro', categoria: 'outro' }],
       }),
@@ -45,7 +45,7 @@ describe('fluxo completo com provedor mock', () => {
     const criado = await json(
       await chamar('POST', `/api/obras/${obra.id}/capitulos`, {
         numero: 1,
-        titulo: '第一章 终焉之始',
+        titulo: '第一章 登塔',
         texto_origem: '「等等！」她喊道。「别走。」\n他沉默了……然后开口。',
       }),
     );
@@ -176,7 +176,7 @@ describe('fluxo completo com provedor mock', () => {
 
   it('traduz título e sinopse do cadastro (contracapa, sem obra)', async () => {
     const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', {
-      titulo_zh: '十日终焉',
+      titulo_zh: '青铜塔',
       sinopse_zh: '他醒来时发现自己在终焉之地。',
       provedor: 'mock',
     });
@@ -191,7 +191,7 @@ describe('fluxo completo com provedor mock', () => {
 
   it('só o campo enviado volta preenchido (o outro não é inventado)', async () => {
     const soTitulo = await json(
-      await chamar('POST', '/api/ia/traduzir-detalhes', { titulo_zh: '死人经', provedor: 'mock' }),
+      await chamar('POST', '/api/ia/traduzir-detalhes', { titulo_zh: '青铜塔', provedor: 'mock' }),
     );
     expect(soTitulo.titulo_pt).toBeTruthy();
     expect(soTitulo.sinopse_pt).toBeNull();
@@ -337,7 +337,7 @@ describe('fluxo completo com provedor mock', () => {
   it('sinopse vai inteira numa chamada e volta com versos e parágrafos preservados', async () => {
     // Dois versos paralelos (uma linha cada, sem linha em branco entre eles) e
     // um parágrafo de resenha: a forma que o formato numerado antigo destruía.
-    const sinopse = '一本死人经，半部无道书。\n斩尽千人头，啖吞百身骨。\n\n非常难得的一本传统武侠小说。';
+    const sinopse = '一座青铜塔，半张无名图。\n登尽千层阶，望断百重云。\n\n很少见的一部传统武侠小说。';
     const resposta = await chamar('POST', '/api/ia/traduzir-detalhes', { sinopse_zh: sinopse, provedor: 'mock' });
     expect(resposta.status).toBe(200);
     const dados = await json(resposta);
@@ -923,7 +923,7 @@ describe('fluxo completo com provedor mock', () => {
 
     await chamar('POST', '/api/ia/traduzir-detalhes', {
       obra_id: obra.id,
-      titulo_zh: '十日终焉',
+      titulo_zh: '青铜塔',
       provedor: 'mock',
     });
     expect(_temperaturaMock('contracapa')).toBe(0.8);

@@ -5,18 +5,18 @@ import type { EntradaGlossario } from '@dao-tale/shared';
 
 const obra = {
   id: 1,
-  titulo: 'O Sutra dos Mortos',
-  titulo_original: '死人经',
-  autor: 'Shi Bu Xing',
-  sinopse: 'Um tomo do Cânone dos Mortos.',
+  titulo: 'A Torre de Bronze',
+  titulo_original: '青铜塔',
+  autor: 'Autor Fictício',
+  sinopse: 'Um tomo sem dono, meia obra sem nome.',
   tags: [],
 };
 
 const capitulos = [
   {
     numero: 1,
-    titulo: '第一章 离庄',
-    titulo_pt: 'Capítulo 1: Deixando a Propriedade',
+    titulo: '第一章 出发',
+    titulo_pt: 'Capítulo 1: A Partida',
     paragrafos: [{ zh: '甲说。', pt: 'Ele disse.' }],
   },
 ];
@@ -24,14 +24,14 @@ const capitulos = [
 const glossario = (extra: Partial<EntradaGlossario>[] = []): EntradaGlossario[] =>
   [
     { id: 1, obra_id: 1, termo_zh: '刀', termo_pt: 'sabre', categoria: 'objeto', nota: 'Um só gume.' },
-    { id: 2, obra_id: 1, termo_zh: '顾慎为', termo_pt: 'Gu Shenwei', categoria: 'personagem', nota: null },
+    { id: 2, obra_id: 1, termo_zh: '林青', termo_pt: 'Lin Qing', categoria: 'personagem', nota: null },
     ...extra,
   ] as EntradaGlossario[];
 
 describe('agruparGlossario', () => {
   it('agrupa por categoria e ordena por termo em português', () => {
     const g = agruparGlossario(
-      glossario([{ id: 3, obra_id: 1, termo_zh: '金鹏堡', termo_pt: 'Fortaleza Jinpeng', categoria: 'local' }]),
+      glossario([{ id: 3, obra_id: 1, termo_zh: '青铜塔', termo_pt: 'Torre de Bronze', categoria: 'local' }]),
     );
     expect(g.map((x) => x.rotulo)).toEqual(['Personagens', 'Lugares', 'Objetos']);
   });
@@ -39,12 +39,12 @@ describe('agruparGlossario', () => {
   it('deixa as variantes de fora: no livro só repetiriam a principal', () => {
     const g = agruparGlossario(
       glossario([
-        { id: 9, obra_id: 1, termo_zh: '慎为', termo_pt: 'Shenwei', categoria: 'personagem', principal_id: 2 },
+        { id: 9, obra_id: 1, termo_zh: '青', termo_pt: 'Qing', categoria: 'personagem', principal_id: 2 },
       ] as Partial<EntradaGlossario>[]),
     );
     const nomes = g.flatMap((x) => x.entradas.map((e) => e.termo_pt));
-    expect(nomes).toContain('Gu Shenwei');
-    expect(nomes).not.toContain('Shenwei');
+    expect(nomes).toContain('Lin Qing');
+    expect(nomes).not.toContain('Qing');
   });
 
   it('categoria criada pelo usuário aparece com o nome dela', () => {
@@ -64,8 +64,8 @@ describe('glossarioMarkdown', () => {
     const md = glossarioMarkdown(glossario());
     expect(md).toContain('## Glossário');
     expect(md).toContain('- **sabre** (刀) — Um só gume.');
-    expect(md).toContain('- **Gu Shenwei** (顾慎为)'); // sem nota, sem travessão solto
-    expect(md).not.toContain('(顾慎为) —');
+    expect(md).toContain('- **Lin Qing** (林青)'); // sem nota, sem travessão solto
+    expect(md).not.toContain('(林青) —');
   });
 });
 

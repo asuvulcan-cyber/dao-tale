@@ -233,7 +233,7 @@ function FormularioNovaObra({
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
             className="entrada mt-1 w-full"
-            placeholder="Dez Dias Até o Fim"
+            placeholder="A Torre de Bronze"
           />
         </label>
         <label className="block text-sm">

@@ -181,7 +181,7 @@ describe('variantes de termo no glossário', () => {
 });
 
 describe('contracapa (título/sinopse de obra)', () => {
-  const versos = '一本死人经，半部无道书。\n斩尽千人头，啖吞百身骨。\n\n非常难得的一本传统武侠小说。';
+  const versos = '一座青铜塔，半张无名图。\n登尽千层阶，望断百重云。\n\n很少见的一部传统武侠小说。';
   const req: RequisicaoContracapa = {
     modelo: 'm',
     tituloZh: '死人经',

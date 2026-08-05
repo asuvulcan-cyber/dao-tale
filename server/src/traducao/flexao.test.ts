@@ -7,23 +7,23 @@ import { contemTermoFlexionado } from './flexao.js';
 
 describe('contemTermoFlexionado', () => {
   it('aceita o plural, que o núcleo trata como uso correto', () => {
-    expect(contemTermoFlexionado('Os Reis Incomparáveis das gerações passadas', 'Rei Incomparável')).toBe(true);
-    expect(contemTermoFlexionado('Sete gerações de Reis Incomparáveis', 'Rei Incomparável')).toBe(true);
+    expect(contemTermoFlexionado('Os Senhores das Dez Trilhas das gerações passadas', 'Senhor das Dez Trilhas')).toBe(true);
+    expect(contemTermoFlexionado('Sete gerações de Senhores das Dez Trilhas', 'Senhor das Dez Trilhas')).toBe(true);
   });
 
   it('aceita a forma exata, e caso ou acento diferentes', () => {
-    expect(contemTermoFlexionado('o Rei Incomparável entrou', 'Rei Incomparável')).toBe(true);
-    expect(contemTermoFlexionado('o rei incomparavel entrou', 'Rei Incomparável')).toBe(true);
+    expect(contemTermoFlexionado('o Senhor das Dez Trilhas entrou', 'Senhor das Dez Trilhas')).toBe(true);
+    expect(contemTermoFlexionado('o senhor das dez trilhas entrou', 'Senhor das Dez Trilhas')).toBe(true);
   });
 
   it('aceita variação de artigo entre as palavras do termo', () => {
-    expect(contemTermoFlexionado('a Fortaleza de Peng Dourado', 'Fortaleza do Peng Dourado')).toBe(true);
-    expect(contemTermoFlexionado('as Fortalezas do Peng Dourado', 'Fortaleza do Peng Dourado')).toBe(true);
+    expect(contemTermoFlexionado('o Templo de Shaolin', 'Templo do Shaolin')).toBe(true);
+    expect(contemTermoFlexionado('os Templos do Shaolin', 'Templo do Shaolin')).toBe(true);
   });
 
   it('continua acusando quando o termo REALMENTE não está', () => {
-    expect(contemTermoFlexionado('o Rei Supremo entrou', 'Rei Incomparável')).toBe(false);
-    expect(contemTermoFlexionado('o homem de preto disse', 'Gu Shenwei')).toBe(false);
+    expect(contemTermoFlexionado('o Rei Supremo entrou', 'Senhor das Dez Trilhas')).toBe(false);
+    expect(contemTermoFlexionado('o homem de preto disse', 'Tie Xin')).toBe(false);
     expect(contemTermoFlexionado('a espada curta caiu', 'sabre')).toBe(false);
   });
 

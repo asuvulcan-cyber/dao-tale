@@ -70,12 +70,12 @@ describe('filtrarPorEscopo', () => {
 });
 
 describe('nomeArquivo', () => {
-  const obra = { titulo: 'Dez Dias Até o Fim' } as ObraEpub;
+  const obra = { titulo: 'A Torre de Bronze' } as ObraEpub;
   const cap = (numero: number) => ({ numero }) as CapituloEpub;
 
   it('usa slug do título e a faixa realmente incluída', () => {
-    expect(nomeArquivo(obra, [cap(118), cap(119)], 'epub')).toBe('dez-dias-ate-o-fim-118-119.epub');
-    expect(nomeArquivo(obra, [cap(118)], 'md')).toBe('dez-dias-ate-o-fim-118.md');
+    expect(nomeArquivo(obra, [cap(118), cap(119)], 'epub')).toBe('a-torre-de-bronze-118-119.epub');
+    expect(nomeArquivo(obra, [cap(118)], 'md')).toBe('a-torre-de-bronze-118.md');
   });
 
   it('título só com caracteres não-latinos cai para "obra"', () => {
@@ -110,8 +110,8 @@ describe('remontagem de texto', () => {
 describe('montarMarkdown', () => {
   const obra: ObraEpub = {
     id: 1,
-    titulo: 'Dez Dias Até o Fim',
-    titulo_original: '十日终焉',
+    titulo: 'A Torre de Bronze',
+    titulo_original: '青铜塔',
     autor: '杀虫队队员',
     sinopse: 'Uma sinopse.',
     tags: ['Horror'],
@@ -131,7 +131,7 @@ describe('montarMarkdown', () => {
 
   it('concatena a obra em ordem numérica com ficha no topo', () => {
     const md = montarMarkdown(obra, capitulos);
-    expect(md).toContain('# Dez Dias Até o Fim');
+    expect(md).toContain('# A Torre de Bronze');
     expect(md).toContain('**Autor:** 杀虫队队员');
     expect(md).toContain('> Uma sinopse.');
     expect(md.indexOf('## Capítulo 118 — Um')).toBeLessThan(md.indexOf('## Capítulo 119 — Dois'));

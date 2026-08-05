@@ -16,7 +16,7 @@ describe('cabecalhoPt', () => {
   });
 
   it('prefixa normalmente quando o título é só o nome', () => {
-    expect(cabecalhoPt(cap(118, 'A Fortaleza Jinpeng'))).toBe('Capítulo 118 — A Fortaleza Jinpeng');
+    expect(cabecalhoPt(cap(118, 'A Torre de Bronze'))).toBe('Capítulo 118 — A Torre de Bronze');
   });
 
   it('sem título traduzido, usa o chinês; sem nenhum, só o número', () => {
@@ -37,6 +37,6 @@ describe('tituloSeAnuncia', () => {
   });
 
   it('recusa nome comum', () => {
-    for (const t of ['A Fortaleza Jinpeng', 'Capítulo do Sangue', 'O Sabre e a Lança']) expect(tituloSeAnuncia(t)).toBe(false);
+    for (const t of ['A Torre de Bronze', 'Capítulo do Sangue', 'O Sabre e a Lança']) expect(tituloSeAnuncia(t)).toBe(false);
   });
 });

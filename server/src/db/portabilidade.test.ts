@@ -18,8 +18,8 @@ function fixture(): ExportObra {
     versao_schema: 1,
     exportado_em: '2026-07-23T00:00:00.000Z',
     obra: {
-      titulo: 'Dez Dias Até o Fim',
-      titulo_original: '十日终焉',
+      titulo: 'A Torre de Bronze',
+      titulo_original: '青铜塔',
       autor: '杀虫队队员',
       sinopse: 'Sinopse de teste.',
       tags: ['xianxia', 'sombrio'],

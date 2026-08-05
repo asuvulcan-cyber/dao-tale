@@ -12,8 +12,8 @@ function dados(extra: Partial<DadosEpub> = {}): DadosEpub {
   return {
     obra: {
       id: 1,
-      titulo: 'Dez Dias Até o Fim',
-      titulo_original: '十日终焉',
+      titulo: 'A Torre de Bronze',
+      titulo_original: '青铜塔',
       autor: '杀虫队队员',
       sinopse: 'Primeiro parágrafo.\n\nSegundo parágrafo & companhia.',
       tags: ['Horror', 'Mistério'],
@@ -84,10 +84,10 @@ describe('montarEpub', () => {
     expect(arquivos.get('META-INF/container.xml')).toContain('full-path="OEBPS/conteudo.opf"');
 
     const opf = arquivos.get('OEBPS/conteudo.opf')!;
-    expect(opf).toContain('<dc:title>Dez Dias Até o Fim</dc:title>');
+    expect(opf).toContain('<dc:title>A Torre de Bronze</dc:title>');
     expect(opf).toContain('<dc:language>pt-BR</dc:language>');
     expect(opf).toContain('<dc:creator id="autor">杀虫队队员</dc:creator>');
-    expect(opf).toContain('<dc:source>十日终焉</dc:source>');
+    expect(opf).toContain('<dc:source>青铜塔</dc:source>');
     expect(opf).toContain('<dc:subject>Horror</dc:subject>');
     expect(opf).toContain('<dc:subject>Mistério</dc:subject>');
     expect(opf).toContain('role" scheme="marc:relators">trl</meta>');

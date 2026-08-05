@@ -196,8 +196,8 @@ describe('nomes próprios (sentido vs som)', () => {
 
   it('mesclar cobre as nuances que o eixo sozinho não resolve', () => {
     const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
-    expect(texto).toContain('Gu Shenwei'); // pessoa: pinyin mesmo tendo sentido
-    expect(texto).toContain('Fortaleza do Peng Dourado'); // híbrido com classificador
+    expect(texto).toContain('Tie Xin'); // pessoa: pinyin mesmo tendo sentido
+    expect(texto).toContain('Templo Shaolin'); // híbrido com classificador
     expect(texto).toContain('jianghu'); // termo de gênero consagrado
   });
 

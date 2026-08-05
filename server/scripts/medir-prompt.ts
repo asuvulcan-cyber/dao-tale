@@ -34,7 +34,7 @@ import { abrirSomenteLeitura, acertoDeCache, formatarUsd, medidoPorPapel } from 
 
 const modoReal = process.argv.includes('--real');
 const argumentos = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const caminho = argumentos[0] ?? path.join(process.cwd(), '..', 'dez-dias-ate-o-fim-backup.json');
+const caminho = argumentos[0] ?? path.join(process.cwd(), '..', 'a-torre-de-bronze-backup.json');
 const numeroCapitulo = argumentos[1] ? Number(argumentos[1]) : undefined;
 
 const dados = JSON.parse(fs.readFileSync(caminho, 'utf-8'));

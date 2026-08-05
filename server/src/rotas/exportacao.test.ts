@@ -41,8 +41,8 @@ beforeEach(() => {
   db = abrirBanco(':memory:');
   app = criarApp(db);
   obraId = reposObras.criar(db, {
-    titulo: 'Dez Dias Até o Fim',
-    titulo_original: '十日终焉',
+    titulo: 'A Torre de Bronze',
+    titulo_original: '青铜塔',
     sinopse: 'Sinopse da obra.',
     tags: ['Horror'],
   }).id;
@@ -59,7 +59,7 @@ describe('GET /obras/:id/epub', () => {
     expect(r.status).toBe(200);
     expect(r.headers.get('content-type')).toBe('application/epub+zip');
     expect(r.headers.get('content-disposition')).toBe(
-      'attachment; filename="dez-dias-ate-o-fim-118-119.epub"',
+      'attachment; filename="a-torre-de-bronze-118-119.epub"',
     );
 
     const epub = Buffer.from(await r.arrayBuffer());
@@ -131,9 +131,9 @@ describe('GET /obras/:id/markdown', () => {
     const r = await app.request(`/api/obras/${obraId}/markdown`);
     expect(r.status).toBe(200);
     expect(r.headers.get('content-type')).toBe('text/markdown; charset=utf-8');
-    expect(r.headers.get('content-disposition')).toContain('dez-dias-ate-o-fim-118-119.md');
+    expect(r.headers.get('content-disposition')).toContain('a-torre-de-bronze-118-119.md');
     const md = await r.text();
-    expect(md).toContain('# Dez Dias Até o Fim');
+    expect(md).toContain('# A Torre de Bronze');
     expect(md.indexOf('## Capítulo 118')).toBeLessThan(md.indexOf('## Capítulo 119'));
     expect(md).not.toContain('风停了。');
   });
@@ -141,7 +141,7 @@ describe('GET /obras/:id/markdown', () => {
   it('no formato bilíngue traz o chinês ao lado', async () => {
     const r = await app.request(`/api/obras/${obraId}/markdown?formato=bilingue&numeros=118`);
     const md = await r.text();
-    expect(r.headers.get('content-disposition')).toContain('dez-dias-ate-o-fim-118.bilingue.md');
+    expect(r.headers.get('content-disposition')).toContain('a-torre-de-bronze-118.bilingue.md');
     expect(md).toContain('他说：「走。」');
     expect(md).toContain('*(pendente de tradução)*');
   });

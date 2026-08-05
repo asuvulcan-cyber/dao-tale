@@ -6,33 +6,33 @@ import { aplicarCorrecao } from '@dao-tale/shared';
 
 describe('aplicarCorrecao', () => {
   it('preserva as aspas de diálogo ao corrigir só o miolo da fala', () => {
-    const atual = '"Matem, porra! Matem todo mundo agora! Só quero as cabeças — nada de deixar corpo inteiro!"';
+    const atual = '"Fechem o portão! Ninguém sai daqui vivo — nem um servo, nem um cavalo!"';
     const r = aplicarCorrecao(atual, {
-      trecho_pt_errado: 'nada de deixar corpo inteiro',
-      trecho_pt_corrigido: 'não quero corpo inteiro nenhum',
+      trecho_pt_errado: 'nem um servo, nem um cavalo',
+      trecho_pt_corrigido: 'nem um servo, nem cavalo nenhum',
       // A proposta do modelo veio SEM as aspas: é ela que apagava a marcação.
-      correcao_proposta: 'Matem, porra! Matem todo mundo agora! Só quero as cabeças — não quero corpo inteiro nenhum!',
+      correcao_proposta: 'Fechem o portão! Ninguém sai daqui vivo — nem um servo, nem cavalo nenhum!',
     });
     expect(r.tipo).toBe('cirurgica');
     expect(r.tipo === 'cirurgica' && r.texto).toBe(
-      '"Matem, porra! Matem todo mundo agora! Só quero as cabeças — não quero corpo inteiro nenhum!"',
+      '"Fechem o portão! Ninguém sai daqui vivo — nem um servo, nem cavalo nenhum!"',
     );
   });
 
   it('preserva as orações que a proposta encurtada tinha apagado', () => {
     const atual =
-      'Na mente de Shangguan Fa havia apenas uma impressão vaga. Aquele homem certamente morreria sob as lâminas ' +
-      'da Fortaleza Jinpeng. Se conseguira fazer o Rei Incomparável decepar a mão do próprio filho, sua morte já ' +
+      'Na mente do velho mestre havia apenas uma lembrança vaga. O forasteiro certamente morreria sob as lanças ' +
+      'da Torre de Bronze. Se conseguira fazer o Senhor das Dez Trilhas dobrar o joelho uma vez, sua morte já ' +
       'podia ser considerada valiosa.';
     const r = aplicarCorrecao(atual, {
       trecho_pt_errado: 'Se conseguira fazer',
       trecho_pt_corrigido: 'Se tinha conseguido fazer',
       correcao_proposta:
-        'Se tinha conseguido fazer o Rei Incomparável decepar a mão do próprio filho, sua morte já podia ser considerada valiosa.',
+        'Se tinha conseguido fazer o Senhor das Dez Trilhas dobrar o joelho uma vez, sua morte já podia ser considerada valiosa.',
     });
     expect(r.tipo).toBe('cirurgica');
-    expect(r.tipo === 'cirurgica' && r.texto).toContain('Na mente de Shangguan Fa');
-    expect(r.tipo === 'cirurgica' && r.texto).toContain('Fortaleza Jinpeng');
+    expect(r.tipo === 'cirurgica' && r.texto).toContain('Na mente do velho mestre');
+    expect(r.tipo === 'cirurgica' && r.texto).toContain('Torre de Bronze');
     expect(r.tipo === 'cirurgica' && r.texto).toContain('Se tinha conseguido fazer');
   });
 

@@ -3,8 +3,8 @@
   "versao_schema": 1,
   "exportado_em": "2026-07-10T20:00:00.000Z",
   "obra": {
-    "titulo": "Dez Dias Até o Fim (exemplo)",
-    "titulo_original": "十日终焉",
+    "titulo": "A Torre de Bronze (exemplo)",
+    "titulo_original": "青铜塔",
     "provedor_padrao": "mock",
     "modelo_padrao": null
   },
@@ -27,9 +27,9 @@
   "capitulos": [
     {
       "numero": 1,
-      "titulo": "O início do fim",
+      "titulo": "第一章 登塔",
       "status": "revisado",
-      "texto_origem": "第一章 终焉之始\n「等等！」她喊道。「你不能就这样离开。」\n他沉默了……然后开口。「命运已经决定了。十日之后，一切终结。」\n她握紧了手中的灵剑，剑身上刻着古老的符文。\n「那我们就一起面对终焉。」\n夜色渐深，宗门的灯火在远处闪烁。",
+      "texto_origem": "第一章 登塔\n「站住！」她喊道。「塔门一开，就再也关不上了。」\n他没有回答……过了很久才开口。「门早就开了。今夜之前，我必须登顶。」\n她握紧手中的铜灯，灯身上刻着看不懂的字。\n「那我陪你上去。」\n风声渐大，塔顶的火光在云里忽明忽暗。",
       "provedor": "mock",
       "modelo": "mock-v1",
       "prompt_versao": "1.1",
@@ -38,72 +38,72 @@
         {
           "ordem": 0,
           "paragrafo": 0,
-          "texto_zh": "第一章 终焉之始",
-          "texto_pt": "Capítulo 1 — O Início do Fim Derradeiro",
-          "texto_pt_original_ia": "Capítulo 1 — O Início do Fim Derradeiro",
+          "texto_zh": "第一章 登塔",
+          "texto_pt": "Capítulo 1 — Subir a Torre",
+          "texto_pt_original_ia": "Capítulo 1 — Subir a Torre",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 1,
           "paragrafo": 1,
-          "texto_zh": "「等等！」她喊道。",
-          "texto_pt": "— Espera! — ela gritou.",
-          "texto_pt_original_ia": "— Espere! — ela gritou.",
+          "texto_zh": "「站住！」她喊道。",
+          "texto_pt": "— Pare! — ela gritou.",
+          "texto_pt_original_ia": "— Pare! — ela gritou.",
           "editado_manualmente": true,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 2,
-          "paragrafo": 1,
-          "texto_zh": "「你不能就这样离开。」",
-          "texto_pt": "— Você não pode simplesmente ir embora assim.",
-          "texto_pt_original_ia": "— Você não pode simplesmente ir embora assim.",
+          "paragrafo": 2,
+          "texto_zh": "「塔门一开，就再也关不上了。」",
+          "texto_pt": "— Uma vez aberta, a porta da torre não fecha mais.",
+          "texto_pt_original_ia": "— Uma vez aberta, a porta da torre não fecha mais.",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 3,
-          "paragrafo": 2,
-          "texto_zh": "他沉默了……然后开口。",
-          "texto_pt": "Ele ficou em silêncio… e então falou.",
-          "texto_pt_original_ia": "Ele ficou em silêncio… e então falou.",
+          "paragrafo": 3,
+          "texto_zh": "他没有回答……过了很久才开口。",
+          "texto_pt": "Ele não respondeu… e só muito depois falou.",
+          "texto_pt_original_ia": "Ele não respondeu… e só muito depois falou.",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 4,
-          "paragrafo": 2,
-          "texto_zh": "「命运已经决定了。十日之后，一切终结。」",
-          "texto_pt": "— O destino já foi decidido. Em dez dias, tudo chega ao fim.",
-          "texto_pt_original_ia": "— O destino já foi decidido. Em dez dias, tudo chega ao fim.",
+          "paragrafo": 4,
+          "texto_zh": "「门早就开了。今夜之前，我必须登顶。」",
+          "texto_pt": "— A porta já está aberta há muito tempo. Antes desta noite, preciso chegar ao topo.",
+          "texto_pt_original_ia": "— A porta já está aberta há muito tempo. Antes desta noite, preciso chegar ao topo.",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 5,
-          "paragrafo": 3,
-          "texto_zh": "她握紧了手中的灵剑，剑身上刻着古老的符文。",
-          "texto_pt": "Ela apertou a espada espiritual em suas mãos; runas antigas estavam gravadas na lâmina.",
-          "texto_pt_original_ia": "Ela apertou a espada espiritual em suas mãos; runas antigas estavam gravadas na lâmina.",
+          "paragrafo": 5,
+          "texto_zh": "她握紧手中的铜灯，灯身上刻着看不懂的字。",
+          "texto_pt": "Ela apertou a lamparina de bronze na mão; no corpo dela havia gravados sinais que ninguém sabia ler.",
+          "texto_pt_original_ia": "Ela apertou a lamparina de bronze na mão; no corpo dela havia gravados sinais que ninguém sabia ler.",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 6,
-          "paragrafo": 4,
-          "texto_zh": "「那我们就一起面对终焉。」",
-          "texto_pt": "— Então enfrentaremos o Fim Derradeiro juntos.",
-          "texto_pt_original_ia": "— Então enfrentaremos o Fim Derradeiro juntos.",
+          "paragrafo": 6,
+          "texto_zh": "「那我陪你上去。」",
+          "texto_pt": "— Então subo com você.",
+          "texto_pt_original_ia": "— Então subo com você.",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         },
         {
           "ordem": 7,
-          "paragrafo": 5,
-          "texto_zh": "夜色渐深，宗门的灯火在远处闪烁。",
-          "texto_pt": "A noite se aprofundava; as luzes da seita cintilavam ao longe.",
-          "texto_pt_original_ia": "A noite se aprofundava; as luzes da seita cintilavam ao longe.",
+          "paragrafo": 7,
+          "texto_zh": "风声渐大，塔顶的火光在云里忽明忽暗。",
+          "texto_pt": "O vento crescia, e o fogo no alto da torre piscava entre as nuvens.",
+          "texto_pt_original_ia": "O vento crescia, e o fogo no alto da torre piscava entre as nuvens.",
           "editado_manualmente": false,
           "status_traducao": "traduzida"
         }
@@ -112,79 +112,20 @@
   ],
   "glossario": [
     {
-      "termo_zh": "终焉",
-      "termo_pt": "Fim Derradeiro",
+      "termo_zh": "青铜塔",
+      "termo_pt": "Torre de Bronze",
+      "categoria": "local",
+      "nota": "A torre que dá nome à obra.",
+      "origem": "manual"
+    },
+    {
+      "termo_zh": "铜灯",
+      "termo_pt": "lamparina de bronze",
       "categoria": "outro",
-      "nota": "Conceito central da obra; sempre com iniciais maiúsculas.",
-      "origem": "manual",
-      "criado_em": "2026-07-01T12:00:00.000Z"
-    },
-    {
-      "termo_zh": "灵剑",
-      "termo_pt": "espada espiritual",
-      "categoria": "poder-habilidade",
-      "nota": null,
-      "origem": "manual",
-      "criado_em": "2026-07-01T12:00:00.000Z"
-    },
-    {
-      "termo_zh": "宗门",
-      "termo_pt": "seita",
-      "categoria": "entidade",
-      "nota": "Nunca traduzir como \"clã\".",
-      "origem": "manual",
-      "criado_em": "2026-07-01T12:00:00.000Z"
-    },
-    {
-      "termo_zh": "符文",
-      "termo_pt": "runas",
-      "categoria": "poder-habilidade",
-      "nota": null,
-      "origem": "sugerido-ia",
-      "criado_em": "2026-07-09T12:00:00.000Z"
+      "nota": "Objeto que a personagem carrega.",
+      "origem": "manual"
     }
   ],
-  "termos_sugeridos": [
-    {
-      "capitulo_numero": 1,
-      "termo_zh": "灯火",
-      "termo_pt": "luzes",
-      "categoria": "outro",
-      "contexto": "夜色渐深，宗门的灯火在远处闪烁。",
-      "status": "pendente",
-      "criado_em": "2026-07-09T12:05:00.000Z"
-    }
-  ],
-  "banco_testes": [
-    {
-      "capitulo_numero": 1,
-      "frase_ordem": 1,
-      "trecho_zh": "「等等！」她喊道。",
-      "pergunta": "\"Espere\" não ficou formal demais para uma fala urgente?",
-      "veredito": "incorreto",
-      "justificativa": "A regra 1.2 pede diálogos naturais; em urgência, o imperativo coloquial \"Espera!\" soa mais crível em PT-BR do que \"Espere!\".",
-      "secao_regra": "1.2-dialogos-naturais",
-      "correcao_proposta": "— Espera! — ela gritou.",
-      "status": "corrigido",
-      "provedor": "mock",
-      "modelo": "mock-v1",
-      "resposta_bruta": "{\"trecho_zh\":\"「等等！」她喊道。\",\"veredito\":\"incorreto\",\"justificativa\":\"A regra 1.2 pede diálogos naturais; em urgência, o imperativo coloquial soa mais crível.\",\"secao_regra\":\"1.2-dialogos-naturais\",\"correcao_proposta\":\"— Espera! — ela gritou.\"}",
-      "criado_em": "2026-07-09T12:10:00.000Z"
-    },
-    {
-      "capitulo_numero": 1,
-      "frase_ordem": 6,
-      "trecho_zh": "那我们就一起面对终焉",
-      "pergunta": "Por que \"Fim Derradeiro\" e não apenas \"o fim\"?",
-      "veredito": "correto",
-      "justificativa": "A regra 2.1 exige o termo canônico do glossário: 终焉 → Fim Derradeiro, conceito nomeado da obra, distinto de 结束 (fim comum).",
-      "secao_regra": "2.1-glossario-canonico",
-      "correcao_proposta": null,
-      "status": "confirmado",
-      "provedor": "mock",
-      "modelo": "mock-v1",
-      "resposta_bruta": "{\"trecho_zh\":\"那我们就一起面对终焉\",\"veredito\":\"correto\",\"justificativa\":\"A regra 2.1 exige o termo canônico do glossário.\",\"secao_regra\":\"2.1-glossario-canonico\",\"correcao_proposta\":null}",
-      "criado_em": "2026-07-09T12:15:00.000Z"
-    }
-  ]
+  "termos_sugeridos": [],
+  "banco_testes": []
 }

@@ -88,7 +88,7 @@ describe('coerência schema ⇄ zod (a fonte única não pode divergir da valida
       CONTRATO_REFINAR_PROMPT.zod.parse({ propostas: [{ secao_regra: 'g', regra_proposta: 'r', justificativa: 'j' }] }),
     ).not.toThrow();
     expect(() =>
-      CONTRATO_CONTRACAPA.zod.parse({ titulo_pt: 'O Cânone dos Mortos', sinopse_pt: 'Verso um.\nVerso dois.' }),
+      CONTRATO_CONTRACAPA.zod.parse({ titulo_pt: 'A Torre de Bronze', sinopse_pt: 'Verso um.\nVerso dois.' }),
     ).not.toThrow();
   });
 

@@ -2,7 +2,7 @@
 //
 // O núcleo diz que o glossário é lei "inclusive nas flexões" — o plural é uso
 // CORRETO, não desvio. Comparando string exata, "Reis Incomparáveis" era acusado
-// de não conter "Rei Incomparável", e a varredura do prólogo devolvia duas
+// de não conter "Senhor das Dez Trilhas", e a varredura devolvia duas
 // violações que não existiam. Falso positivo é pior que falso negativo aqui:
 // ele treina o usuário a ignorar o indicador.
 //
