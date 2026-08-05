@@ -1462,6 +1462,15 @@ function ModalConsistencia({
       ),
     staleTime: 0,
   });
+  const clienteQuery = useQueryClient();
+  const dispensar = useMutation({
+    mutationFn: (d: { frase_id: number; termo_zh: string }) =>
+      api('POST', `/frases/${d.frase_id}/consistencia/dispensar`, { termo_zh: d.termo_zh }),
+    onSuccess: () => {
+      clienteQuery.invalidateQueries({ queryKey: ['consistencia', capituloId] });
+      clienteQuery.invalidateQueries({ queryKey: ['capitulos'] });
+    },
+  });
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40" onClick={aoFechar}>
@@ -1492,15 +1501,29 @@ function ModalConsistencia({
                   </p>
                   <p className="texto-zh text-xs text-tinta-2">{v.texto_zh}</p>
                   <p className="mb-2 text-xs text-tinta-2">{v.texto_pt}</p>
-                  <Botao variante="secundario" onClick={() => aoIrParaFrase(v.frase_id)}>
-                    Ir à frase
-                  </Botao>
+                  <div className="flex flex-wrap gap-2">
+                    <Botao variante="secundario" onClick={() => aoIrParaFrase(v.frase_id)}>
+                      Ir à frase
+                    </Botao>
+                    {/* Nem toda ausência é erro: com o referente já estabelecido,
+                        o português OMITE em vez de repetir. Sem um jeito de dizer
+                        "já conferi", o indicador fica aceso para sempre e o
+                        revisor aprende a ignorá-lo. */}
+                    <Botao
+                      variante="secundario"
+                      onClick={() => dispensar.mutate({ frase_id: v.frase_id, termo_zh: v.termo_zh })}
+                      disabled={dispensar.isPending}
+                    >
+                      Dispensar — está certo assim
+                    </Botao>
+                  </div>
                 </div>
               ))}
             </div>
             <p className="text-xs text-tinta-2">
-              Verificação heurística: compara sem maiúsculas/acentos e não entende flexões (plural, gênero) — trate
-              como sinalização, não veredito.
+              Verificação heurística: ignora maiúsculas e acentos e aceita flexão (plural, artigo) — mas continua
+              sendo sinalização, não veredito. Quando a ausência for legítima (o referente já está estabelecido e
+              repetir pioraria a prosa), use <strong>Dispensar</strong>: some daqui e do contador do capítulo.
               {data.termos_curtos_ignorados > 0 && (
                 <>
                   {' '}

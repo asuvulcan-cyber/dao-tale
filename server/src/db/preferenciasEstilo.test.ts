@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   PREFERENCIAS_PADRAO,
+  REGISTROS_PREDEFINIDOS,
+  ROTULOS_PREFERENCIAS,
   descreverMudancas,
   normalizarPreferencias,
   preferenciasSaoPadrao,
@@ -230,7 +232,26 @@ describe('descreverMudancas', () => {
       'Onomatopeias: adaptar ao PT-BR → manter em pinyin',
     ]);
     expect(descreverMudancas(PREFERENCIAS_PADRAO, com({ registro: 'quem gosta de xianxia' }))).toEqual([
-      'Registro / público-alvo: jovem adulto (30–40) → quem gosta de xianxia',
+      'Registro / público-alvo: leitor de webnovel (18–25) → quem gosta de xianxia',
     ]);
+  });
+});
+
+describe('rótulo da tela x texto da regra', () => {
+  it('o rótulo do registro descreve o mesmo público que a regra manda ao prompt', () => {
+    // O rótulo dizia "jovem adulto (30–40)" enquanto a regra já falava em 18–25:
+    // o seletor mentia sobre o que a opção faz. Mesma classe de defeito das
+    // contradições prosa-x-exemplo, só que entre interface e comportamento.
+    const rotulo = ROTULOS_PREFERENCIAS.registro.opcoes['jovem-adulto'];
+    const regra = REGISTROS_PREDEFINIDOS['jovem-adulto'];
+    expect(rotulo).toContain('18');
+    expect(regra).toContain('18 a 25');
+    expect(rotulo).not.toContain('30');
+  });
+
+  it('toda opção do registro tem rótulo e texto de regra', () => {
+    for (const chave of Object.keys(ROTULOS_PREFERENCIAS.registro.opcoes)) {
+      expect(REGISTROS_PREDEFINIDOS[chave], `sem regra para "${chave}"`).toBeTruthy();
+    }
   });
 });

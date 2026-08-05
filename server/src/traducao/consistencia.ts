@@ -1,4 +1,5 @@
 import type { EntradaGlossario, Frase } from '@dao-tale/shared';
+import { contemTermoFlexionado } from './flexao.js';
 
 // Varredura reversa de consistência do glossário (doc 05 §4.2, D5): para cada
 // termo do glossário presente no chinês de uma frase traduzida, a tradução PT
@@ -26,7 +27,15 @@ const normalizar = (t: string) =>
     .replace(/\p{M}/gu, '')
     .toLowerCase();
 
-export function varrerConsistencia(frases: Frase[], glossario: EntradaGlossario[]): ResultadoConsistencia {
+/** Pares (frase, termo) que o revisor já conferiu e dispensou. */
+export type ChaveIgnorada = `${number}|${string}`;
+export const chaveIgnorada = (fraseId: number, termoZh: string): ChaveIgnorada => `${fraseId}|${termoZh}`;
+
+export function varrerConsistencia(
+  frases: Frase[],
+  glossario: EntradaGlossario[],
+  ignoradas: ReadonlySet<string> = new Set(),
+): ResultadoConsistencia {
   // Dois filtros contra falso positivo: termos de 1 caractere (aparecem dentro
   // de dezenas de palavras comuns) e um termo que é parte de outro termo mais
   // longo também presente na frase (coberto pelo mais longo).
@@ -42,7 +51,10 @@ export function varrerConsistencia(frases: Frase[], glossario: EntradaGlossario[
     for (const g of presentes) {
       if (presentes.some((outro) => outro.termo_zh !== g.termo_zh && outro.termo_zh.includes(g.termo_zh))) continue;
       ocorrencias++;
-      if (!normalizar(f.texto_pt).includes(normalizar(g.termo_pt))) {
+      // Dispensada pelo revisor: nem toda ausência é erro. Quando o referente
+      // já está estabelecido, o português omite em vez de repetir.
+      if (ignoradas.has(chaveIgnorada(f.id, g.termo_zh))) continue;
+      if (!contemTermoFlexionado(f.texto_pt, g.termo_pt)) {
         violacoes.push({
           frase_id: f.id,
           ordem: f.ordem,

@@ -3,7 +3,7 @@ import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { PROVEDORES_IDS, STATUS_CAPITULO, normalizarPreferencias, type EventoTraducao } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa } from '../db/repos.js';
+import { reposCapitulos, reposConsistencia, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
@@ -93,6 +93,19 @@ export function rotasCapitulos(db: BancoDados): Hono {
     return c.json(analisarEstilo(reposFrases.listarPorCapitulo(db, id), prefs));
   });
 
+  // Dispensar uma ocorrência: "já conferi, aqui está certo". Por PAR
+  // (frase, termo) — não desliga o termo na obra inteira.
+  app.post('/frases/:id/consistencia/dispensar', async (c) => {
+    const corpo = z.object({ termo_zh: z.string().min(1), desfazer: z.boolean().optional() }).safeParse(await c.req.json());
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const fraseId = Number(c.req.param('id'));
+    const frase = reposFrases.obter(db, fraseId);
+    if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
+    if (corpo.data.desfazer) reposConsistencia.restaurar(db, fraseId, corpo.data.termo_zh);
+    else reposConsistencia.dispensar(db, fraseId, corpo.data.termo_zh);
+    return c.json({ ok: true });
+  });
+
   app.put('/capitulos/:id', async (c) => {
     const corpo = atualizarCapituloSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
@@ -143,7 +156,11 @@ export function rotasCapitulos(db: BancoDados): Hono {
     const id = Number(c.req.param('id'));
     const capitulo = reposCapitulos.obter(db, id);
     if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
-    const resultado = varrerConsistencia(reposFrases.listarPorCapitulo(db, id), reposGlossario.listar(db, capitulo.obra_id));
+    const resultado = varrerConsistencia(
+      reposFrases.listarPorCapitulo(db, id),
+      reposGlossario.listar(db, capitulo.obra_id),
+      reposConsistencia.ignoradasDoCapitulo(db, id),
+    );
     // Mantém o badge da lista em dia quando a varredura é disparada à mão.
     reposCapitulos.definirConsistencia(db, id, resultado.violacoes.length);
     return c.json(resultado);

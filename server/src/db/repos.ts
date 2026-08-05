@@ -1113,6 +1113,42 @@ function rotuloConvergido(db: BancoDados, obraId: number, rotulo: string): strin
   return usados.find((u) => normalizarSecaoRegra(u.secao_regra) === alvo)?.secao_regra ?? rotulo;
 }
 
+// ── Consistência dispensada (par frase+termo já conferido) ────────────────
+
+export const reposConsistencia = {
+  /** Chaves `frase|termo` dispensadas no capítulo — formato que a varredura consome. */
+  ignoradasDoCapitulo(db: BancoDados, capituloId: number): Set<string> {
+    const linhas = db
+      .prepare(
+        `SELECT i.frase_id, i.termo_zh FROM consistencia_ignorada i
+         JOIN frases f ON f.id = i.frase_id WHERE f.capitulo_id = ?`,
+      )
+      .all(capituloId) as { frase_id: number; termo_zh: string }[];
+    return new Set(linhas.map((l) => `${l.frase_id}|${l.termo_zh}`));
+  },
+
+  ignoradasDaObra(db: BancoDados, obraId: number): Set<string> {
+    const linhas = db
+      .prepare(
+        `SELECT i.frase_id, i.termo_zh FROM consistencia_ignorada i
+         JOIN frases f ON f.id = i.frase_id
+         JOIN capitulos c ON c.id = f.capitulo_id WHERE c.obra_id = ?`,
+      )
+      .all(obraId) as { frase_id: number; termo_zh: string }[];
+    return new Set(linhas.map((l) => `${l.frase_id}|${l.termo_zh}`));
+  },
+
+  dispensar(db: BancoDados, fraseId: number, termoZh: string): void {
+    db.prepare(
+      'INSERT INTO consistencia_ignorada (frase_id, termo_zh) VALUES (?, ?) ON CONFLICT DO NOTHING',
+    ).run(fraseId, termoZh);
+  },
+
+  restaurar(db: BancoDados, fraseId: number, termoZh: string): void {
+    db.prepare('DELETE FROM consistencia_ignorada WHERE frase_id = ? AND termo_zh = ?').run(fraseId, termoZh);
+  },
+};
+
 // ── Configurações (chave-valor) ────────────────────────────────────────────
 
 export const reposConfig = {

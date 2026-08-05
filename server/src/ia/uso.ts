@@ -55,10 +55,12 @@ export function usoDoClaude(usage: unknown): UsoChamada {
 /** `usageMetadata` do Gemini. `thoughtsTokenCount` entra na SAÍDA porque é
  * cobrado como saída — é o desperdício que o `thinkingBudget: 0` combate
  * (doc 05); esconder aqui tornaria a economia invisível no painel. */
-export function usoDoGemini(meta: unknown): UsoChamada {
+export function usoDoGemini(meta: unknown, modeloResolvido?: string | null): UsoChamada {
   const m = objeto(meta);
   const cache = num(m.cachedContentTokenCount);
   return {
+    // Só entra quando o provedor informa: ausente ≠ null, e a maioria não diz.
+    ...(modeloResolvido ? { modelo_resolvido: modeloResolvido } : {}),
     tokens_entrada: descontarCache(num(m.promptTokenCount), cache),
     tokens_saida: somar(num(m.candidatesTokenCount), num(m.thoughtsTokenCount)),
     tokens_cache_leitura: cache,

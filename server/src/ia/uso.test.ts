@@ -112,3 +112,18 @@ describe('estimarTokens', () => {
     expect(estimarTokens('a'.repeat(38))).toBe(10);
   });
 });
+
+describe('modelo resolvido', () => {
+  it('guarda o modelo que ATENDEU quando o provedor informa', () => {
+    // "gemini-flash-latest" é apelido; a cota gratuita do Google é por modelo
+    // concreto (3.5 Flash: 20 req/dia). Sem isto, o consumo do app não cruza
+    // com o painel do provedor.
+    const u = usoDoGemini({ promptTokenCount: 100, candidatesTokenCount: 50 }, 'gemini-3.5-flash');
+    expect(u.modelo_resolvido).toBe('gemini-3.5-flash');
+  });
+
+  it('não inventa o campo quando o provedor não informa', () => {
+    const u = usoDoGemini({ promptTokenCount: 100, candidatesTokenCount: 50 });
+    expect('modelo_resolvido' in u).toBe(false);
+  });
+});

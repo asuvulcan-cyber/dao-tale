@@ -7,7 +7,7 @@ import {
   type ProvedorId,
 } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
+import { reposCapitulos, reposConfig, reposConsistencia, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
@@ -410,7 +410,11 @@ async function executarJob(
       // checkpoint. Nunca derruba o job.
       if (prontas > 0) {
         try {
-          const violacoes = varrerConsistencia(finais, reposGlossario.listar(db, capitulo.obra_id)).violacoes.length;
+          const violacoes = varrerConsistencia(
+            finais,
+            reposGlossario.listar(db, capitulo.obra_id),
+            reposConsistencia.ignoradasDoCapitulo(db, capituloId),
+          ).violacoes.length;
           reposCapitulos.definirConsistencia(db, capituloId, violacoes);
         } catch (e) {
           console.warn(`[traducao] capítulo ${capituloId}: varredura de consistência falhou:`, e);

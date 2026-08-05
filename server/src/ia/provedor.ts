@@ -13,6 +13,11 @@ export interface UsoChamada {
   tokens_cache_leitura: number | null;
   /** Entrada gravada no cache (~1,25× do preço de entrada). */
   tokens_cache_criacao: number | null;
+  /** Modelo que DE FATO atendeu, quando o provedor informa. Pedir
+   *  `gemini-flash-latest` é pedir um apelido: o painel do Google contabiliza no
+   *  modelo concreto, e sem guardar isto não há como cruzar o nosso consumo com
+   *  o limite de cota dele — nem saber qual linha da tabela foi gasta. */
+  modelo_resolvido?: string | null;
 }
 
 // ── Requisições montadas pela orquestração (independentes de provedor) ─────

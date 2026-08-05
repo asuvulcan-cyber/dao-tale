@@ -40,6 +40,9 @@ export function registrarEvento(db: BancoDados, dados: DadosEvento): void {
       tokens_saida: uso.tokens_saida,
       tokens_cache_leitura: uso.tokens_cache_leitura,
       tokens_cache_criacao: uso.tokens_cache_criacao,
+      // Apelido pedido vs modelo que atendeu: sem isto não dá para cruzar o
+      // consumo com o painel do provedor, onde a cota é POR MODELO.
+      modelo_resolvido: uso.modelo_resolvido ?? null,
       custo_estimado: calcularCusto(preco, uso),
     });
   } catch (e) {

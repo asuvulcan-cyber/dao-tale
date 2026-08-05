@@ -11,7 +11,11 @@ export interface EventoIaNovo {
   capitulo_id: number | null;
   papel: PapelIa;
   provedor: string;
+  /** O que foi PEDIDO — pode ser apelido ("gemini-flash-latest"). */
   modelo: string;
+  /** O que ATENDEU, quando o provedor informa. A cota gratuita é por modelo
+   *  concreto, então é este que cruza com o painel do provedor. */
+  modelo_resolvido?: string | null;
   tokens_entrada: number | null;
   tokens_saida: number | null;
   tokens_cache_leitura: number | null;
@@ -52,9 +56,9 @@ export const reposEventos = {
   registrar(db: BancoDados, dados: EventoIaNovo): void {
     db.prepare(
       `INSERT INTO eventos_ia
-        (data, obra_id, capitulo_id, papel, provedor, modelo,
+        (data, obra_id, capitulo_id, papel, provedor, modelo, modelo_resolvido,
          tokens_entrada, tokens_saida, tokens_cache_leitura, tokens_cache_criacao, custo_estimado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       dataLocalHoje(),
       dados.obra_id,
@@ -62,6 +66,7 @@ export const reposEventos = {
       dados.papel,
       dados.provedor,
       dados.modelo,
+      dados.modelo_resolvido ?? null,
       dados.tokens_entrada,
       dados.tokens_saida,
       dados.tokens_cache_leitura,

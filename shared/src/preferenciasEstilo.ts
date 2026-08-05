@@ -280,7 +280,14 @@ export const ROTULOS_PREFERENCIAS: Record<keyof PreferenciasEstilo, { titulo: st
   },
   registro: {
     titulo: 'Registro / público-alvo',
-    opcoes: { 'jovem-adulto': 'jovem adulto (30–40)', 'adulto-literario': 'adulto literário', juvenil: 'juvenil' },
+    // A CHAVE continua 'jovem-adulto' de propósito: trocá-la invalidaria a
+    // preferência gravada nas versões de prompt existentes. O rótulo é que
+    // estava mentindo — descrevia a cauda do público (30–40) como se fosse o alvo.
+    opcoes: {
+      'jovem-adulto': 'leitor de webnovel (18–25)',
+      'adulto-literario': 'adulto literário',
+      juvenil: 'juvenil (12–16)',
+    },
   },
 };
 

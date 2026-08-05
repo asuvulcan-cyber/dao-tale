@@ -6,7 +6,7 @@ import type {
   StatusCapitulo,
 } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposGlossario } from '../db/repos.js';
+import { reposCapitulos, reposConsistencia, reposFrases, reposGlossario } from '../db/repos.js';
 import { varrerConsistencia } from './consistencia.js';
 
 // Checkpoint de estabilidade (doc 09 §4): decide, por taxas medidas nos dados
@@ -160,7 +160,11 @@ export function checkpointDaObra(db: BancoDados, obraId: number, fase: FaseTradu
     const glossario = reposGlossario.listar(db, obraId);
     for (const c of caps) {
       if (!naJanela.has(c.id)) continue;
-      c.violacoes = varrerConsistencia(reposFrases.listarPorCapitulo(db, c.id), glossario).violacoes.length;
+      c.violacoes = varrerConsistencia(
+        reposFrases.listarPorCapitulo(db, c.id),
+        glossario,
+        reposConsistencia.ignoradasDoCapitulo(db, c.id),
+      ).violacoes.length;
     }
   }
 
