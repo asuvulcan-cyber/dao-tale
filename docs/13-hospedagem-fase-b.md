@@ -176,10 +176,17 @@ Passo 4; a restauração continua sendo `npm run restaurar`.
 
 ```sh
 # 1. Sistema e usuário de serviço (sem shell, sem home)
-sudo apt update && sudo apt install -y git curl caddy unattended-upgrades
+sudo apt update && sudo apt install -y git curl caddy unattended-upgrades chromium
 sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin daotale
 
-# 2. Node 22 (nodesource)
+#    `chromium` é só para a exportação em PDF, que roda um navegador headless.
+#    Sem ele, a rota /pdf devolve 503 explicando, e o caminho do HTML para
+#    imprimir continua funcionando — o resto do app não depende dele.
+#    Em distro que empacota como `chromium-browser`, ajuste o nome; se o
+#    executável tiver outro caminho, aponte com DAO_TALE_NAVEGADOR.
+
+# 2. Node 22 — EXIGÊNCIA, não preferência: o gerador de PDF fala DevTools
+#    Protocol pelo WebSocket embutido, que só existe a partir do 22.
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 

@@ -157,6 +157,9 @@ export async function gerarPdf(html: string, opcoes: OpcoesPdf = {}): Promise<Bu
         '--headless=new',
         '--disable-gpu',
         '--no-sandbox',
+        // Sob systemd endurecido (PrivateTmp/PrivateDevices) o /dev/shm é
+        // pequeno demais e o Chromium morre na subida; isso o faz usar disco.
+        '--disable-dev-shm-usage',
         '--no-first-run',
         '--no-default-browser-check',
         '--remote-debugging-port=0',
