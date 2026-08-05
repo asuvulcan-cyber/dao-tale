@@ -1,0 +1,43 @@
+# Dao Tale atrás de um Traefik que JÁ existe na máquina (doc 13 §4.1).
+#
+# Use isto quando o VPS não está limpo — um Dokploy/Coolify já dono das portas
+# 80 e 443, com outras aplicações em produção atrás. Subir o Caddy nesse caso
+# derruba o que já está no ar; o Dao Tale entra pelo proxy que já manda.
+#
+#     sudo install -m 0644 deploy/traefik-dao-tale.yml.exemplo \
+#         /etc/dokploy/traefik/dynamic/dao-tale.yml
+#     sudo nano /etc/dokploy/traefik/dynamic/dao-tale.yml   # troque o domínio
+#
+# O provedor de arquivo do Traefik OBSERVA essa pasta: salvar já vale. Não
+# recarregue nem reinicie o Traefik — piscaria as outras aplicações à toa.
+#
+# Pré-requisito no lado do app (o proxy vive em container e não enxerga o
+# loopback do host): DAO_TALE_BIND=172.17.0.1 no /etc/dao-tale/dao-tale.env,
+# mais o drop-in `After=docker.service` na unit.
+http:
+  routers:
+    dao-tale-web:
+      rule: Host(`tale.exemplo.com`)
+      entryPoints:
+        - web
+      middlewares:
+        # Definido pelo próprio Dokploy em dynamic/middlewares.yml.
+        - redirect-to-https@file
+      service: dao-tale-service
+
+    dao-tale-websecure:
+      rule: Host(`tale.exemplo.com`)
+      entryPoints:
+        - websecure
+      service: dao-tale-service
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    dao-tale-service:
+      loadBalancer:
+        # OBRIGATÓRIO: o modo hospedado confere o Host contra
+        # DAO_TALE_HOST_PUBLICO (doc 13 §1). Sem isto, 403 em tudo.
+        passHostHeader: true
+        servers:
+          - url: http://172.17.0.1:8317

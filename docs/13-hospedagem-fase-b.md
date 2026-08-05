@@ -136,6 +136,52 @@ Cabeçalhos de resposta acrescentados pela própria app (não dependem do proxy)
 > por `http://` sem TLS: o cookie é `Secure` e o navegador simplesmente não o guarda. Isso
 > é proposital — não existe chave de escape para servir em claro.
 
+**Armadilha do `caddy validate`:** rodar a validação como `root` **cria** o arquivo de log
+declarado no Caddyfile, com dono `root`. Depois o serviço, que roda como `caddy`, não
+consegue abrir o próprio log e morre com `permission denied` — em um arquivo cujo
+*diretório* está com o dono certo, o que despista. Se acontecer:
+`chown caddy:caddy /var/log/caddy/dao-tale.log`.
+
+### 4.1 Quando o VPS já tem um proxy (Traefik, Nginx, Dokploy…)
+
+Foi o caso real do primeiro deploy: a máquina já rodava um Dokploy, e o **Traefik dele era
+o dono das portas 80 e 443**, com outras aplicações em produção atrás. Instalar o Caddy ali
+não é uma questão de configuração — é uma disputa por porta que **derruba o que já está no
+ar**. A regra é: *quem chegou primeiro na 443 continua sendo o dono; o Dao Tale entra por
+ele.*
+
+Dois ajustes bastam.
+
+**1. O app precisa escutar onde o proxy o enxergue.** O padrão é `127.0.0.1`, e um proxy em
+container **não alcança o loopback do host** — para ele, `127.0.0.1` é ele mesmo. Daí o
+`DAO_TALE_BIND`, que aponta o bind para a ponte do Docker:
+
+```sh
+DAO_TALE_BIND=172.17.0.1     # gateway de docker0, visível dos containers
+```
+
+`172.17.0.1` é endereço de interface do host: não é roteável da internet, então a porta
+continua fechada de fora (confira com um TCP de fora, não com `ufw status`). Como `docker0`
+só existe depois que o Docker sobe, a unit precisa de um drop-in:
+
+```ini
+# /etc/systemd/system/dao-tale.service.d/docker.conf
+[Unit]
+After=docker.service
+Wants=docker.service
+```
+
+**2. Uma rota no proxy.** O Traefik do Dokploy observa `/etc/dokploy/traefik/dynamic/`:
+soltar o arquivo lá basta, e **não se deve recarregar o Traefik** (piscaria as outras
+aplicações à toa). O modelo está em `deploy/traefik-dao-tale.yml.exemplo`; o que não pode
+faltar é `passHostHeader: true`, senão a allowlist de §1 responde 403 a tudo.
+
+> **`ufw` em máquina com Docker é armadilha.** O Docker escreve as regras dele no iptables
+> antes da cadeia que o `ufw` governa: ligar o `ufw` **não fecha** uma porta publicada por
+> container (um `0.0.0.0:3306->3306` continua aberto para a internet inteira) e ainda pode
+> cortar o caminho host↔container de que o proxy depende. Porta publicada se fecha **onde
+> foi publicada** — no container — ou num firewall fora da máquina.
+
 ---
 
 ## 5. Deploy reproduzível (systemd)
@@ -173,6 +219,10 @@ Backup automático, rotação, `integrity_check`, lockfile e shutdown limpo vêm
 Passo 4; a restauração continua sendo `npm run restaurar`.
 
 ### Passo a passo, VPS limpo (Debian/Ubuntu)
+
+> **Antes de começar, confira que o VPS está mesmo limpo:** `ss -tlnp | grep -E ':80 |:443 '`
+> e `docker ps`. Se algo já ocupa 80/443, **pule o Caddy** e siga §4.1 — o primeiro deploy
+> real quase derrubou um bot em produção exatamente aqui.
 
 ```sh
 # 1. Sistema e usuário de serviço (sem shell, sem home)
