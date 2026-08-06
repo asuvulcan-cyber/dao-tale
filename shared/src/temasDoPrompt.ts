@@ -1,0 +1,196 @@
+// Registro de temas: quem é dono de quê (doc 15 §7).
+//
+// A regra que governa as três camadas do prompt é uma PARTIÇÃO POR TEMA — cada tema
+// pertence a exatamente uma camada. Quando duas falam do mesmo tema, quem decide é o
+// modelo, e a decisão muda a cada chamada. Esta tabela é o que torna a partição
+// verificável, em vez de disciplina que só existe na cabeça de quem escreveu.
+//
+// OS PADRÕES MIRAM A DECISÃO, NÃO O VOCABULÁRIO. Medido em 2026-08-06 contra o núcleo
+// enxuto real: com padrões ingênuos, 6 dos 8 temas de Beta davam zero ocorrência (o Alfa
+// está limpo), mas `nomes_proprios` dava três, e as três eram falso positivo de espécies
+// diferentes:
+//
+//   "Alterne apenas entre nome próprio, pronome e sujeito oculto"  → variação elegante,
+//                                                                     tema de Alfa
+//   "Traduzir ou transliterar é decidido na Seção 5 (Nomes...)"    → remissão a Beta
+//   "Nunca deixe a unidade transliterada"                          → unidade de medida,
+//                                                                     tema de Alfa
+//
+// Daí as duas defesas: padrão que reconhece a forma em que a POLÍTICA é enunciada, e
+// isenção para linhas de remissão. Não afrouxe nenhum padrão sem repetir as duas
+// medições — a negativa (o Alfa distribuído continua limpo) e a positiva (cada variante
+// de Beta acende o seu tema). Ambas estão em teste.
+
+export type Camada = 'alfa' | 'beta' | 'delta';
+
+export interface Tema {
+  /** Para temas de Beta, é exatamente a chave de PreferenciasEstilo. */
+  id: string;
+  dono: Camada;
+  /** Nome curto, para a mensagem de aviso. */
+  titulo: string;
+  /** Como o tema se resolve — entra na mensagem de aviso. */
+  resolucao: string;
+  /** Reconhece o tema em TEXTO CORRIDO. Estrito: mira a decisão, não a palavra. */
+  padrao: RegExp;
+  /** Reconhece o tema num RÓTULO de regra já normalizado (minúsculo, sem acento,
+      sem numeração de seção) — entrada curta, onde falso positivo é improvável e o
+      padrão estrito erraria por falta de contexto: o rótulo "notas tradutor" não
+      contém o "do" que `padrao` exige. Ausente = usa `padrao`. */
+  padraoRotulo?: RegExp;
+  /** Entra no FILTRO de `preferenciaQueCobre`, que derruba candidatos em silêncio?
+      `false` = só avisa. Ver o comentário de `nomes_proprios`. */
+  filtravel: boolean;
+}
+
+export interface Ocorrencia {
+  tema: Tema;
+  /** 1-indexada, para apontar a linha na tela. */
+  linha: number;
+  /** O texto que casou, com contexto ao redor — é o que torna o aviso julgável
+      de um olhar, em vez de uma acusação abstrata. */
+  trecho: string;
+}
+
+/** Uma linha que ENTREGA o tema a outra camada não está decidindo nada — está fazendo a
+    partição funcionar à vista. Um Alfa bem escrito deve poder dizer "isto se decide na
+    Seção 5" sem gerar aviso. */
+const REFERENCIA_ENTRE_CAMADAS = /decidid[oa] n[ao] Se[çc][ãa]o \d|ver (?:a )?Se[çc][ãa]o \d|Se[çc][ãa]o \d \(/i;
+
+export const TEMAS: readonly Tema[] = [
+  {
+    id: 'dialogo',
+    dono: 'beta',
+    titulo: 'Diálogo',
+    resolucao: 'resolve-se pela chave Diálogo (aspas ou travessão)',
+    padrao: /travess[ãa]o|aspas duplas|aspas asi[áa]ticas|di[áa]logo|verbo de eloc|dicendi|「」/i,
+    padraoRotulo: /dialogo|aspas|travessao/,
+    filtravel: true,
+  },
+  {
+    // Vem ANTES de `pensamento_marca` porque o padrão de rótulo dela é mais amplo
+    // (`/pensamento/`) e engoliria este. O código antigo tinha só o amplo, e por isso
+    // devolvia `pensamento_marca` para rótulos que falavam de tempo verbal — rótulo
+    // errado, embora as duas chaves sejam filtradas do mesmo jeito.
+    id: 'pensamento_tempo',
+    dono: 'beta',
+    titulo: 'Tempo do pensamento',
+    resolucao: 'resolve-se pela chave Tempo do pensamento (presente ou do original)',
+    // `\*{0,2}` porque no Beta renderizado o "presente" vem em negrito markdown.
+    padrao:
+      /pensamento[^.\n]{0,60}(no \*{0,2}presente|tempo verbal)|(no \*{0,2}presente|tempo verbal)[^.\n]{0,60}pensamento/i,
+    padraoRotulo: /pensamento.*(tempo|verbal|presente|passado)/,
+    filtravel: true,
+  },
+  {
+    id: 'pensamento_marca',
+    dono: 'beta',
+    titulo: 'Marcação do pensamento',
+    resolucao: 'resolve-se pela chave Pensamento (itálico ou aspas)',
+    padrao: /pensamento[^.\n]{0,40}(it[áa]lico|aspas)|(it[áa]lico|aspas)[^.\n]{0,40}pensamento|sentiendi/i,
+    padraoRotulo: /pensamento/,
+    filtravel: true,
+  },
+  {
+    id: 'mais_que_perfeito',
+    dono: 'beta',
+    titulo: 'Mais-que-perfeito',
+    resolucao: 'resolve-se pela chave Mais-que-perfeito simples',
+    padrao: /mais[-\s]que[-\s]perfeito|anterioridade|\bfizera\b|\bdissera\b/i,
+    padraoRotulo: /perfeito/,
+    filtravel: true,
+  },
+  {
+    id: 'notas_tradutor',
+    dono: 'beta',
+    titulo: 'Notas do tradutor',
+    resolucao: 'resolve-se pela chave Notas do tradutor (( ))',
+    padrao: /notas? do tradutor|\(\(/i,
+    padraoRotulo: /tradutor|\bnotas?\b/,
+    filtravel: true,
+  },
+  {
+    id: 'onomatopeia',
+    dono: 'beta',
+    titulo: 'Onomatopeias',
+    resolucao: 'resolve-se pela chave Onomatopeias',
+    padrao: /onomatopeia/i,
+    filtravel: true,
+  },
+  {
+    // `filtravel: false` de propósito. Em `obras.ts` o filtro DERRUBA candidatos a
+    // diretriz antes de gastar a chamada paga, e nomes próprios é o caso genuinamente
+    // ambíguo do doc 15 §4: a POLÍTICA (traduzir ou transliterar) é chave de Beta, mas o
+    // tratamento de UM nome é glossário. Filtrar ali descartaria candidato legítimo em
+    // silêncio — exatamente o que este trabalho existe para impedir. No aviso ele entra.
+    id: 'nomes_proprios',
+    dono: 'beta',
+    titulo: 'Nomes próprios',
+    resolucao: 'a política resolve-se pela chave Nomes próprios; o nome específico, pelo glossário',
+    padrao: /nomes? pr[óo]prios? *[—:]|(?:em|para) pinyin|pinyin, sem|translitera(?:r|ndo) o (?:nome|lugar)/i,
+    filtravel: false,
+  },
+  {
+    // `\bregistro\b` e não `/registro/`: "registre como termo novo" e "registrar" são do
+    // glossário, tema de Alfa. E nada de `/leitor/` solto — o Alfa diz "o que um leitor
+    // brasileiro sente" ao falar de unidades de medida, e casaria.
+    id: 'registro',
+    dono: 'beta',
+    titulo: 'Registro / público-alvo',
+    resolucao: 'resolve-se pela chave Registro / público-alvo',
+    padrao: /\bregistro\b|p[úu]blico[-\s]?alvo|leitor de webnovel|p[úu]blico juvenil/i,
+    padraoRotulo: /registro|publico|leitor/,
+    filtravel: true,
+  },
+  {
+    id: 'glossario',
+    dono: 'alfa',
+    titulo: 'Glossário',
+    resolucao: 'o glossário é lei acima de todas as camadas; termos entram pelo glossário da obra',
+    padrao: /gloss[áa]rio|termos? novos?/i,
+    filtravel: false,
+  },
+  {
+    id: 'unidades',
+    dono: 'alfa',
+    titulo: 'Unidades de medida',
+    resolucao: 'vive no Alfa: a conversão zh→pt-BR é objetiva e vale para qualquer obra',
+    padrao: /unidades? de medida|时辰|\b里\b|\b丈\b|\b斤\b|tael/i,
+    filtravel: false,
+  },
+  {
+    id: 'demonstrativos',
+    dono: 'alfa',
+    titulo: 'Demonstrativos (这 / 那)',
+    resolucao: 'vive no Alfa: o teste da deleção e a linha dura do "aquele"',
+    padrao: /demonstrativo|这|那样|teste da dele[çc][ãa]o/i,
+    filtravel: false,
+  },
+  {
+    id: 'decalque',
+    dono: 'alfa',
+    titulo: 'Decalque do chinês',
+    resolucao: 'vive no Alfa: 对方, 开口, chengyu, partículas polissêmicas',
+    padrao: /decalque|chengyu|part[íi]culas? poliss[êe]mica|对方|开口/i,
+    filtravel: false,
+  },
+];
+
+/** Todos os temas reconhecidos no texto, com a linha e o trecho que casaram.
+    Linha que só faz remissão a outra camada é isenta. Função pura. */
+export function temasNoTexto(texto: string): Ocorrencia[] {
+  const achados: Ocorrencia[] = [];
+  texto.split('\n').forEach((linha, n) => {
+    if (REFERENCIA_ENTRE_CAMADAS.test(linha)) return;
+    for (const tema of TEMAS) {
+      const m = linha.match(tema.padrao);
+      if (!m || m.index === undefined) continue;
+      achados.push({
+        tema,
+        linha: n + 1,
+        trecho: linha.slice(Math.max(0, m.index - 40), m.index + 60).trim(),
+      });
+    }
+  });
+  return achados;
+}

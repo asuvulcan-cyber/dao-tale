@@ -1,6 +1,7 @@
 // Tipos de domínio e contratos da API — fonte única de verdade entre server e web.
 
 import type { PreferenciasEstilo } from './preferenciasEstilo.js';
+import { TEMAS } from './temasDoPrompt.js';
 import { TEMPERATURAS_PADRAO, type TemperaturasPapel } from './temperatura.js';
 
 // Tokens de pigmento/tipografia como dado, para o alvo EPUB (doc 12 §6).
@@ -18,6 +19,9 @@ export * from './preferenciasEstilo.js';
 export * from './temperatura.js';
 // Vitrine pública (doc 14): os únicos formatos que saem sem sessão.
 export * from './publico.js';
+// Registro de temas (doc 15 §7): qual camada é dona de cada tema, e como reconhecê-lo
+// em texto. É o que torna verificável a partição entre Alfa, Beta e Delta.
+export * from './temasDoPrompt.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
@@ -52,16 +56,16 @@ export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
  *
  * Devolve a chave de preferência coberta, ou null quando o caso é mesmo
  * candidato a virar diretriz nova.
+ *
+ * Lê o registro de temas (`temasDoPrompt.ts`), mas só as entradas `filtravel` — este é
+ * o caminho que DERRUBA candidatos em silêncio, e por isso é mais conservador que o
+ * aviso. `nomes_proprios` fica de fora de propósito: a política é chave de Beta, mas o
+ * tratamento de um nome específico é glossário, e descartar aqui perderia caso legítimo.
  */
 export function preferenciaQueCobre(rotulo: string): keyof PreferenciasEstilo | null {
   const n = normalizarSecaoRegra(rotulo);
-  if (/perfeito/.test(n)) return 'mais_que_perfeito';
-  if (/dialogo|aspas|travessao/.test(n)) return 'dialogo';
-  if (/pensamento/.test(n)) return 'pensamento_marca';
-  if (/onomatopeia/.test(n)) return 'onomatopeia';
-  if (/registro|publico|leitor/.test(n)) return 'registro';
-  if (/tradutor|\bnota\b|notas/.test(n)) return 'notas_tradutor';
-  return null;
+  const tema = TEMAS.find((t) => t.dono === 'beta' && t.filtravel && (t.padraoRotulo ?? t.padrao).test(n));
+  return (tema?.id as keyof PreferenciasEstilo) ?? null;
 }
 
 /**
