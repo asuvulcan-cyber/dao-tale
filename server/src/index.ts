@@ -6,6 +6,8 @@ import { criarApp } from './app.js';
 import { adquirirLock } from './instancia.js';
 import { avisosDeHospedagem, problemasDeHospedagem } from './auth/boot.js';
 import { ehHospedado, enderecoBind, hostsPublicos, PORTA, caminhoBanco, diretorioDados } from './config.js';
+import { reposPromptPadrao } from './db/repos.js';
+import { MARCADOR_PREFERENCIAS } from '@dao-tale/shared';
 
 // C2 (cinto de segurança): promessa órfã de um job nunca deve derrubar o
 // servidor no meio de uma tradução — loga e segue (o estado durável das
@@ -57,6 +59,26 @@ if (ultimo && Date.now() - new Date(ultimo.em).getTime() < INTERVALO_BOOT_MS) {
   fazerBackup(db, 'boot')
     .then((caminho) => console.log(`[dao-tale] backup de boot: ${caminho}`))
     .catch((e) => console.error('[dao-tale] falha no backup de boot:', (e as Error).message));
+}
+
+// Guarda de boot (doc 15 §1). Um Alfa ativo sem `{{PREFERENCIAS_OBRA}}` faz a composição
+// DESCARTAR as preferências de cada obra em silêncio: a obra tem `pensamento_tempo:
+// "original"` gravado e recebe "sempre no presente" do núcleo. Nada quebra, nada avisa, e
+// o texto sai errado por meses — foi exatamente o que aconteceu nesta instância até
+// 2026-08-06. As checagens de tela só pegam versões NOVAS; esta pega a que já está ativa.
+avisarSeAlfaIgnoraPreferencias(db);
+
+function avisarSeAlfaIgnoraPreferencias(banco: typeof db): void {
+  const alfa = reposPromptPadrao.ativo(banco);
+  if (!alfa || alfa.conteudo.includes(MARCADOR_PREFERENCIAS)) return;
+  const obras = banco.prepare('SELECT COUNT(*) n FROM prompts WHERE ativo = 1 AND tipo = ?').get('delta') as {
+    n: number;
+  };
+  console.error(
+    `[dao-tale] ATENÇÃO: o núcleo ativo (v${alfa.versao}) não traz ${MARCADOR_PREFERENCIAS} — ` +
+      `as preferências de estilo de ${obras.n} obra(s) estão sendo IGNORADAS em silêncio. ` +
+      `Ative um núcleo que reserve a Seção 5 na tela "Núcleo universal".`,
+  );
 }
 
 const app = criarApp(db);
