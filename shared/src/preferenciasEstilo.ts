@@ -262,7 +262,7 @@ export const TITULO_SECAO_PREFERENCIAS = '## 5. PREFERÊNCIAS DE ESTILO DESTA OB
 // catalogado em forma traduzida punha as duas regras em guerra e quem decidia era o
 // modelo, de chamada em chamada.
 //
-// A mesma ressalva vai no cabeçalho do delta, em `comporPromptMae`. São os dois cabeçalhos
+// A mesma ressalva vai no cabeçalho do delta, em `comporOmega`. São os dois cabeçalhos
 // SUBORDINADOS que criavam o conflito; o do núcleo já dizia a coisa certa e não muda —
 // mexer nele exigiria cortar uma versão nova, e versões são imutáveis.
 //

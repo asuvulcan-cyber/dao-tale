@@ -220,3 +220,81 @@ tentativa nenhuma — o teto global passa a contar só quem já tem permissão d
 - obra pública sem capítulo finalizado não aparece nem abre
 - despublicar tira do ar na mesma requisição seguinte
 - id malformado (`abc`, `-1`, `0`, `1e9999`) devolve 404, não 500
+
+---
+
+## 10. A vitrine é um app de celular
+
+O §1 dizia *o que* o visitante vê. Esta seção diz *onde*: num telefone. O link da vitrine
+circula por mensagem, e mensagem se abre com o polegar — a bancada é a tela de trabalho, a
+vitrine é a tela de leitura, e desenhar as duas com a mesma régua foi o erro da primeira
+versão. Ela nasceu como a bancada com menos coisas, e no celular isso aparecia: pílulas de
+26 px, sumário de 137 capítulos numa lista de 28 px por linha, e a troca de capítulo
+escondida em dois links do tamanho de uma unha no fim da página.
+
+### A contracapa, que não existia
+
+`/ler/:obra` abria **direto o capítulo 1**. Quem recebia o link caía no meio de uma cena sem
+saber o que tinha aberto, e a `sinopse` — que a API sempre devolveu — não tinha onde
+aparecer na interface.
+
+Agora `/ler/:obra` é a **contracapa** (capa, título original, autor, gênero, sinopse,
+sumário) e o capítulo tem endereço próprio, `/ler/:obra/:numero`, sempre com número. Duas
+consequências que valem dizer em voz alta:
+
+- **A rota pública não mudou de forma**, só de destino: continua sendo obra por id e
+  capítulo por número (§3). Nada de novo é exposto — a contracapa mostra campos que
+  `ObraPublica` já carregava.
+- O botão principal é **um só**: "Começar a ler", ou "Continuar do capítulo N" quando há
+  marca de leitura. A marca vive no `localStorage` do aparelho (`web/src/util/leitura.ts`),
+  nunca no servidor: guardar progresso do lado de lá exigiria identificar quem lê, que é
+  exatamente o que a vitrine não faz (§8).
+
+### As medidas que passaram a ser tokens
+
+| Token | Valor | Por quê |
+|---|---|---|
+| `--toque` | 44px | mínimo de alvo tocável (Apple HIG) |
+| `--toque-largo` | 48px | linha de lista e ação principal (Material) |
+| `--margem-tela` | 1rem | respiro lateral da interface |
+| `--margem-leitura` | 1.4rem | respiro do texto corrido — maior, porque a borda curva do aparelho come o canto |
+| `--seguro-topo/baixo/esq/dir` | `env(safe-area-inset-*)` | notch, ilha e barra de gestos |
+| `--cor-veu` | por tema | fundo atrás da gaveta |
+
+`--cor-veu` mora na camada de **pigmento** e não na semântica, o que parece errado até
+olhar: é o raro caso em que os dois temas precisam de tokens *diferentes* para o mesmo
+efeito. Escurecer no claro é `--cor-tinta`; no escuro, tinta é creme e clarearia o fundo.
+
+As faixas do aparelho só valem com `viewport-fit=cover` no `index.html` — sem isso
+`env(safe-area-inset-*)` é sempre `0` e a barra passa por baixo do notch.
+
+### Decisões do leitor, e a que foi recusada
+
+- **Barra de cima com o mínimo**: voltar, obra, "Capítulo N de M", sumário, `Aa`. Duas
+  linhas de texto em vez de uma frase cortada — em 390 px o título da obra e o do capítulo
+  não cabem lado a lado, e a pergunta que o leitor faz o tempo todo é *em que capítulo eu
+  estou*.
+- **Trocar de capítulo é um botão do tamanho da coluna, no fim do capítulo** — onde a mão
+  já está quando a pergunta aparece.
+- **Barra fixa no rodapé foi recusada.** Come altura de leitura em todas as telas para
+  servir dois toques que acontecem uma vez por capítulo. O `☰` da barra de cima resolve o
+  salto; o fim do capítulo resolve o "próximo".
+- **Sumário é gaveta, não painel que empurra o texto**, e abre **no capítulo em leitura** —
+  numa obra de 137 capítulos, abrir no capítulo 1 é abrir no lugar errado 136 vezes. Acima
+  de 12 capítulos ele ganha campo de busca, que casa por texto **ou pelo número exato**
+  ("quero o 88" é o jeito como se procura).
+- **"Largura da coluna" some no celular.** Não existe largura para escolher: a coluna é a
+  tela. O controle continua no desktop.
+- **Corpo inicial menor em tela estreita** (< 360 px). Só na primeira visita — a partir daí
+  manda o `A−/A+` da pessoa.
+
+A gaveta é **uma marcação só**: sobe do rodapé no celular e vira caixa centrada a partir de
+640 px, pelo CSS. Não existe "versão mobile" de componente nenhum aqui, e não deve passar a
+existir — duas árvores para a mesma coisa divergem em silêncio.
+
+### O que continua valendo
+
+`LeitorPublico.tsx` **não** compartilha componente com o `Leitor.tsx` da bancada (§5), e a
+regra não afrouxou: o que é compartilhado dentro da *vitrine* (`CascaVitrine`,
+`SumarioVitrine`) é compartilhado entre telas que já eram públicas, nunca entre a rua e a
+bancada. `BotaoTema` e `Selo` seguem sendo a exceção antiga — enfeite sem dado.

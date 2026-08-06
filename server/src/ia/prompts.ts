@@ -76,7 +76,7 @@ export function juntarPartes(p: PartesSistema): string {
 }
 
 export function sistemaTraducaoPartes(
-  req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>,
+  req: Pick<RequisicaoTraducaoBloco, 'omega' | 'glossario' | 'glossarioNoUsuario'>,
 ): PartesSistema {
   const instrucoes = [
     'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
@@ -94,10 +94,10 @@ export function sistemaTraducaoPartes(
     '## INSTRUÇÕES OPERACIONAIS DO APLICATIVO',
     ...instrucoes,
   ].join('\n');
-  return { base: req.promptMae.trim(), operacional };
+  return { base: req.omega.trim(), operacional };
 }
 
-export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
+export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'omega' | 'glossario' | 'glossarioNoUsuario'>): string {
   return juntarPartes(sistemaTraducaoPartes(req));
 }
 
@@ -186,7 +186,7 @@ export function usuarioContracapa(req: RequisicaoContracapa): string {
   return partes.join('\n').trimEnd();
 }
 
-export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {
+export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'omega' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {
   const operacional = [
     ...(req.glossarioNoUsuario
       ? // Mesmo desenho da tradução (A4 da auditoria): glossário filtrado por frase
@@ -208,10 +208,10 @@ export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'promptMae' | 
     '- trecho_pt_corrigido: o que esse pedaço deve virar.',
     '- Não inclua aspas de diálogo, travessão nem a pontuação final da frase no trecho, a menos que o erro seja justamente essa marca. Se o problema for a frase inteira (ordem das orações, sentido trocado), aí sim o trecho pode ser a frase toda.',
   ].join('\n');
-  return { base: req.promptMae.trim(), operacional };
+  return { base: req.omega.trim(), operacional };
 }
 
-export function sistemaRevisao(req: Pick<RequisicaoRevisao, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
+export function sistemaRevisao(req: Pick<RequisicaoRevisao, 'omega' | 'glossario' | 'glossarioNoUsuario'>): string {
   return juntarPartes(sistemaRevisaoPartes(req));
 }
 
@@ -256,7 +256,7 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
 // ── Extração exaustiva de termos de uma frase ──────────────────────────────
 
 export function sistemaExtrairTermosPartes(
-  req: Pick<RequisicaoExtrairTermos, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>,
+  req: Pick<RequisicaoExtrairTermos, 'omega' | 'glossario' | 'glossarioNoUsuario'>,
 ): PartesSistema {
   const operacional = [
     ...(req.glossarioNoUsuario
@@ -276,10 +276,10 @@ export function sistemaExtrairTermosPartes(
     'Se não houver nenhum termo novo digno de glossário, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ].join('\n');
-  return { base: req.promptMae.trim(), operacional };
+  return { base: req.omega.trim(), operacional };
 }
 
-export function sistemaExtrairTermos(req: Pick<RequisicaoExtrairTermos, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
+export function sistemaExtrairTermos(req: Pick<RequisicaoExtrairTermos, 'omega' | 'glossario' | 'glossarioNoUsuario'>): string {
   return juntarPartes(sistemaExtrairTermosPartes(req));
 }
 
@@ -298,7 +298,7 @@ export function usuarioExtrairTermos(req: RequisicaoExtrairTermos): string {
 // Um modelo diferente do tradutor compara cada par zh↔pt e aponta problemas nos
 // quatro eixos — só aponta, nunca reescreve. Mesmo desenho de camadas/cache.
 
-export function sistemaQaPartes(req: Pick<RequisicaoQa, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {
+export function sistemaQaPartes(req: Pick<RequisicaoQa, 'omega' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {
   const operacional = [
     ...(req.glossarioNoUsuario
       ? ['## GLOSSÁRIO DA OBRA', 'Os termos do glossário presentes neste trecho virão na mensagem do usuário. Uso obrigatório e consistente.']
@@ -316,10 +316,10 @@ export function sistemaQaPartes(req: Pick<RequisicaoQa, 'promptMae' | 'glossario
     'Se a tradução estiver boa, devolva a lista de apontamentos vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ].join('\n');
-  return { base: req.promptMae.trim(), operacional };
+  return { base: req.omega.trim(), operacional };
 }
 
-export function sistemaQa(req: Pick<RequisicaoQa, 'promptMae' | 'glossario' | 'glossarioNoUsuario'>): string {
+export function sistemaQa(req: Pick<RequisicaoQa, 'omega' | 'glossario' | 'glossarioNoUsuario'>): string {
   return juntarPartes(sistemaQaPartes(req));
 }
 
@@ -344,7 +344,7 @@ export function usuarioQa(req: RequisicaoQa): string {
 // Casos recorrentes do banco de testes → propostas concretas de regra para o
 // delta da obra. A IA propõe; o usuário edita/aprova como nova versão.
 
-export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'promptMae' | 'deltaAtual'>): PartesSistema {
+export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'omega' | 'deltaAtual'>): PartesSistema {
   const operacional = [
     '## TAREFA: REFINAR AS DIRETRIZES DA OBRA',
     'O prompt acima rege a tradução da obra. O revisor registrou casos recorrentes em que a tradução saiu errada ou dúbia — agrupados por seção/regra, eles indicam lacunas sistemáticas das DIRETRIZES ESPECÍFICAS DA OBRA (Seção 6).',
@@ -361,10 +361,10 @@ export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'p
     'Se os casos não sustentarem nenhuma regra nova, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ].join('\n');
-  return { base: req.promptMae.trim(), operacional };
+  return { base: req.omega.trim(), operacional };
 }
 
-export function sistemaRefinarPrompt(req: Pick<RequisicaoRefinarPrompt, 'promptMae' | 'deltaAtual'>): string {
+export function sistemaRefinarPrompt(req: Pick<RequisicaoRefinarPrompt, 'omega' | 'deltaAtual'>): string {
   return juntarPartes(sistemaRefinarPromptPartes(req));
 }
 

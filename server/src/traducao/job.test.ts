@@ -246,7 +246,7 @@ describe('truncamento (A1)', () => {
 });
 
 describe('traduzirBlocoComRetry (M1)', () => {
-  const req = { modelo: 'm', promptMae: 'p', glossario: [], caudaAnterior: [], frases: [], proximas: [] };
+  const req = { modelo: 'm', omega: 'p', glossario: [], caudaAnterior: [], frases: [], proximas: [] };
   const provedorQueFalha = (erros: ErroProvedor[], resposta?: RespostaTraducaoBloco) => {
     let chamada = 0;
     return {

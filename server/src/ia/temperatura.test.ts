@@ -90,7 +90,7 @@ describe('provedor compatível com OpenAI', () => {
   const requisicao = (modelo: string, temperatura?: number) => ({
     modelo,
     temperatura,
-    promptMae: 'Regras.',
+    omega: 'Regras.',
     glossario: [],
     caudaAnterior: [],
     frases: [{ ordem: 0, texto_zh: '你好。' }],

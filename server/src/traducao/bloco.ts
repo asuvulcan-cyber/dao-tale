@@ -19,7 +19,7 @@ export interface ParametrosBloco {
   temperatura?: number;
   /** Raciocínio escolhido pela obra; undefined = padrão do provedor. */
   thinking?: ModoThinking;
-  promptMae: string;
+  omega: string;
   tamanhoBloco: number;
   caudaContexto: number;
   glossarioRelevante: boolean;
@@ -84,7 +84,7 @@ export function montarBloco(p: ParametrosBloco): ContextoBloco {
       modelo: p.modelo,
       temperatura: p.temperatura,
       thinking: p.thinking,
-      promptMae: p.promptMae,
+      omega: p.omega,
       glossario: glossarioDoBloco,
       glossarioNoUsuario: p.glossarioRelevante,
       termosAdotados: termosAdotadosDoBloco,

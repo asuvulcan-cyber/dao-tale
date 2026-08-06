@@ -29,7 +29,7 @@ export function Login({ aoEntrar, senhaDefinida }: { aoEntrar: () => void; senha
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-papel px-4 py-10 text-tinta">
+    <div className="vitrine vitrine-margem flex items-center justify-center py-10">
       <main className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <span className="grid size-12 place-items-center rounded-selo bg-selo font-zh text-2xl leading-none text-papel-alto" aria-hidden>
@@ -53,6 +53,7 @@ export function Login({ aoEntrar, senhaDefinida }: { aoEntrar: () => void; senha
             required
             // 16px evita o zoom automático do iOS ao focar o campo.
             className="entrada w-full text-base"
+            style={{ minHeight: 'var(--toque)' }}
             placeholder="sua frase-senha"
           />
           {erro && <Aviso tipo="erro">{erro}</Aviso>}
@@ -62,7 +63,7 @@ export function Login({ aoEntrar, senhaDefinida }: { aoEntrar: () => void; senha
               instalado.
             </Aviso>
           )}
-          <Botao type="submit" disabled={enviando || !senha} className="w-full py-2.5 text-base">
+          <Botao type="submit" disabled={enviando || !senha} className="acao-larga">
             {enviando ? 'Entrando…' : 'Entrar'}
           </Botao>
         </form>

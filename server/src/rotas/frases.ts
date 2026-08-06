@@ -175,7 +175,7 @@ export function rotasFrases(db: BancoDados): Hono {
         modelo,
         // Amostragem (doc 08 §13): a revisão é veredito — variar aqui é ruído.
         temperatura: resolverTemperatura(config.temperaturas, 'revisao', obra.temperatura),
-        promptMae: prompt.texto,
+        omega: prompt.texto,
         glossario,
         // A4 da auditoria: glossário filtrado vai na mensagem do usuário e o
         // sistema fica estável entre revisões da obra (cache passa a acertar).
@@ -266,7 +266,7 @@ export function rotasFrases(db: BancoDados): Hono {
         modelo,
         // Amostragem (doc 08 §13): extração é catálogo, quer a mesma lista.
         temperatura: resolverTemperatura(config.temperaturas, 'extracao', obra.temperatura),
-        promptMae: prompt.texto,
+        omega: prompt.texto,
         glossario,
         glossarioNoUsuario: config.glossario_relevante,
         frase: { texto_zh: frase.texto_zh, texto_pt: frase.texto_pt },

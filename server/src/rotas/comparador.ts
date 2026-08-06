@@ -80,7 +80,7 @@ export function rotasComparador(db: BancoDados): Hono {
       ? incluirPrincipais(filtrarGlossarioRelevante(glossarioTodo, [corpo.data.texto_zh]), glossarioTodo)
       : glossarioTodo;
 
-    const base: Omit<RequisicaoTraducaoBloco, 'modelo' | 'promptMae'> = {
+    const base: Omit<RequisicaoTraducaoBloco, 'modelo' | 'omega'> = {
       // O comparador É tradução sendo medida: sai com a temperatura da tradução
       // (doc 08 §13). É o que torna o portão A/B do §12 honesto — a temperatura
       // 1.0 de antes espalhava as execuções do MESMO prompt tanto quanto a
@@ -119,7 +119,7 @@ export function rotasComparador(db: BancoDados): Hono {
             return { provedor: alvo.provedor, modelo, nucleo_versao, ok: false, erro: 'Nenhuma chave de API configurada.', ms: 0 };
           }
           reposUso.registrar(db, alvo.provedor, modelo);
-          const resposta = await provedor.traduzirBloco(chave, { ...base, promptMae: composto!.texto, modelo });
+          const resposta = await provedor.traduzirBloco(chave, { ...base, omega: composto!.texto, modelo });
           registrarEvento(db, {
             obra_id: obraId,
             capitulo_id: null,

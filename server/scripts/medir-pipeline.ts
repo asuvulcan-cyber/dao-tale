@@ -30,7 +30,7 @@ import {
   usuarioQa,
   usuarioTraducao,
 } from '../src/ia/prompts.js';
-import { comporPromptMae, extrairCamadas } from '../src/db/promptPadraoInicial.js';
+import { comporOmega, extrairCamadas } from '../src/db/promptPadraoInicial.js';
 import { obterChave } from '../src/credenciais/index.js';
 import { abrirSomenteLeitura, acertoDeCache, formatarUsd, medidoPorPapel } from './medido.js';
 
@@ -59,7 +59,7 @@ const glossario: EntradaGlossario[] = dados.glossario.map((g: any, i: number) =>
 }));
 
 const camadas = extrairCamadas(promptCompletoLegado);
-const promptComposto = camadas ? comporPromptMae(camadas.nucleo, camadas.delta) : promptCompletoLegado;
+const promptComposto = camadas ? comporOmega(camadas.nucleo, camadas.delta) : promptCompletoLegado;
 
 // ── Contagem de tokens ─────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ function custoSequencia(linhas: Linha[]): number {
   return Math.round(total);
 }
 
-async function medirTraducao(promptMae: string): Promise<Linha[]> {
+async function medirTraducao(omega: string): Promise<Linha[]> {
   const linhas: Linha[] = [];
   for (let i = 0; i < frases.length; i += TAM) {
     const bloco = frases.slice(i, i + TAM);
@@ -124,7 +124,7 @@ async function medirTraducao(promptMae: string): Promise<Linha[]> {
     );
     const req = {
       modelo: 'medicao',
-      promptMae,
+      omega,
       glossario: gloss,
       glossarioNoUsuario: true,
       caudaAnterior: cauda,
@@ -136,7 +136,7 @@ async function medirTraducao(promptMae: string): Promise<Linha[]> {
   return linhas;
 }
 
-async function medirQa(promptMae: string): Promise<Linha[]> {
+async function medirQa(omega: string): Promise<Linha[]> {
   const linhas: Linha[] = [];
   for (let i = 0; i < traduzidas.length; i += TAM) {
     const pares = traduzidas.slice(i, i + TAM).map((f) => ({ ordem: f.ordem, texto_zh: f.texto_zh, texto_pt: f.texto_pt }));
@@ -144,7 +144,7 @@ async function medirQa(promptMae: string): Promise<Linha[]> {
     const gloss = incluirPrincipais(filtrarGlossarioRelevante(glossario, pares.map((p) => p.texto_zh)), glossario);
     const req = {
       modelo: 'medicao',
-      promptMae,
+      omega,
       glossario: gloss,
       glossarioNoUsuario: true,
       caudaAnterior: cauda,

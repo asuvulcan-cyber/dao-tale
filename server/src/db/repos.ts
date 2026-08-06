@@ -2,7 +2,7 @@ import type { BancoDados } from './index.js';
 import type {
   Obra,
   ObraComContadores,
-  PromptMae,
+  VersaoDelta,
   PromptPadrao,
   PromptComposto,
   TipoPrompt,
@@ -37,7 +37,7 @@ import {
   normalizarTemperaturas,
   temperaturaValida,
 } from '@dao-tale/shared';
-import { comporPromptMae } from './promptPadraoInicial.js';
+import { comporOmega } from './promptPadraoInicial.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
     letra/número (fronteira Unicode, então acentos contam como letra). Evita trocar
@@ -48,7 +48,7 @@ function trocaPorPalavra(texto: string, de: string, para: string): string {
 }
 
 // Linhas cruas do SQLite (booleanos como 0/1) → tipos do domínio.
-function paraPrompt(l: any): PromptMae {
+function paraPrompt(l: any): VersaoDelta {
   const prompt = { ...l, ativo: !!l.ativo };
   // Só linhas de `prompts` têm preferências; as de `prompt_padrao` (núcleo) não —
   // e um PromptPadrao não deve ganhar o campo do nada.
@@ -216,18 +216,18 @@ export const reposObras = {
 // ── Prompts (prompt mãe versionado) ────────────────────────────────────────
 
 export const reposPrompts = {
-  listar(db: BancoDados, obraId: number): PromptMae[] {
+  listar(db: BancoDados, obraId: number): VersaoDelta[] {
     return (
       db.prepare('SELECT * FROM prompts WHERE obra_id = ? ORDER BY criado_em DESC').all(obraId) as any[]
     ).map(paraPrompt);
   },
 
-  obter(db: BancoDados, id: number): PromptMae | undefined {
+  obter(db: BancoDados, id: number): VersaoDelta | undefined {
     const l = db.prepare('SELECT * FROM prompts WHERE id = ?').get(id);
     return l ? paraPrompt(l) : undefined;
   },
 
-  ativo(db: BancoDados, obraId: number): PromptMae | undefined {
+  ativo(db: BancoDados, obraId: number): VersaoDelta | undefined {
     const l = db.prepare('SELECT * FROM prompts WHERE obra_id = ? AND ativo = 1').get(obraId);
     return l ? paraPrompt(l) : undefined;
   },
@@ -244,7 +244,7 @@ export const reposPrompts = {
       nucleo_id?: number | null;
       preferencias?: PreferenciasEstilo;
     },
-  ): PromptMae {
+  ): VersaoDelta {
     return db.transaction(() => {
       if (dados.ativar) {
         db.prepare('UPDATE prompts SET ativo = 0 WHERE obra_id = ?').run(obraId);
@@ -269,7 +269,7 @@ export const reposPrompts = {
     })();
   },
 
-  ativar(db: BancoDados, id: number): PromptMae | undefined {
+  ativar(db: BancoDados, id: number): VersaoDelta | undefined {
     const alvo = this.obter(db, id);
     if (!alvo) return undefined;
     db.transaction(() => {
@@ -282,7 +282,7 @@ export const reposPrompts = {
   /** Cria o delta inicial (vazio) da obra sobre o núcleo ativo — a obra passa a
       usar o núcleo global + o próprio delta, sem copiar o prompt inteiro.
       Devolve undefined se a obra já tem versões ou se não há núcleo ativo. */
-  adotarPadrao(db: BancoDados, obraId: number): PromptMae | undefined {
+  adotarPadrao(db: BancoDados, obraId: number): VersaoDelta | undefined {
     return db.transaction(() => {
       if (this.listar(db, obraId).length > 0) return undefined;
       const nucleo = reposPromptPadrao.ativo(db);
@@ -300,7 +300,7 @@ export const reposPrompts = {
 
   /** Prompt que governa a tradução da obra: o ativo dela ou, se ela ainda não
       tem nenhum, o delta adotado automaticamente na hora. */
-  ativoOuAdotado(db: BancoDados, obraId: number): PromptMae | undefined {
+  ativoOuAdotado(db: BancoDados, obraId: number): VersaoDelta | undefined {
     return this.ativo(db, obraId) ?? this.adotarPadrao(db, obraId);
   },
 
@@ -315,9 +315,9 @@ export const reposPrompts = {
     if (prompt.tipo !== 'delta') return { texto: prompt.conteudo, prompt, nucleo: null };
     const nucleo = nucleoId != null ? reposPromptPadrao.obter(db, nucleoId) : reposPromptPadrao.ativo(db);
     // Sem núcleo ativo (estado excepcional), o delta sozinho é o que há.
-    if (!nucleo) return { texto: comporPromptMae('', prompt.conteudo, prompt.preferencias), prompt, nucleo: null };
+    if (!nucleo) return { texto: comporOmega('', prompt.conteudo, prompt.preferencias), prompt, nucleo: null };
     return {
-      texto: comporPromptMae(nucleo.conteudo, prompt.conteudo, prompt.preferencias),
+      texto: comporOmega(nucleo.conteudo, prompt.conteudo, prompt.preferencias),
       prompt,
       nucleo,
     };

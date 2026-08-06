@@ -42,6 +42,11 @@
   --cor-tinta-2:     #565b4f;
   --cor-linha:       #cfcfc0;
 
+  /* Véu atrás da gaveta. Vive na camada de pigmento porque é o raro caso em que
+     os dois temas precisam de tokens DIFERENTES para o mesmo efeito: escurecer.
+     No claro isso é tinta; no escuro, tinta é creme e clarearia o fundo. */
+  --cor-veu:         color-mix(in srgb, var(--cor-tinta) 45%, transparent);
+
   --cor-jade:        #2e7a63;  --cor-jade-forte:   #235f4d;  --cor-jade-tint:   #dbe6de;
   --cor-selo:        #be3f2b;  --cor-selo-forte:   #9c331f;  --cor-selo-tint:   #f0dbd3;
   --cor-ocre:        #a9812a;  --cor-ocre-forte:   #85661f;  --cor-ocre-tint:   #ede2c8;
@@ -80,6 +85,23 @@
   --esp-5:1.5rem; --esp-6:2.5rem; --esp-7:4rem; --esp-8:6rem;
   --raio-1:3px; --raio-2:6px; --raio-selo:9px; --raio-pill:999px;
 
+  /* — Toque e tela (doc 14 §10) — a vitrine é lida no celular, e no celular o
+     ponteiro é um polegar de ~9 mm. Tamanho de alvo vira token para não voltar
+     a ser chutado botão a botão. `--toque` é o mínimo da Apple (44px);
+     `--toque-largo` é o da lista/ação principal (Material, 48px). — */
+  --toque: 44px;
+  --toque-largo: 48px;
+  --margem-tela: 1rem;      /* respiro lateral da interface */
+  --margem-leitura: 1.4rem; /* respiro lateral do texto corrido: maior, porque
+                               a borda curva do aparelho come os cantos */
+
+  /* Faixas do aparelho (notch, ilha, barra de gestos). Só valem com
+     `viewport-fit=cover` no index.html; em tela sem recorte todas são 0. */
+  --seguro-topo:  env(safe-area-inset-top, 0px);
+  --seguro-baixo: env(safe-area-inset-bottom, 0px);
+  --seguro-esq:   env(safe-area-inset-left, 0px);
+  --seguro-dir:   env(safe-area-inset-right, 0px);
+
   color-scheme: light;
 }
 
@@ -92,6 +114,7 @@
     --cor-tinta:       #e9e4d5;
     --cor-tinta-2:     #a09a89;
     --cor-linha:       #37332a;
+    --cor-veu:         color-mix(in srgb, var(--cor-papel-fundo) 78%, transparent);
 
     --cor-jade:   #5fb49c;  --cor-jade-forte:   #7ec8b1;  --cor-jade-tint:   #1c2a25;
     --cor-selo:   #d66b52;  --cor-selo-forte:   #e58369;  --cor-selo-tint:   #2c1c16;
@@ -106,6 +129,7 @@
 :root[data-theme='dark'] {
   --cor-papel:#17150f; --cor-papel-alto:#201d16; --cor-papel-fundo:#100e09;
   --cor-tinta:#e9e4d5; --cor-tinta-2:#a09a89; --cor-linha:#37332a;
+  --cor-veu: color-mix(in srgb, var(--cor-papel-fundo) 78%, transparent);
   --cor-jade:#5fb49c; --cor-jade-forte:#7ec8b1; --cor-jade-tint:#1c2a25;
   --cor-selo:#d66b52; --cor-selo-forte:#e58369; --cor-selo-tint:#2c1c16;
   --cor-ocre:#c99c46; --cor-ocre-forte:#dab060; --cor-ocre-tint:#29230f;
@@ -115,6 +139,7 @@
 :root[data-theme='light'] {
   --cor-papel:#e9eae0; --cor-papel-alto:#f4f3ec; --cor-papel-fundo:#deded3;
   --cor-tinta:#20241e; --cor-tinta-2:#565b4f; --cor-linha:#cfcfc0;
+  --cor-veu: color-mix(in srgb, var(--cor-tinta) 45%, transparent);
   --cor-jade:#2e7a63; --cor-jade-forte:#235f4d; --cor-jade-tint:#dbe6de;
   --cor-selo:#be3f2b; --cor-selo-forte:#9c331f; --cor-selo-tint:#f0dbd3;
   --cor-ocre:#a9812a; --cor-ocre-forte:#85661f; --cor-ocre-tint:#ede2c8;
@@ -334,4 +359,218 @@ body {
   vertical-align: 0.08em;
   white-space: nowrap;
   cursor: help;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   VITRINE PÚBLICA — peças de celular (doc 14 §10)
+   ════════════════════════════════════════════════════════════════════════
+   A bancada é usada no desktop, com mouse; a vitrine é lida no celular, com o
+   polegar. São ergonomias diferentes, então a vitrine tem peças próprias em vez
+   de reaproveitar as da bancada apertando-as: `.ferramenta` tem 26px de altura,
+   que serve para uma barra de trabalho e é um alvo ruim para o dedo.
+
+   Estas classes NÃO são usadas pela bancada — mexer aqui não mexe lá.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Raiz de toda página da vitrine. `dvh` em vez de `vh`: no celular a barra de
+   endereço do navegador aparece e some, e `100vh` deixa um pedaço da página
+   permanentemente fora da tela. As faixas laterais protegem o conteúdo da
+   borda curva do aparelho no modo paisagem. */
+.vitrine {
+  min-height: 100dvh;
+  padding-left: var(--seguro-esq);
+  padding-right: var(--seguro-dir);
+  background: var(--cor-papel);
+  color: var(--cor-tinta);
+}
+
+/* Respiro lateral padrão da vitrine. Uma classe em vez de `px-4` espalhado:
+   a margem do celular é uma decisão só, tomada em um lugar. */
+.vitrine-margem {
+  padding-left: var(--margem-tela);
+  padding-right: var(--margem-tela);
+}
+
+/* Barra superior. `sticky` + faixa do notch somada ao respiro: sob a ilha do
+   iPhone o conteúdo não pode começar em 0. */
+.vitrine-barra {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--cor-papel-alto) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--cor-linha);
+  padding-top: var(--seguro-topo);
+}
+
+/* Alvo de toque: o mínimo que um polegar acerta sem mirar. Vai JUNTO da peça
+   visual (`class="ferramenta toque"`), sem alterar o desenho dela — só garante
+   a área. */
+.toque {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--toque);
+  min-width: var(--toque);
+}
+
+/* Pílula de barra no tamanho do dedo: mesma pílula da bancada, área de toque
+   inteira e rótulo legível a um braço de distância. */
+.ferramenta-toque {
+  min-height: var(--toque);
+  min-width: var(--toque);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--esp-2);
+  padding-inline: var(--esp-4);
+  font-size: var(--txt-sm);
+}
+
+/* Ação principal de uma tela de celular: largura toda, altura de dedo. É o
+   "Começar a ler" e o "Próximo capítulo" — as duas coisas que o leitor mais
+   aperta, e as duas que ele aperta sem olhar. */
+.acao-larga {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--esp-2);
+  width: 100%;
+  min-height: var(--toque-largo);
+  padding-inline: var(--esp-4);
+  border-radius: var(--raio-2);
+  background: var(--cor-acao);
+  color: var(--cor-papel-alto);
+  font-size: var(--txt-base);
+  font-weight: 600;
+  text-align: center;
+}
+.acao-larga:hover { background: var(--cor-acao-forte); }
+.acao-larga--calma {
+  background: var(--cor-papel-alto);
+  color: var(--cor-tinta);
+  border: 1px solid var(--cor-linha);
+  font-weight: 500;
+}
+.acao-larga--calma:hover { border-color: var(--cor-jade); color: var(--cor-jade-forte); background: var(--cor-papel-alto); }
+.acao-larga[aria-disabled='true'] { opacity: 0.4; pointer-events: none; }
+
+/* Linha de lista tocável (sumário, capítulos). Altura de dedo mesmo quando o
+   texto é curto — "Capítulo 7" não pode virar um alvo de 20px. */
+.linha-toque {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  width: 100%;
+  min-height: var(--toque-largo);
+  padding: var(--esp-2) var(--esp-3);
+  border-radius: var(--raio-2);
+  font-size: var(--txt-base);
+  text-align: left;
+}
+.linha-toque:hover { background: var(--cor-papel-fundo); }
+.linha-toque[aria-current='true'] {
+  background: var(--cor-jade-tint);
+  color: var(--cor-jade-forte);
+  font-weight: 600;
+}
+
+/* Etiqueta de gênero na capa/estante. */
+.tag-obra {
+  display: inline-block;
+  border-radius: var(--raio-pill);
+  background: var(--cor-papel-fundo);
+  color: var(--cor-tinta-2);
+  padding: 0.2rem 0.6rem;
+  font-size: var(--txt-cap);
+  white-space: nowrap;
+}
+
+/* ── Gaveta (sumário, ajustes) ──────────────────────────────────────────────
+   No celular sobe do rodapé e ocupa a tela: é o gesto que o polegar alcança, e
+   uma lista de 137 capítulos precisa de altura. No desktop a MESMA marcação
+   vira caixa centrada — sem componente duplicado e sem "versão mobile". */
+.gaveta {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: var(--cor-veu);
+}
+.gaveta-painel {
+  display: flex;
+  flex-direction: column;
+  max-height: 88dvh;
+  background: var(--cor-papel-alto);
+  border-top: 1px solid var(--cor-linha);
+  border-radius: var(--raio-selo) var(--raio-selo) 0 0;
+  padding-bottom: var(--seguro-baixo);
+  animation: gaveta-sobe 0.18s ease-out;
+}
+@keyframes gaveta-sobe {
+  from { transform: translateY(2rem); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+/* Puxador: a dica visual de que aquilo desce com o dedo. */
+.gaveta-puxador {
+  width: 2.25rem;
+  height: 4px;
+  border-radius: var(--raio-pill);
+  background: var(--cor-linha);
+  margin: var(--esp-2) auto var(--esp-1);
+  flex-shrink: 0;
+}
+.gaveta-rolagem {
+  overflow-y: auto;
+  overscroll-behavior: contain; /* rolar a lista até o fim não rola a página atrás */
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 640px) {
+  .gaveta { justify-content: center; align-items: center; padding: var(--esp-5); }
+  .gaveta-painel {
+    width: min(36rem, 100%);
+    max-height: 80dvh;
+    border: 1px solid var(--cor-linha);
+    border-radius: var(--raio-selo);
+    padding-bottom: 0;
+    animation: none;
+  }
+  .gaveta-puxador { display: none; }
+}
+
+/* ── Leitor da vitrine ──────────────────────────────────────────────────────
+   O texto é o produto: a margem lateral é maior que a da interface e a coluna
+   respira. */
+.leitor-publico {
+  padding-left: max(var(--margem-leitura), var(--seguro-esq));
+  padding-right: max(var(--margem-leitura), var(--seguro-dir));
+  padding-bottom: calc(var(--esp-6) + var(--seguro-baixo));
+}
+
+/* Fio de progresso do capítulo, colado embaixo da barra. Dois pixels: no
+   celular a pergunta "falta muito?" não merece mais que isso de tela. */
+.leitor-progresso {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--cor-jade);
+  transition: width 0.12s linear;
+}
+
+/* Numa coluna estreita, palavra comprida sem hifenização abre buraco no meio
+   da linha. `hyphens` usa o dicionário do idioma do <html> (pt-BR). */
+@media (max-width: 640px) {
+  .leitor-folha {
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+}
+
+/* Respeita quem desligou animação no sistema (comum em acessibilidade móvel). */
+@media (prefers-reduced-motion: reduce) {
+  .gaveta-painel { animation: none; }
+  .leitor-progresso { transition: none; }
 }

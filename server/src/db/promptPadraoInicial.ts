@@ -23,10 +23,15 @@ export const VERSAO_PROMPT_PADRAO_INICIAL = '1.0';
     remover o marcador ao editar o núcleo, o delta é anexado ao final. */
 export const MARCADOR_DELTA = '{{DELTA_OBRA}}';
 
-/** Núcleo ativo + preferências + delta da obra → prompt mãe completo,
-    determinístico (mesmas versões ⇒ mesmos bytes — pré-requisito do prompt
-    caching). `preferencias` ausente = padrões do aplicativo. */
-export function comporPromptMae(
+/** Alfa (núcleo ativo) + Beta (preferências) + Delta (diretrizes da obra) →
+    **Ômega**, o composto que vai para a IA. Determinístico: mesmas versões ⇒
+    mesmos bytes, que é pré-requisito do prompt caching. `preferencias` ausente
+    = padrões do aplicativo.
+
+    Ômega não é camada, é a soma — daí a última letra do alfabeto, que não cabe
+    numa escala de especificidade. O nome antigo, "prompt mãe", significava DUAS
+    coisas: esta string e a linha versionada de `prompts` (hoje `VersaoDelta`). */
+export function comporOmega(
   nucleoConteudo: string,
   deltaConteudo: string,
   preferencias?: PreferenciasEstilo,

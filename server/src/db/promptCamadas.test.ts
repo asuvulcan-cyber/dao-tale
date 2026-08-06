@@ -9,15 +9,15 @@ import {
   MARCADOR_PREFERENCIAS,
   NUCLEO_ENXUTO,
   PROMPT_PADRAO_INICIAL,
-  comporPromptMae,
+  comporOmega,
   extrairCamadas,
 } from './promptPadraoInicial.js';
 
 const NUCLEO = ['# Regras', '', '## 5. PARTÍCULAS', 'texto.', '', '---', '', MARCADOR_DELTA, '', '## 7. PROIBIÇÕES', 'tabela.'].join('\n');
 
-describe('comporPromptMae', () => {
+describe('comporOmega', () => {
   it('insere o delta como Seção 6 no lugar do marcador', () => {
-    const texto = comporPromptMae(NUCLEO, 'Lin Feng fala em gírias.');
+    const texto = comporOmega(NUCLEO, 'Lin Feng fala em gírias.');
     expect(texto).toContain('## 6. DIRETRIZES ESPECÍFICAS DA OBRA');
     expect(texto).toContain('Lin Feng fala em gírias.');
     expect(texto).not.toContain(MARCADOR_DELTA);
@@ -27,31 +27,31 @@ describe('comporPromptMae', () => {
   });
 
   it('delta vazio: remove o marcador sem deixar buraco', () => {
-    const texto = comporPromptMae(NUCLEO, '   ');
+    const texto = comporOmega(NUCLEO, '   ');
     expect(texto).not.toContain(MARCADOR_DELTA);
     expect(texto).not.toContain('## 6.');
     expect(texto).not.toContain('\n\n\n');
   });
 
   it('núcleo sem marcador: delta é anexado ao final', () => {
-    const texto = comporPromptMae('# Regras\ncorpo.', 'Diretriz da obra.');
+    const texto = comporOmega('# Regras\ncorpo.', 'Diretriz da obra.');
     expect(texto).toContain('## 6. DIRETRIZES ESPECÍFICAS DA OBRA');
     expect(texto.indexOf('Diretriz da obra.')).toBeGreaterThan(texto.indexOf('corpo.'));
   });
 
   it('é determinística (mesmos insumos ⇒ mesmos bytes — pré-requisito do cache)', () => {
-    expect(comporPromptMae(NUCLEO, 'x')).toBe(comporPromptMae(NUCLEO, 'x'));
+    expect(comporOmega(NUCLEO, 'x')).toBe(comporOmega(NUCLEO, 'x'));
   });
 
   it('o núcleo semeado compõe sem marcador visível e com a Seção 6 no lugar', () => {
-    const texto = comporPromptMae(PROMPT_PADRAO_INICIAL, 'Diretriz.');
+    const texto = comporOmega(PROMPT_PADRAO_INICIAL, 'Diretriz.');
     expect(texto).not.toContain(MARCADOR_DELTA);
     expect(texto.indexOf('## 6.')).toBeLessThan(texto.indexOf('## 7.'));
   });
 });
 
 describe('extrairCamadas (conversão de prompt completo legado)', () => {
-  const completo = comporPromptMae(NUCLEO, 'Vício de fala do Lin Feng.');
+  const completo = comporOmega(NUCLEO, 'Vício de fala do Lin Feng.');
 
   it('separa a Seção 6 como delta e devolve o núcleo com marcador', () => {
     const camadas = extrairCamadas(completo)!;
@@ -75,7 +75,7 @@ describe('extrairCamadas (conversão de prompt completo legado)', () => {
 describe('migração de boot: padrão legado (com Seção 6) vira núcleo', () => {
   it('na reabertura, deriva uma versão-núcleo ativa e preserva o histórico', () => {
     const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dao-tale-')), 'teste.db');
-    const legadoCompleto = comporPromptMae(NUCLEO, 'Diretriz que era do padrão.');
+    const legadoCompleto = comporOmega(NUCLEO, 'Diretriz que era do padrão.');
 
     // Banco "antigo": uma só versão de padrão, ativa, ainda com a Seção 6, e
     // nenhuma das flags de migração.

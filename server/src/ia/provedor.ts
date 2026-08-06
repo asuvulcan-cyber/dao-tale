@@ -35,7 +35,7 @@ export interface RequisicaoTraducaoBloco {
   temperatura?: number;
   /** Raciocínio prolongado; `undefined` = não mandar nada (padrão do provedor). */
   thinking?: ModoThinking;
-  promptMae: string;
+  omega: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado por bloco (só termos presentes no trecho):
    * ele entra na mensagem do usuário e o sistema fica estável para o prompt caching. */
@@ -99,7 +99,7 @@ export interface RespostaContracapa {
 export interface RequisicaoRevisao {
   modelo: string;
   temperatura?: number;
-  promptMae: string;
+  omega: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário foi filtrado pela frase questionada: ele entra na
    * mensagem do usuário e o sistema fica estável entre revisões (cacheável). */
@@ -127,7 +127,7 @@ export interface RespostaRevisaoProvedor extends RespostaRevisao {
 export interface RequisicaoExtrairTermos {
   modelo: string;
   temperatura?: number;
-  promptMae: string;
+  omega: string;
   /** Termos já catalogados que o modelo não deve repetir. Com `glossarioNoUsuario`,
    * chega filtrado pela frase (os ausentes dela não ajudam a deduplicar nada). */
   glossario: EntradaGlossario[];
@@ -151,7 +151,7 @@ export interface RequisicaoRefinarPrompt {
   modelo: string;
   temperatura?: number;
   /** Prompt mãe composto (núcleo + delta) vigente na obra. */
-  promptMae: string;
+  omega: string;
   /** Delta atual (Seção 6) — é o que a proposta deve refinar. */
   deltaAtual: string;
   casos: {
@@ -191,7 +191,7 @@ export interface ParParaQa {
 export interface RequisicaoQa {
   modelo: string;
   temperatura?: number;
-  promptMae: string;
+  omega: string;
   glossario: EntradaGlossario[];
   /** true quando o glossário filtrado vai na mensagem do usuário (sistema estável). */
   glossarioNoUsuario?: boolean;

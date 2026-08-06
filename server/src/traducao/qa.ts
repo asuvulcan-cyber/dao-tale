@@ -109,7 +109,7 @@ export async function analisarCapitulo(
       // Amostragem (doc 08 §13): o QA aponta problema, não escreve prosa —
       // duas passadas na mesma tradução devem apontar as mesmas coisas.
       temperatura: resolverTemperatura(config.temperaturas, 'qa', obra?.temperatura),
-      promptMae: prompt.texto,
+      omega: prompt.texto,
       glossario: glossarioDoBloco,
       glossarioNoUsuario: config.glossario_relevante,
       caudaAnterior,

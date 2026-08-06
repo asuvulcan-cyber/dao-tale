@@ -9,7 +9,7 @@ import {
   type Lote,
   type LoteCapitulo,
   type Obra,
-  type PromptMae,
+  type VersaoDelta,
   type PromptPadrao,
   type ProvedorId,
 } from '@dao-tale/shared';
@@ -36,7 +36,7 @@ export function Capitulos() {
   // com prompt vX · núcleo vY". Mesmas chaves de cache da tela Prompt mãe.
   const { data: promptsObra } = useQuery({
     queryKey: ['prompts', obraId],
-    queryFn: () => api<PromptMae[]>('GET', `/obras/${obraId}/prompts`),
+    queryFn: () => api<VersaoDelta[]>('GET', `/obras/${obraId}/prompts`),
   });
   const { data: nucleos } = useQuery({
     queryKey: ['prompt-padrao'],

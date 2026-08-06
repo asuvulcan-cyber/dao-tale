@@ -466,7 +466,7 @@ export function rotasObras(db: BancoDados): Hono {
         // Amostragem (doc 08 §13): a única tarefa em que variedade é o produto —
         // propor regra nova a partir dos casos —, por isso a mais solta.
         temperatura: resolverTemperatura(config.temperaturas, 'refinamento', obra.temperatura),
-        promptMae: prompt.texto,
+        omega: prompt.texto,
         deltaAtual: prompt.prompt.tipo === 'delta' ? prompt.prompt.conteudo : (extrairCamadas(prompt.prompt.conteudo)?.delta ?? ''),
         casos,
       });

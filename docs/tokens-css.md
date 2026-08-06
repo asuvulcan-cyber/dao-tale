@@ -64,6 +64,13 @@ Trocar a intenção (ex.: mudar "ação" de selo p/ jade) é editar um token só
 | Espaçamento | `--esp-`    | `--esp-1`…`--esp-8` (escala 4/8/12/16/24/40/64/96px) |
 | Raio        | `--raio-`   | `--raio-1`, `--raio-2`, `--raio-selo`, `--raio-pill` |
 | Leitura     | `--leitor-` | `--leitor-txt-1`…`--leitor-txt-5`, `--leitor-medida-1`…`-3`, `--leitor-entrelinha` |
+| Toque       | `--toque`   | `--toque` (44px), `--toque-largo` (48px)             |
+| Tela        | `--margem-` / `--seguro-` | `--margem-tela`, `--margem-leitura`, `--seguro-topo/baixo/esq/dir` |
+
+> As famílias `--toque` e `--seguro-` existem por causa da vitrine (doc 14 §10), que é lida no
+> celular: tamanho de alvo e faixa do notch viram token para não voltarem a ser chutados botão
+> a botão. `--seguro-*` são `env(safe-area-inset-*)` e só valem com `viewport-fit=cover` no
+> `index.html`.
 
 > A família `--leitor-` existe porque o modo leitura (doc 12 §7) deixa o **leitor** escolher
 > corpo e medida: os controles `A−/A+` e `largura` trocam qual token o componente usa
@@ -110,6 +117,20 @@ em `estilos.css` + componentes em `App.tsx`). Nada de estilo ad hoc por página.
 | Aviso | `<Aviso>` | feedback ok/info/erro |
 | Estado da frase | `.frase-lava--*` + `.chip-estado` | opção B aprovada: lavagem de fundo esmaecendo + filete esquerdo + chip |
 | Termo do glossário | `.termo-gloss` | sublinhado pontilhado estilo link |
+
+Peças **só da vitrine** (doc 14 §10) — a bancada não as usa, e mexer nelas não mexe lá:
+
+| Peça | Classe | Uso |
+|------|--------|-----|
+| Raiz da página | `.vitrine` | `100dvh` + faixas laterais do aparelho |
+| Respiro lateral | `.vitrine-margem` | a margem de celular, decidida num lugar só |
+| Barra superior | `.vitrine-barra` | sticky, com a faixa do notch somada |
+| Alvo de toque | `.toque` | 44px de área, junto da peça visual |
+| Pílula de dedo | `.ferramenta-toque` | `.ferramenta` no tamanho do polegar |
+| Ação principal | `.acao-larga` (`--calma`) | largura toda, 48px de altura |
+| Linha de lista | `.linha-toque` | sumário e capítulos |
+| Gaveta | `.gaveta` / `.gaveta-painel` | rodapé no celular, caixa centrada no desktop |
+| Etiqueta de gênero | `.tag-obra` | tags da obra na estante e na contracapa |
 
 Princípios de composição (a "cara" Dao Tale):
 - **Barra dupla** em telas de trabalho: barra 1 = *onde estou* (contexto, navegação ‹ ›, status); barra 2 = *como vejo / o que faço* (modos, ferramentas, UMA ação primária). Ações raras vão para o menu `⋯`.

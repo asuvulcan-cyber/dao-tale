@@ -207,7 +207,7 @@ export interface ObraComContadores extends Obra {
  * obra (Seção 6) — o prompt enviado à IA é composto com o núcleo ativo. */
 export type TipoPrompt = 'completo' | 'delta';
 
-export interface PromptMae {
+export interface VersaoDelta {
   id: number;
   obra_id: number;
   versao: string;
@@ -225,12 +225,12 @@ export interface PromptMae {
 
 /** Versão do núcleo universal (prompt padrão global): regras zh→pt-BR comuns a
  * todas as obras; o delta de cada obra é inserido no marcador {{DELTA_OBRA}}. */
-export type PromptPadrao = Omit<PromptMae, 'obra_id' | 'tipo' | 'nucleo_id' | 'preferencias'>;
+export type PromptPadrao = Omit<VersaoDelta, 'obra_id' | 'tipo' | 'nucleo_id' | 'preferencias'>;
 
 /** Prompt mãe efetivo de uma obra (núcleo + delta compostos), com proveniência. */
 export interface PromptComposto {
   texto: string;
-  prompt: PromptMae;
+  prompt: VersaoDelta;
   nucleo: PromptPadrao | null;
 }
 

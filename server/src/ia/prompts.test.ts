@@ -50,7 +50,7 @@ describe('filtrarGlossarioRelevante', () => {
 describe('glossário no usuário (modo relevante)', () => {
   const base: RequisicaoTraducaoBloco = {
     modelo: 'm',
-    promptMae: 'Regras da obra.',
+    omega: 'Regras da obra.',
     glossario: [entrada('齐夏', 'Qi Xia')],
     caudaAnterior: [],
     frases: [{ ordem: 0, texto_zh: '齐夏睁开了眼睛。' }],
@@ -76,7 +76,7 @@ describe('sistema em duas partes (doc 08 §3)', () => {
   it('a base é o prompt mãe composto e as partes juntas reproduzem o sistema inteiro', () => {
     const req: RequisicaoTraducaoBloco = {
       modelo: 'm',
-      promptMae: 'Núcleo + delta compostos.',
+      omega: 'Núcleo + delta compostos.',
       glossario: [],
       glossarioNoUsuario: true,
       caudaAnterior: [],
@@ -92,7 +92,7 @@ describe('sistema em duas partes (doc 08 §3)', () => {
 describe('revisão com glossário no usuário (A4 da auditoria)', () => {
   const base: RequisicaoRevisao = {
     modelo: 'm',
-    promptMae: 'Regras.',
+    omega: 'Regras.',
     glossario: [entrada('齐夏', 'Qi Xia')],
     vizinhasAntes: [],
     vizinhasDepois: [],
@@ -117,7 +117,7 @@ describe('revisão com glossário no usuário (A4 da auditoria)', () => {
 describe('extração de termos com glossário no usuário (M2 da auditoria)', () => {
   const base: RequisicaoExtrairTermos = {
     modelo: 'm',
-    promptMae: 'Regras.',
+    omega: 'Regras.',
     glossario: [entrada('齐夏', 'Qi Xia')],
     frase: { texto_zh: '齐夏进入了归墟。', texto_pt: 'Qi Xia entrou no Abismo.' },
   };
@@ -143,7 +143,7 @@ describe('termos adotados no capítulo', () => {
   it('entram na mensagem do usuário, antes das frases, e não mudam o sistema', () => {
     const req: RequisicaoTraducaoBloco = {
       modelo: 'm',
-      promptMae: 'Regras.',
+      omega: 'Regras.',
       glossario: [],
       glossarioNoUsuario: true,
       termosAdotados: [{ termo_zh: '归墟', termo_pt: 'Abismo do Retorno' }],
@@ -165,7 +165,7 @@ describe('variantes de termo no glossário', () => {
   const variante: EntradaGlossario = { ...entrada('芊芊', 'Qianqian'), id: 2, principal_id: 1 };
 
   it('a formatação anota a variante apontando para a canônica', () => {
-    const sistema = sistemaTraducao({ promptMae: 'Regras.', glossario: [canonica, variante] });
+    const sistema = sistemaTraducao({ omega: 'Regras.', glossario: [canonica, variante] });
     expect(sistema).toContain('芊芊 → Qianqian');
     expect(sistema).toContain('variante de Lin Qian (林芊)');
   });

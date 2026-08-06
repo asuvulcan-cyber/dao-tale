@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import './estilos.css';
-import { Casca } from './App';
+import { Casca, pintarBarraDoNavegador } from './App';
 import { ListaObras } from './paginas/ListaObras';
 import { ObraLayout } from './paginas/ObraLayout';
 import { Capitulos } from './paginas/Capitulos';
@@ -18,6 +18,7 @@ import { ComparadorModelos } from './paginas/ComparadorModelos';
 import { Telemetria } from './paginas/Telemetria';
 import { Leitor } from './paginas/Leitor';
 import { Biblioteca } from './paginas/Biblioteca';
+import { ObraPublica } from './paginas/ObraPublica';
 import { LeitorPublico } from './paginas/LeitorPublico';
 import { Entrar } from './paginas/Entrar';
 import { PortaoSessao } from './componentes/PortaoSessao';
@@ -26,13 +27,17 @@ const clienteQuery = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
-// Vitrine (doc 14): o roteador de quem chega sem senha. Três rotas, e a `*`
+// Vitrine (doc 14): o roteador de quem chega sem senha. Quatro rotas, e a `*`
 // devolve para a estante — assim um /configuracoes digitado à mão vira estante,
 // não tela de erro nem pista de que existe um /configuracoes.
+//
+// `/ler/:obraId` é a CONTRACAPA (doc 14 §10), não o capítulo 1: um link
+// compartilhado abre a obra se apresentando, e não o meio de uma cena. O
+// capítulo tem endereço próprio e sempre com número.
 const rotasVitrine = createBrowserRouter([
   { path: '/', element: <Biblioteca /> },
   { path: '/entrar', element: <Entrar /> },
-  { path: '/ler/:obraId', element: <LeitorPublico /> },
+  { path: '/ler/:obraId', element: <ObraPublica /> },
   { path: '/ler/:obraId/:numero', element: <LeitorPublico /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ]);
@@ -69,6 +74,10 @@ const rotasBancada = createBrowserRouter([
   // Quem entrou estando em /entrar cai aqui e é levado para a lista de obras.
   { path: '*', element: <Navigate to="/" replace /> },
 ]);
+
+// A barra do navegador do celular acompanha o papel desde a primeira pintura —
+// inclusive nas telas que não têm o botão de tema (login).
+pintarBarraDoNavegador();
 
 ReactDOM.createRoot(document.getElementById('raiz')!).render(
   <React.StrictMode>

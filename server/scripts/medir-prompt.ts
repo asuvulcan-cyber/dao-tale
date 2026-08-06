@@ -28,7 +28,7 @@ import {
   usuarioRevisao,
   usuarioTraducao,
 } from '../src/ia/prompts.js';
-import { comporPromptMae, extrairCamadas } from '../src/db/promptPadraoInicial.js';
+import { comporOmega, extrairCamadas } from '../src/db/promptPadraoInicial.js';
 import { obterChave } from '../src/credenciais/index.js';
 import { abrirSomenteLeitura, acertoDeCache, formatarUsd, medidoPorPapel } from './medido.js';
 
@@ -58,7 +58,7 @@ const glossario: EntradaGlossario[] = dados.glossario.map((g: any, i: number) =>
 
 // Camadas do prompt real: Seção 6 vira delta; o resto faz papel de núcleo.
 const camadas = extrairCamadas(promptCompletoLegado);
-const promptComposto = camadas ? comporPromptMae(camadas.nucleo, camadas.delta) : promptCompletoLegado;
+const promptComposto = camadas ? comporOmega(camadas.nucleo, camadas.delta) : promptCompletoLegado;
 
 // ── Contagem de tokens ─────────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ interface Linha {
   usuario: number;
 }
 
-async function medirTraducao(promptMae: string): Promise<Linha[]> {
+async function medirTraducao(omega: string): Promise<Linha[]> {
   const linhas: Linha[] = [];
   for (let b = 0; b < blocos.length; b++) {
     const bloco = blocos[b];
@@ -115,7 +115,7 @@ async function medirTraducao(promptMae: string): Promise<Linha[]> {
     ]);
     const req = {
       modelo: 'medicao',
-      promptMae,
+      omega,
       glossario: gloss,
       glossarioNoUsuario: true,
       caudaAnterior: cauda,
@@ -143,7 +143,7 @@ async function medirRevisao(depois: boolean): Promise<Linha[]> {
     const gloss = filtrarGlossarioRelevante(glossario, [f.texto_zh, ...antes.map((x) => x.texto_zh), ...depois3.map((x) => x.texto_zh)]);
     const req = {
       modelo: 'medicao',
-      promptMae: depois ? promptComposto : promptCompletoLegado,
+      omega: depois ? promptComposto : promptCompletoLegado,
       glossario: gloss,
       glossarioNoUsuario: depois,
       vizinhasAntes: antes,
@@ -162,7 +162,7 @@ async function medirExtracao(depois: boolean): Promise<Linha[]> {
     const gloss = depois ? filtrarGlossarioRelevante(glossario, [f.texto_zh]) : glossario;
     const req = {
       modelo: 'medicao',
-      promptMae: depois ? promptComposto : promptCompletoLegado,
+      omega: depois ? promptComposto : promptCompletoLegado,
       glossario: gloss,
       glossarioNoUsuario: depois,
       frase: { texto_zh: f.texto_zh, texto_pt: f.texto_pt },

@@ -67,15 +67,15 @@ function hash(texto: string): string {
 
 function usoSimulado(
   papel: string,
-  req: { promptMae?: string; temperatura?: number; thinking?: string },
+  req: { omega?: string; temperatura?: number; thinking?: string },
   resposta: unknown,
 ): UsoChamada {
   temperaturasRecebidas.set(papel, req.temperatura);
   thinkingRecebido.set(papel, req.thinking);
-  const sistema = estimarTokens(req.promptMae ?? '');
+  const sistema = estimarTokens(req.omega ?? '');
   // O resto da requisição (glossário, frases, cauda) é a parte que nunca cacheia.
   const usuario = Math.max(0, estimarTokens(JSON.stringify(req)) - sistema);
-  const chave = `${papel}:${hash(req.promptMae ?? '')}`;
+  const chave = `${papel}:${hash(req.omega ?? '')}`;
   const quente = prefixosVistos.has(chave);
   prefixosVistos.add(chave);
   return {
@@ -148,7 +148,7 @@ export const provedorMock: ProvedorIA = {
       bruta: JSON.stringify(dados),
       // O prompt de contracapa é o prefixo estável desta tarefa (o prompt mãe da
       // obra não entra aqui) — é ele que o cache simulado deve contabilizar.
-      uso: usoSimulado('contracapa', { ...req, promptMae: PROMPT_CONTRACAPA }, dados),
+      uso: usoSimulado('contracapa', { ...req, omega: PROMPT_CONTRACAPA }, dados),
     };
   },
 

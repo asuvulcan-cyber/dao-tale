@@ -18,11 +18,28 @@ function temaEfetivo(): Tema {
 
 function aplicarTema(tema: Tema) {
   document.documentElement.setAttribute('data-theme', tema === 'escuro' ? 'dark' : 'light');
+  pintarBarraDoNavegador();
+}
+
+/** Tinge a barra do navegador do celular com a mesma cor do papel (Chrome
+ *  Android, Safari iOS). Sem isto o app fica com uma tarja branca ou preta em
+ *  cima dele no tema oposto — a coisa que mais denuncia "site aberto no
+ *  navegador" numa tela de leitura. O valor é LIDO do token em vez de escrito
+ *  no HTML: assim continua sendo o sistema de cores quem manda. */
+export function pintarBarraDoNavegador() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const cor = getComputedStyle(document.documentElement).getPropertyValue('--cor-papel').trim();
+  if (cor) meta.setAttribute('content', cor);
 }
 
 /** Alterna claro/escuro. Exportado porque o modo leitura (doc 12 §7) tem barra
-    própria, fora da casca, e reaproveita este controle em vez de duplicá-lo. */
-export function BotaoTema() {
+    própria, fora da casca, e reaproveita este controle em vez de duplicá-lo.
+
+    `tamanho="toque"` é o mesmo botão com a área de um dedo (doc 14 §10): a
+    vitrine é usada no celular, a bancada no desktop. Só muda a área — o desenho
+    é um só, para o tema não trocar de cara entre as duas superfícies. */
+export function BotaoTema({ tamanho = 'compacto' }: { tamanho?: 'compacto' | 'toque' }) {
   const [tema, setTema] = useState<Tema>(() => temaEfetivo());
   useEffect(() => {
     aplicarTema(tema);
@@ -33,7 +50,9 @@ export function BotaoTema() {
     <button
       type="button"
       onClick={() => setTema(escuro ? 'claro' : 'escuro')}
-      className="flex items-center gap-1.5 rounded-full border border-linha bg-papel-alto px-3 py-1 text-sm text-tinta-2 hover:border-jade hover:text-jade-forte"
+      className={`flex items-center gap-1.5 rounded-full border border-linha bg-papel-alto text-tinta-2 hover:border-jade hover:text-jade-forte ${
+        tamanho === 'toque' ? 'toque text-base' : 'px-3 py-1 text-sm'
+      }`}
       aria-label={escuro ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
       title={escuro ? 'Tema claro' : 'Tema escuro'}
     >

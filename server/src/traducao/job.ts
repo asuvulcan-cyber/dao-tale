@@ -195,7 +195,7 @@ export async function iniciarTraducao(
       // para o job inteiro pelo mesmo motivo.
       thinking: obra.thinking ?? undefined,
       chave,
-      promptMae: prompt.texto,
+      omega: prompt.texto,
       config,
       traduzirTitulo,
       aoTerminar,
@@ -217,7 +217,7 @@ async function executarJob(
     temperatura: number;
     thinking?: ModoThinking;
     chave: string | null;
-    promptMae: string;
+    omega: string;
     config: ReturnType<typeof reposConfig.obterTodas>;
     traduzirTitulo: boolean;
     aoTerminar?: (resultado: ResultadoJob) => void;
@@ -255,7 +255,7 @@ async function executarJob(
         modelo: ctx.modelo,
         temperatura: ctx.temperatura,
         thinking: ctx.thinking,
-        promptMae: ctx.promptMae,
+        omega: ctx.omega,
         tamanhoBloco,
         caudaContexto: ctx.config.cauda_contexto,
         glossarioRelevante: ctx.config.glossario_relevante,

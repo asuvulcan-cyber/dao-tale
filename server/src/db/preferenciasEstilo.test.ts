@@ -9,7 +9,7 @@ import {
   renderizarPreferencias,
   type PreferenciasEstilo,
 } from '@dao-tale/shared';
-import { MARCADOR_DELTA, MARCADOR_PREFERENCIAS, NUCLEO_ENXUTO, comporPromptMae } from './promptPadraoInicial.js';
+import { MARCADOR_DELTA, MARCADOR_PREFERENCIAS, NUCLEO_ENXUTO, comporOmega } from './promptPadraoInicial.js';
 
 const com = (p: Partial<PreferenciasEstilo>): PreferenciasEstilo => ({ ...PREFERENCIAS_PADRAO, ...p });
 
@@ -105,7 +105,7 @@ describe('renderizarPreferencias', () => {
 
 describe('composição com preferências', () => {
   it('o núcleo enxuto rende as duas seções na ordem 5 → 6, sem marcador sobrando', () => {
-    const texto = comporPromptMae(NUCLEO_ENXUTO, 'Lin Feng fala em gírias.', PREFERENCIAS_PADRAO);
+    const texto = comporOmega(NUCLEO_ENXUTO, 'Lin Feng fala em gírias.', PREFERENCIAS_PADRAO);
     expect(texto).not.toContain(MARCADOR_PREFERENCIAS);
     expect(texto).not.toContain(MARCADOR_DELTA);
     expect(texto.indexOf('## 5. PREFERÊNCIAS')).toBeGreaterThan(texto.indexOf('## 4. SEM DECALQUE'));
@@ -114,7 +114,7 @@ describe('composição com preferências', () => {
   });
 
   it('sem delta, não sobra separador nem seção vazia no fim', () => {
-    const texto = comporPromptMae(NUCLEO_ENXUTO, '', PREFERENCIAS_PADRAO);
+    const texto = comporOmega(NUCLEO_ENXUTO, '', PREFERENCIAS_PADRAO);
     expect(texto).not.toContain('## 6.');
     expect(texto).not.toContain('\n\n\n');
     expect(texto.trimEnd().endsWith('---')).toBe(false);
@@ -122,20 +122,20 @@ describe('composição com preferências', () => {
   });
 
   it('preferências ausentes = padrões (chamada antiga de dois argumentos)', () => {
-    expect(comporPromptMae(NUCLEO_ENXUTO, 'x')).toBe(comporPromptMae(NUCLEO_ENXUTO, 'x', PREFERENCIAS_PADRAO));
+    expect(comporOmega(NUCLEO_ENXUTO, 'x')).toBe(comporOmega(NUCLEO_ENXUTO, 'x', PREFERENCIAS_PADRAO));
   });
 
   it('núcleo SEM o marcador de preferências ignora as chaves — é o que torna a volta atrás segura', () => {
     const antigo = `# Núcleo antigo\n\nRegras no corpo.\n\n${MARCADOR_DELTA}\n\n## 7. PROIBIÇÕES`;
-    const texto = comporPromptMae(antigo, 'Delta.', com({ dialogo: 'travessao' }));
+    const texto = comporOmega(antigo, 'Delta.', com({ dialogo: 'travessao' }));
     expect(texto).not.toContain('## 5. PREFERÊNCIAS');
     expect(texto).not.toContain('travessão');
     expect(texto).toContain('## 6. DIRETRIZES');
   });
 
   it('trocar uma chave muda os bytes do prompt (é isso que a versão nova registra)', () => {
-    const aspas = comporPromptMae(NUCLEO_ENXUTO, 'd', PREFERENCIAS_PADRAO);
-    const travessao = comporPromptMae(NUCLEO_ENXUTO, 'd', com({ dialogo: 'travessao' }));
+    const aspas = comporOmega(NUCLEO_ENXUTO, 'd', PREFERENCIAS_PADRAO);
+    const travessao = comporOmega(NUCLEO_ENXUTO, 'd', com({ dialogo: 'travessao' }));
     expect(travessao).not.toBe(aspas);
   });
 });
@@ -146,7 +146,7 @@ describe('composição com preferências', () => {
 // pinyin", e um nome catalogado em forma traduzida punha as duas regras em guerra.
 describe('hierarquia: o glossário é lei acima das três camadas', () => {
   it('os cabeçalhos de Beta e Delta se autolimitam', () => {
-    const texto = comporPromptMae(NUCLEO_ENXUTO, 'Lin Feng fala em gírias.', PREFERENCIAS_PADRAO);
+    const texto = comporOmega(NUCLEO_ENXUTO, 'Lin Feng fala em gírias.', PREFERENCIAS_PADRAO);
     const beta = texto.slice(texto.indexOf('## 5. PREFERÊNCIAS'), texto.indexOf('## 6. DIRETRIZES'));
     const delta = texto.slice(texto.indexOf('## 6. DIRETRIZES'));
     expect(beta).toContain('exceto o glossário, que é lei acima de todas as camadas');
@@ -156,12 +156,12 @@ describe('hierarquia: o glossário é lei acima das três camadas', () => {
   // Sem número de seção: a composição aceita Alfas arbitrários, inclusive editados pelo
   // usuário, e nada garante que o glossário seja a Seção 2 neles.
   it('a exceção não cita número de seção', () => {
-    const texto = comporPromptMae(NUCLEO_ENXUTO, 'Delta.', PREFERENCIAS_PADRAO);
+    const texto = comporOmega(NUCLEO_ENXUTO, 'Delta.', PREFERENCIAS_PADRAO);
     expect(texto).not.toContain('exceto o glossário (Seção');
   });
 
   it('vale também com o delta vazio — Beta sozinho não pode derrubar o glossário', () => {
-    const texto = comporPromptMae(NUCLEO_ENXUTO, '', PREFERENCIAS_PADRAO);
+    const texto = comporOmega(NUCLEO_ENXUTO, '', PREFERENCIAS_PADRAO);
     expect(texto).toContain('exceto o glossário, que é lei acima de todas as camadas');
   });
 });
