@@ -25,6 +25,55 @@ type VersaoPrompt = PromptPadrao & {
   preferencias?: PreferenciasEstilo;
 };
 
+// ── Partição das camadas (doc 15) ──────────────────────────────────────────
+
+type AvisoCamada = {
+  tema: string;
+  titulo: string;
+  dono: 'alfa' | 'beta' | 'delta';
+  mensagem: string;
+  linha: number;
+  trecho: string;
+};
+
+type RelatorioOmega = {
+  temas: { tema: string; titulo: string; dono: 'alfa' | 'beta' | 'delta'; ocorrencias: number }[];
+  sobreposicoes: { tema: string; titulo: string; dono: string; camadas: string[]; trechos: string[] }[];
+};
+
+/**
+ * Os avisos de sobreposição entre camadas. Tom de ATENÇÃO, nunca de erro: a versão
+ * foi salva, e o dono às vezes quer mesmo a exceção — o que não pode é ela acontecer
+ * sem ele ver.
+ *
+ * O trecho vem sempre junto. Sem ele o aviso é uma acusação abstrata, e acusação
+ * abstrata se aprende a ignorar em duas semanas.
+ */
+function AvisosDeCamada({ avisos }: { avisos: AvisoCamada[] }) {
+  if (avisos.length === 0) return null;
+  return (
+    <Aviso tipo="info">
+      <p className="mb-2 font-semibold">
+        Salvo. {avisos.length === 1 ? 'Uma sobreposição' : `${avisos.length} sobreposições`} de camada para você
+        ver:
+      </p>
+      <ul className="space-y-2">
+        {avisos.map((a) => (
+          <li key={a.tema}>
+            <span className="font-medium">{a.titulo}</span> — {a.mensagem}
+            {a.trecho && (
+              <code className="mt-1 block truncate rounded bg-papel-fundo px-2 py-1 text-xs">
+                {a.linha > 0 && <span className="text-tinta-2">linha {a.linha}: </span>}
+                {a.trecho}
+              </code>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Aviso>
+  );
+}
+
 export function PromptMae() {
   const { obraId } = useParams();
   const clienteQuery = useQueryClient();
@@ -111,6 +160,9 @@ function GerenciadorPrompts({
   const [painel, setPainel] = useState<'ver' | 'nova' | 'comparar' | 'converter' | 'refinar' | 'preferencias'>('ver');
   const [rascunhoInicial, setRascunhoInicial] = useState<string | null>(null);
   const [erro, setErro] = useState('');
+  // Avisos da última versão salva (doc 15 §7). Vivem fora do painel de criação
+  // porque ele fecha no sucesso — o aviso precisa sobreviver ao fechamento.
+  const [avisos, setAvisos] = useState<AvisoCamada[]>([]);
 
   const { data: versoes } = useQuery({
     queryKey: chave,
@@ -133,12 +185,13 @@ function GerenciadorPrompts({
       ativar: boolean;
       tipo?: TipoPrompt;
       preferencias?: PreferenciasEstilo;
-    }) => api('POST', urlCriar, dados),
-    onSuccess: () => {
+    }) => api<{ avisos?: AvisoCamada[] }>('POST', urlCriar, dados),
+    onSuccess: (resposta) => {
       invalidar();
       setPainel('ver');
       setRascunhoInicial(null);
       setErro('');
+      setAvisos(resposta?.avisos ?? []);
     },
     onError: (e) => setErro((e as Error).message),
   });
@@ -175,6 +228,7 @@ function GerenciadorPrompts({
       </CabecalhoPagina>
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
+      <AvisosDeCamada avisos={avisos} />
       {versoes?.length === 0 && painel !== 'nova' && estadoVazio}
 
       {ehLegado && painel !== 'converter' && (
@@ -493,6 +547,59 @@ function VisualizadorDelta({ obraId, delta, ativo }: { obraId: string; delta: st
           ? (composto?.texto ?? 'Carregando…')
           : delta.trim() || '(delta vazio — a obra usa só o núcleo universal por enquanto)'}
       </pre>
+      {verComposto && ativo && <RelatorioDeTemas obraId={obraId} />}
+    </div>
+  );
+}
+
+/**
+ * Temas presentes no Ômega, com o dono de cada um — e as sobreposições.
+ *
+ * Fica junto da prévia do composto porque é sobre ele que o relatório fala: as
+ * checagens de salvar olham uma camada por vez e não enxergam um Delta impecável
+ * sozinho que ainda assim repete o que Beta decide.
+ */
+function RelatorioDeTemas({ obraId }: { obraId: string }) {
+  const { data: rel } = useQuery({
+    queryKey: ['omega-relatorio', obraId],
+    queryFn: () => api<RelatorioOmega>('GET', `/obras/${obraId}/omega/relatorio`),
+  });
+  if (!rel) return null;
+
+  const NOME: Record<string, string> = { alfa: 'Alfa', beta: 'Beta', delta: 'Delta' };
+  const COR: Record<string, 'jade' | 'indigo' | 'ocre'> = { alfa: 'jade', beta: 'indigo', delta: 'ocre' };
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <h4 className="mb-2 text-sm font-semibold">Temas e donos</h4>
+      <div className="flex flex-wrap gap-1.5">
+        {rel.temas.map((t) => (
+          <Etiqueta key={t.tema} cor={COR[t.dono]}>
+            {t.titulo} · {NOME[t.dono]}
+          </Etiqueta>
+        ))}
+      </div>
+      {rel.sobreposicoes.length > 0 && (
+        <Aviso tipo="info">
+          <p className="mb-2 font-semibold">
+            {rel.sobreposicoes.length === 1 ? 'Um tema aparece' : `${rel.sobreposicoes.length} temas aparecem`} fora
+            da camada dona:
+          </p>
+          <ul className="space-y-2">
+            {rel.sobreposicoes.map((s) => (
+              <li key={s.tema}>
+                <span className="font-medium">{s.titulo}</span> — é de {NOME[s.dono]}, mas aparece em{' '}
+                {s.camadas.map((c) => NOME[c]).join(' e ')}.
+                {s.trechos.map((t, i) => (
+                  <code key={i} className="mt-1 block truncate rounded bg-papel-fundo px-2 py-1 text-xs">
+                    {t}
+                  </code>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </Aviso>
+      )}
     </div>
   );
 }
