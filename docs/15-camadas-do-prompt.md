@@ -166,3 +166,41 @@ Sem essa peça, "separado" significa apagar e reimportar a cada publicação.
 
 Recomendação: **(a)**, a menos que trabalhar offline seja requisito. A divergência silenciosa
 já custou uma sessão inteira de confusão.
+
+---
+
+## 9. O que aconteceu de fato (2026-08-06)
+
+Decidido **(a)**, e ao executar descobriu-se que **a direção da migração estava errada**.
+O plano dizia "levar o banco local para o VPS, que é a fonte da verdade". O inventário do
+VPS, feito antes de tocar em qualquer coisa, mostrou o contrário:
+
+| | Local | VPS |
+|---|---|---|
+| Caps 0–3 | finalizado, idênticos | finalizado, idênticos |
+| **Cap 4** | rascunho, 0 frases | **traduzido, 60 frases** |
+| Publicada | não | **sim** |
+| Glossário | 34 termos | 34 termos (idêntico) |
+| Alfa ativo | v5.0, com marcador | **v1.0, sem marcador** |
+
+O VPS estava **à frente no conteúdo** e atrás só no núcleo. Copiar o banco local por cima
+teria apagado um capítulo traduzido e o estado de publicação — para ganhar apenas o
+núcleo, que já vem do código.
+
+**O que foi feito, sem migrar banco nenhum:**
+
+1. Backup do VPS, verificado abrindo a cópia (`integrity_check` + contagens).
+2. Código novo por rsync (`/opt/dao-tale` não é repo git — é cópia de arquivos).
+3. Núcleo enxuto atual criado como **v3.0** e ativado. O v1.0 e o v2.0 continuam no
+   histórico, imutáveis.
+4. Verificado no Ômega real: Seção 5 presente, `pensamento_tempo: "original"` respeitado,
+   a tabela de 18 proibições fora, nenhuma sobreposição.
+
+**Lição que sobra:** "uma instância só" não implica "copiar um banco por cima do outro".
+Aqui as duas instâncias divergiram em eixos diferentes — conteúdo de um lado, prompt do
+outro — e a reconciliação certa foi trazer só a camada que faltava. Olhar o alvo antes de
+escrever é o que separou o conserto do estrago.
+
+**A guarda que faltava:** nada olhava o núcleo **já ativo**. As checagens de tela só
+examinam versões novas, e o v1.0 foi ativado antes de elas existirem. Agora o boot avisa,
+em `server/src/index.ts`.
