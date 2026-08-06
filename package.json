@@ -20,7 +20,8 @@
     "ips": "npm -w server run ips --",
     "atalho": "node scripts/criar-atalho.mjs",
     "test": "npm -w server run test && npm -w web run test",
-    "typecheck": "npm -w server run typecheck && npm -w web run typecheck"
+    "typecheck": "npm -w server run typecheck && npm -w web run typecheck",
+    "subir": "node scripts/subir.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

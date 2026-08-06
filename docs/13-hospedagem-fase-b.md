@@ -297,6 +297,35 @@ correto e não depende de HTTP.
 
 ---
 
+## 5.1 A produção real — onde ela fica
+
+Anotado depois de eu mesmo bater no servidor errado duas vezes em 2026-08-06.
+
+| | |
+|---|---|
+| Domínio | `daotale.illusia.com.br` |
+| **Host** | **`103.199.186.52`, porta 22 padrão** |
+| Acesso | `ssh -i ~/.ssh/dao_tale root@103.199.186.52` |
+| Aplicação | `/opt/dao-tale` — **não é repositório git**, o deploy é cópia de arquivos |
+| Dados | `/var/lib/dao-tale` (banco, backups, credenciais, auth) |
+| Serviço | unit `dao-tale`, roda como usuário `daotale` |
+
+**Cuidado — há outro VPS Hostinger no `known_hosts`:** `86.38.190.94:65002`. Não é este.
+Duas tentativas de chave falharam ali antes de alguém pensar em resolver o DNS, e VPS
+Hostinger costuma ter fail2ban — insistir no host errado bloqueia o IP de quem tenta.
+Na dúvida: `getent hosts daotale.illusia.com.br`.
+
+**Não existe `sqlite3` instalado no servidor.** Para inspecionar o banco, use o `node` com
+o `better-sqlite3` que já está em `/opt/dao-tale/node_modules`, sempre com
+`{ readonly: true }`.
+
+**Atualizar:** `npm run subir` (o `git pull` citado acima nunca funcionou aqui — a pasta
+não é repositório). O script roda testes e tipos antes, faz backup **verificado** do banco,
+envia por rsync sem tocar em `*.db`, reinicia e confere que o núcleo ativo reserva a Seção 5.
+`npm run subir -- --seco` mostra o que mudaria sem enviar nada.
+
+---
+
 ## 6. Segredos e superfície
 
 - `credenciais.json` (fallback sem keyring, já `0600`) e `sessao.chave` (`0600`) vivem em
