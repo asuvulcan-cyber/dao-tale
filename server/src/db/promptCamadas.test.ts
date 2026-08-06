@@ -105,13 +105,38 @@ describe('migração de boot: padrão legado (com Seção 6) vira núcleo', () =
     fs.rmSync(path.dirname(arquivo), { recursive: true, force: true });
   });
 
-  it('o núcleo enxuto é semeado INATIVO e nunca desativa o que estava em uso', () => {
-    const novo = abrirBanco(':memory:');
-    const enxuto = reposPromptPadrao.listar(novo).find((v) => v.conteudo.includes(MARCADOR_PREFERENCIAS))!;
+  // Banco NOVO nasce com o enxuto ativo (não há histórico a preservar). Este teste é
+  // sobre a INSTALAÇÃO ANTIGA, que tem o legado ativo e traduções feitas com ele — e por
+  // isso precisa construir esse estado, em vez de tomar um banco novo por antigo.
+  it('numa instalação com legado ativo, o enxuto entra INATIVO e não desativa o que estava em uso', () => {
+    const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dao-tale-')), 'teste.db');
+    const antes = abrirBanco(arquivo);
+    // Volta o banco ao estado de quem instalou antes do enxuto existir.
+    antes.prepare('DELETE FROM prompt_padrao').run();
+    antes
+      .prepare("INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES ('1.0', ?, '', 1)")
+      .run(PROMPT_PADRAO_INICIAL);
+    antes.prepare("DELETE FROM configuracoes WHERE chave LIKE 'nucleo%'").run();
+    antes.close();
+
+    const depois = abrirBanco(arquivo);
+    const enxuto = reposPromptPadrao.listar(depois).find((v) => v.conteudo === NUCLEO_ENXUTO)!;
     expect(enxuto).toBeDefined();
     expect(enxuto.ativo).toBe(false);
     // O ativo continua sendo o núcleo que já regia as traduções.
-    expect(reposPromptPadrao.ativo(novo)!.conteudo).not.toContain(MARCADOR_PREFERENCIAS);
+    expect(reposPromptPadrao.ativo(depois)!.conteudo).not.toContain(MARCADOR_PREFERENCIAS);
+    depois.close();
+    fs.rmSync(path.dirname(arquivo), { recursive: true, force: true });
+  });
+
+  // O banco novo recebe o enxuto UMA vez: `semearPromptPadrao` o põe ativo, e
+  // `semearNucleoEnxuto` não pode duplicá-lo — versão que não distingue nada é ruído.
+  it('banco novo nasce com o enxuto ATIVO, e sem versão duplicada', () => {
+    const novo = abrirBanco(':memory:');
+    const versoes = reposPromptPadrao.listar(novo);
+    expect(versoes.filter((v) => v.conteudo === NUCLEO_ENXUTO)).toHaveLength(1);
+    expect(reposPromptPadrao.ativo(novo)!.conteudo).toBe(NUCLEO_ENXUTO);
+    expect(reposPromptPadrao.ativo(novo)!.conteudo).toContain(MARCADOR_PREFERENCIAS);
     novo.close();
   });
 
@@ -128,7 +153,16 @@ describe('migração de boot: padrão legado (com Seção 6) vira núcleo', () =
     const antes = abrirBanco(arquivo);
     const idEnxuto = reposPromptPadrao.listar(antes).find((v) => v.conteudo.includes(MARCADOR_PREFERENCIAS))!.id;
     // Simula a cópia semeada antes: texto velho no lugar e a flag do conserto ausente.
-    antes.prepare('UPDATE prompt_padrao SET conteudo = ? WHERE id = ?').run('NÚCLEO ENXUTO VELHO', idEnxuto);
+    // O conserto só toca versão INATIVA (rascunho distribuído, não histórico de tradução),
+    // então o cenário precisa de outro núcleo no comando — como numa instalação antiga.
+    // A nota importa: o conserto reconhece o rascunho distribuído pelo prefixo que
+    // `semearNucleoEnxuto` grava, e é esse o estado que se quer reproduzir aqui.
+    antes
+      .prepare('UPDATE prompt_padrao SET conteudo = ?, ativo = 0, notas_versao = ? WHERE id = ?')
+      .run('NÚCLEO ENXUTO VELHO', 'Núcleo enxuto, INATIVO: semeado antes do conserto.', idEnxuto);
+    antes
+      .prepare("INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES ('0.9', ?, '', 1)")
+      .run(PROMPT_PADRAO_INICIAL);
     antes.prepare("DELETE FROM configuracoes WHERE chave = 'nucleo_enxuto_lugar_da_cena'").run();
     antes.close();
 
@@ -196,5 +230,29 @@ describe('reposPrompts.composto', () => {
     expect(depois.texto).toContain('Regra nova do núcleo.');
     expect(depois.nucleo!.versao).toBe('9.0');
     expect(depois.prompt.id).toBe(delta.id);
+  });
+});
+
+// Doc 15. Havia dois caminhos para criar obra e eles divergiam em silêncio: sem prompt
+// inicial, `adotarPadrao` fazia um delta; COM prompt inicial, a coluna caía no default
+// 'completo' da migração 006 e a obra nascia fora das camadas — sem preferências, sem
+// receber melhorias do núcleo, sem as checagens.
+describe('obra nova nasce em camadas', () => {
+  it('com prompt inicial, o conteúdo digitado vira o DELTA — não um prompt completo', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra Nova', prompt_inicial: { versao: '1.0', conteudo: 'Lin Feng fala em gírias.' } });
+    const ativo = reposPrompts.ativo(db, obra.id)!;
+    expect(ativo.tipo).toBe('delta');
+    expect(ativo.nucleo_id).toBe(reposPromptPadrao.ativo(db)!.id);
+    // E o Ômega dela já traz as três camadas.
+    const composto = reposPrompts.composto(db, obra.id)!;
+    expect(composto.texto).toContain('## 5. PREFERÊNCIAS');
+    expect(composto.texto).toContain('Lin Feng fala em gírias.');
+  });
+
+  it('sem prompt inicial, o delta é adotado na primeira composição (caminho que já funcionava)', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra Sem Prompt' });
+    expect(reposPrompts.composto(db, obra.id)!.prompt.tipo).toBe('delta');
   });
 });

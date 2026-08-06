@@ -110,9 +110,30 @@ export const reposObras = {
         );
       const obraId = Number(info.lastInsertRowid);
       if (payload.prompt_inicial) {
+        // Obra nova NASCE EM CAMADAS (doc 15). A coluna `tipo` tem default 'completo' por
+        // causa da migração 006, que precisava preservar o legado — mas herdar esse default
+        // aqui fazia toda obra criada COM prompt inicial nascer no modelo antigo, fora de
+        // tudo: sem preferências de estilo, sem receber melhorias do núcleo, sem as
+        // checagens de partição. Obra criada SEM o campo já nascia em camadas, via
+        // `adotarPadrao` — os dois caminhos divergiam em silêncio.
+        //
+        // O que o usuário digita ao cadastrar uma obra é, por definição, específico dela:
+        // é Delta. Se ele colar um prompt inteiro ali, a checagem de Delta avisa que aquilo
+        // decide temas de Alfa/Beta, e a conversão assistida separa — que é o caminho certo,
+        // em vez de nascer legado e ninguém perceber.
+        //
+        // Sem núcleo ativo não há com o que compor: aí o conteúdo precisa mesmo bastar-se,
+        // e 'completo' é o registro honesto disso.
+        const nucleo = reposPromptPadrao.ativo(db);
         db.prepare(
-          'INSERT INTO prompts (obra_id, versao, conteudo, ativo) VALUES (?, ?, ?, 1)',
-        ).run(obraId, payload.prompt_inicial.versao, payload.prompt_inicial.conteudo);
+          'INSERT INTO prompts (obra_id, versao, conteudo, ativo, tipo, nucleo_id) VALUES (?, ?, ?, 1, ?, ?)',
+        ).run(
+          obraId,
+          payload.prompt_inicial.versao,
+          payload.prompt_inicial.conteudo,
+          nucleo ? 'delta' : 'completo',
+          nucleo?.id ?? null,
+        );
       }
       for (const e of payload.glossario_inicial ?? []) {
         db.prepare(

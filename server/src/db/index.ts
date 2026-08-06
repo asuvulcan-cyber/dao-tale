@@ -72,15 +72,25 @@ export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMig
   return db;
 }
 
-// Banco sem nenhuma versão de prompt padrão (recém-criado ou migrado) recebe o
-// núcleo genérico inicial já ativo — versões seguintes são criadas pela UI.
+// Banco sem nenhuma versão de prompt padrão (recém-criado) recebe o núcleo ENXUTO já
+// ativo — versões seguintes são criadas pela UI.
+//
+// Antes semeava-se o PROMPT_PADRAO_INICIAL (v1.0), e isso fazia toda instalação nova
+// nascer com o defeito do doc 15 §1: o v1.0 traz as regras de estilo no corpo e NÃO
+// reserva a Seção 5, então as preferências de cada obra eram descartadas em silêncio.
+// Foi o que aconteceu na instância hospedada, e ela só existia havia um dia.
+//
+// Por que trocar aqui não fere a imutabilidade das versões: esta função só roda quando
+// a tabela está VAZIA. A imutabilidade existe para proteger histórico de tradução — num
+// banco recém-criado não há histórico algum, e semear o legado como ativo era distribuir
+// um defeito conhecido, não preservar passado. Instalações existentes não passam por aqui.
 function semearPromptPadrao(db: BancoDados): void {
   const { n } = db.prepare('SELECT COUNT(*) n FROM prompt_padrao').get() as { n: number };
   if (n > 0) return;
   db.prepare('INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, 1)').run(
     VERSAO_PROMPT_PADRAO_INICIAL,
-    PROMPT_PADRAO_INICIAL,
-    'Núcleo genérico inicial distribuído com o aplicativo.',
+    NUCLEO_ENXUTO,
+    'Núcleo universal enxuto, distribuído com o aplicativo: só as regras zh→pt-BR que valem para qualquer obra. Estilo é da Seção 5 (preferências) e particularidade é da Seção 6 (delta).',
   );
 }
 
@@ -122,6 +132,16 @@ function migrarPadraoParaNucleo(db: BancoDados): void {
 function semearNucleoEnxuto(db: BancoDados): void {
   const flag = db.prepare("SELECT valor FROM configuracoes WHERE chave = 'nucleo_enxuto_semeado'").get();
   if (flag) return;
+  // Banco recém-criado já recebeu o enxuto ATIVO em `semearPromptPadrao`; semear de novo
+  // criaria duas versões com bytes idênticos, e versão que não distingue nada é ruído no
+  // histórico. Marca a flag e sai — não há legado para comparar aqui.
+  const jaExiste = db.prepare('SELECT 1 FROM prompt_padrao WHERE conteudo = ?').get(NUCLEO_ENXUTO);
+  if (jaExiste) {
+    db.prepare(
+      "INSERT INTO configuracoes (chave, valor) VALUES ('nucleo_enxuto_semeado', '1') ON CONFLICT (chave) DO UPDATE SET valor = '1'",
+    ).run();
+    return;
+  }
   db.transaction(() => {
     db.prepare('INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, 0)').run(
       proximaVersaoNucleo(db),

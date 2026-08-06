@@ -123,6 +123,13 @@ describe('preferências de estilo na API', () => {
   it('o portão A/B do comparador roda o mesmo modelo com dois núcleos e mede cada saída', async () => {
     const obra = await obraComDelta();
     await chamar('PUT', `/api/obras/${obra.id}`, { provedor_padrao: 'mock', modelo_padrao: 'mock-v1' });
+    // Banco novo tem UM núcleo (o enxuto, ativo). O portão A/B compara dois, então o
+    // segundo é criado aqui — que é também como o usuário chega nesta tela.
+    await chamar('POST', '/api/prompt-padrao', {
+      versao: '9.9',
+      conteudo: `# Núcleo alternativo\n\nRegras.\n\n{{PREFERENCIAS_OBRA}}\n\n{{DELTA_OBRA}}`,
+      ativar: false,
+    });
     const nucleos = await json(await chamar('GET', '/api/prompt-padrao'));
     expect(nucleos.length).toBeGreaterThanOrEqual(2);
 

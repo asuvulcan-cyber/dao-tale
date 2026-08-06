@@ -352,18 +352,19 @@ describe('fluxo completo com provedor mock', () => {
   });
 
   it('prompt padrão: vem semeado, versiona e pode ser adotado explicitamente', async () => {
-    // Semeados na criação do banco (doc 08 §12): o núcleo em uso, ativo, e o
-    // enxuto, INATIVO — ativar é decisão do usuário depois do portão A/B.
+    // Banco novo nasce com UM núcleo: o enxuto, ativo (doc 15). Antes semeava-se o legado
+    // ativo + o enxuto inativo, e toda instalação nova começava ignorando as preferências
+    // de estilo em silêncio — o defeito que derrubou a instância hospedada.
     const versoes = await json(await chamar('GET', '/api/prompt-padrao'));
-    expect(versoes).toHaveLength(2);
+    expect(versoes).toHaveLength(1);
     expect(versoes.filter((v: any) => v.ativo)).toHaveLength(1);
-    expect(versoes.find((v: any) => v.ativo).conteudo).not.toContain('{{PREFERENCIAS_OBRA}}');
-    expect(versoes.find((v: any) => !v.ativo).conteudo).toContain('## 3. DEMONSTRATIVOS');
+    expect(versoes[0].conteudo).toContain('{{PREFERENCIAS_OBRA}}');
+    expect(versoes[0].conteudo).toContain('## 3. DEMONSTRATIVOS');
 
     // Nova versão ativa; só uma fica ativa por vez.
     await chamar('POST', '/api/prompt-padrao', { versao: '1.1', conteudo: 'Regras revisadas.', ativar: true });
     const depois = await json(await chamar('GET', '/api/prompt-padrao'));
-    expect(depois).toHaveLength(3);
+    expect(depois).toHaveLength(2);
     expect(depois.filter((v: any) => v.ativo)).toHaveLength(1);
     expect(depois.find((v: any) => v.ativo).versao).toBe('1.1');
 
