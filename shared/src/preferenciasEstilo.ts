@@ -254,6 +254,22 @@ const NOMES: Record<PoliticaNomes, string[]> = {
 /** Título da seção que o núcleo reserva para as preferências (o delta é a 6). */
 export const TITULO_SECAO_PREFERENCIAS = '## 5. PREFERÊNCIAS DE ESTILO DESTA OBRA';
 
+// A ressalva do glossário no cabeçalho (doc 15 §6) conserta um conflito DECLARADO, não
+// hipotético. O núcleo diz "Hierarquia: Glossário > Conteúdo > Forma natural. O glossário
+// é lei"; este cabeçalho dizia que, conflitando com "as seções anteriores", valem estas —
+// e a seção do glossário é uma seção anterior. Formalmente, uma chave derrubava o
+// glossário. Com `nomes_proprios: mesclar` ("Pessoa: sempre em pinyin"), um nome de pessoa
+// catalogado em forma traduzida punha as duas regras em guerra e quem decidia era o
+// modelo, de chamada em chamada.
+//
+// A mesma ressalva vai no cabeçalho do delta, em `comporPromptMae`. São os dois cabeçalhos
+// SUBORDINADOS que criavam o conflito; o do núcleo já dizia a coisa certa e não muda —
+// mexer nele exigiria cortar uma versão nova, e versões são imutáveis.
+//
+// Sem número de seção de propósito: a composição aceita núcleos arbitrários, inclusive
+// editados pelo usuário, e nada garante que o glossário seja a Seção 2 neles.
+export const RESSALVA_GLOSSARIO = 'exceto o glossário, que é lei acima de todas as camadas';
+
 /** Preferências → o bloco de markdown que entra no prompt mãe, com cabeçalho.
     Função pura: nada de data, aleatoriedade ou estado. */
 export function renderizarPreferencias(prefs: PreferenciasEstilo): string {
@@ -264,7 +280,7 @@ export function renderizarPreferencias(prefs: PreferenciasEstilo): string {
   return [
     TITULO_SECAO_PREFERENCIAS,
     '',
-    '*(Convenções de casa desta obra. Quando conflitarem com as seções anteriores, valem estas.)*',
+    `*(Convenções de casa desta obra. Quando conflitarem com as seções anteriores, valem estas — ${RESSALVA_GLOSSARIO}.)*`,
     '',
     `**Registro:** prosa para ${registro}.`,
     '',

@@ -140,6 +140,32 @@ describe('composição com preferências', () => {
   });
 });
 
+// Doc 15 §6. O Alfa declara "o glossário é lei", e os cabeçalhos de Beta e Delta se
+// diziam superiores a "todas as seções anteriores" / "as demais" — o que inclui a seção
+// do glossário. Não era hipótese: `nomes_proprios: mesclar` manda pessoa "sempre em
+// pinyin", e um nome catalogado em forma traduzida punha as duas regras em guerra.
+describe('hierarquia: o glossário é lei acima das três camadas', () => {
+  it('os cabeçalhos de Beta e Delta se autolimitam', () => {
+    const texto = comporPromptMae(NUCLEO_ENXUTO, 'Lin Feng fala em gírias.', PREFERENCIAS_PADRAO);
+    const beta = texto.slice(texto.indexOf('## 5. PREFERÊNCIAS'), texto.indexOf('## 6. DIRETRIZES'));
+    const delta = texto.slice(texto.indexOf('## 6. DIRETRIZES'));
+    expect(beta).toContain('exceto o glossário, que é lei acima de todas as camadas');
+    expect(delta).toContain('exceto o glossário, que é lei acima de todas as camadas');
+  });
+
+  // Sem número de seção: a composição aceita Alfas arbitrários, inclusive editados pelo
+  // usuário, e nada garante que o glossário seja a Seção 2 neles.
+  it('a exceção não cita número de seção', () => {
+    const texto = comporPromptMae(NUCLEO_ENXUTO, 'Delta.', PREFERENCIAS_PADRAO);
+    expect(texto).not.toContain('exceto o glossário (Seção');
+  });
+
+  it('vale também com o delta vazio — Beta sozinho não pode derrubar o glossário', () => {
+    const texto = comporPromptMae(NUCLEO_ENXUTO, '', PREFERENCIAS_PADRAO);
+    expect(texto).toContain('exceto o glossário, que é lei acima de todas as camadas');
+  });
+});
+
 describe('anterioridade: procedimento em vez de proibição', () => {
   // A redação antiga era negativa ("evite a forma simples") e enterrava a melhor
   // saída no meio da frase. Deu 11,7% de violação no capítulo 2 da 死人经, toda em

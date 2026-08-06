@@ -10,6 +10,7 @@
 import {
   MARCADOR_PREFERENCIAS,
   PREFERENCIAS_PADRAO,
+  RESSALVA_GLOSSARIO,
   renderizarPreferencias,
   type PreferenciasEstilo,
 } from '@dao-tale/shared';
@@ -35,7 +36,10 @@ export function comporPromptMae(
     ? [
         '## 6. DIRETRIZES ESPECÍFICAS DA OBRA',
         '',
-        '*(Regras desta seção têm precedência sobre as demais quando conflitarem.)*',
+        // A ressalva do glossário (doc 15 §6) — o mesmo conserto do cabeçalho das
+        // preferências, e pela mesma razão: "precedência sobre as demais" incluía a
+        // seção que declara o glossário como lei.
+        `*(Regras desta seção têm precedência sobre as demais quando conflitarem — ${RESSALVA_GLOSSARIO}.)*`,
         '',
         delta,
       ].join('\n')
