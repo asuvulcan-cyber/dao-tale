@@ -50,6 +50,14 @@ describe('registro de temas', () => {
     expect(temasNoTexto('Traduzir ou transliterar é decidido na Seção 5 (Nomes próprios).')).toEqual([]);
   });
 
+  // A ressalva do doc 15 §6 CEDE ao glossário; não decide nada sobre ele. Sem esta
+  // isenção o conserto da hierarquia se denunciaria em toda obra.
+  it('ressalva a outra camada também não é sobreposição', () => {
+    const cabecalho =
+      '*(Convenções de casa desta obra. Quando conflitarem com as seções anteriores, valem estas — exceto o glossário, que é lei acima de todas as camadas.)*';
+    expect(temasNoTexto(cabecalho)).toEqual([]);
+  });
+
   // Medido contra o NUCLEO_ENXUTO real: com padrões ingênuos estas duas linhas
   // davam falso positivo em `nomes_proprios`, e nenhuma delas decide nada sobre
   // transliteração.

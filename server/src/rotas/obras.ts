@@ -21,6 +21,8 @@ import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote }
 import { checkpointDaObra } from '../traducao/checkpoint.js';
 import { extrairCamadas } from '../db/promptPadraoInicial.js';
 import { exportarObra, importarObra } from '../db/portabilidade.js';
+import { avisosDaCamada, avisosDeAlfa } from './avisosCamada.js';
+import { relatorioOmega } from './relatorioOmega.js';
 import { backupSeArquivo } from '../db/backup.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { obterChave } from '../credenciais/index.js';
@@ -333,15 +335,16 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Um prompt completo não pode ser vazio.' } }, 400);
     }
     try {
-      return c.json(
-        reposPrompts.criar(db, obraId, {
-          ...corpo.data,
-          tipo,
-          nucleo_id: tipo === 'delta' ? (reposPromptPadrao.ativo(db)?.id ?? null) : null,
-          preferencias: normalizarPreferencias({ ...(ativo?.preferencias ?? {}), ...(corpo.data.preferencias ?? {}) }),
-        }),
-        201,
-      );
+      const criado = reposPrompts.criar(db, obraId, {
+        ...corpo.data,
+        tipo,
+        nucleo_id: tipo === 'delta' ? (reposPromptPadrao.ativo(db)?.id ?? null) : null,
+        preferencias: normalizarPreferencias({ ...(ativo?.preferencias ?? {}), ...(corpo.data.preferencias ?? {}) }),
+      });
+      // Aviso, nunca bloqueio (doc 15 §7): a versão fica salva de qualquer jeito. Um
+      // prompt `completo` legado não é Delta — nele o tema de Beta está no lugar certo.
+      const avisos = tipo === 'delta' ? avisosDaCamada(corpo.data.conteudo, 'delta') : [];
+      return c.json({ ...criado, avisos }, 201);
     } catch (e: any) {
       if (String(e.message).includes('UNIQUE')) {
         return c.json({ erro: { codigo: 'versao-duplicada', mensagem: 'Já existe uma versão com esse identificador nesta obra.' } }, 409);
@@ -350,7 +353,21 @@ export function rotasObras(db: BancoDados): Hono {
     }
   });
 
-  // Prompt mãe efetivo (núcleo + delta compostos) — prévia na UI e medição.
+  // Relatório do Ômega (doc 15 §7): o único lugar onde as três camadas se encontram, e
+  // por isso o único que enxerga sobreposição. As checagens de salvar olham uma camada
+  // por vez e não veriam um Delta impecável que ainda assim repete o que Beta decide.
+  app.get('/obras/:id/omega/relatorio', (c) => {
+    const composto = reposPrompts.composto(db, Number(c.req.param('id')));
+    if (!composto) {
+      return c.json(
+        { erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem Ômega: falta prompt ativo ou Alfa ativo.' } },
+        404,
+      );
+    }
+    return c.json(relatorioOmega(composto.texto));
+  });
+
+  // Ômega efetivo (Alfa + Beta + Delta compostos) — prévia na UI e medição.
   app.get('/obras/:id/prompt-composto', (c) => {
     const composto = reposPrompts.composto(db, Number(c.req.param('id')));
     if (!composto) {
@@ -508,7 +525,9 @@ export function rotasObras(db: BancoDados): Hono {
     const corpo = criarPromptPadraoSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     try {
-      return c.json(reposPromptPadrao.criar(db, corpo.data), 201);
+      // Os dois avisos que teriam evitado o sintoma de 2026-08-05: um Alfa que decide
+      // tema de Beta, e um Alfa sem o marcador que faz as chaves valerem.
+      return c.json({ ...reposPromptPadrao.criar(db, corpo.data), avisos: avisosDeAlfa(corpo.data.conteudo) }, 201);
     } catch (e: any) {
       if (String(e.message).includes('UNIQUE')) {
         return c.json({ erro: { codigo: 'versao-duplicada', mensagem: 'Já existe uma versão do prompt padrão com esse identificador.' } }, 409);

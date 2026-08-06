@@ -52,10 +52,21 @@ export interface Ocorrencia {
   trecho: string;
 }
 
-/** Uma linha que ENTREGA o tema a outra camada não está decidindo nada — está fazendo a
-    partição funcionar à vista. Um Alfa bem escrito deve poder dizer "isto se decide na
-    Seção 5" sem gerar aviso. */
-const REFERENCIA_ENTRE_CAMADAS = /decidid[oa] n[ao] Se[çc][ãa]o \d|ver (?:a )?Se[çc][ãa]o \d|Se[çc][ãa]o \d \(/i;
+/**
+ * Uma linha que ENTREGA o tema a outra camada, ou que CEDE a ela, não está decidindo
+ * nada — está fazendo a partição funcionar à vista, e é o oposto de sobreposição.
+ *
+ * Duas formas, e as duas apareceram no texto real:
+ *
+ *   remissão  "Traduzir ou transliterar é decidido na Seção 5 (Nomes próprios)"
+ *   ressalva  "…valem estas — exceto o glossário, que é lei acima de todas as camadas"
+ *
+ * A segunda é a linha que o conserto da hierarquia (doc 15 §6) pôs nos cabeçalhos de
+ * Beta e Delta. Sem esta isenção ela acusaria sobreposição de `glossario` em TODA obra —
+ * o conserto denunciando a si mesmo.
+ */
+const REMISSAO_OU_RESSALVA =
+  /decidid[oa] n[ao] Se[çc][ãa]o \d|ver (?:a )?Se[çc][ãa]o \d|Se[çc][ãa]o \d \(|exceto o gloss[áa]rio/i;
 
 export const TEMAS: readonly Tema[] = [
   {
@@ -181,7 +192,7 @@ export const TEMAS: readonly Tema[] = [
 export function temasNoTexto(texto: string): Ocorrencia[] {
   const achados: Ocorrencia[] = [];
   texto.split('\n').forEach((linha, n) => {
-    if (REFERENCIA_ENTRE_CAMADAS.test(linha)) return;
+    if (REMISSAO_OU_RESSALVA.test(linha)) return;
     for (const tema of TEMAS) {
       const m = linha.match(tema.padrao);
       if (!m || m.index === undefined) continue;
