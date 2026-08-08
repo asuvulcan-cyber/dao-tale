@@ -48,13 +48,20 @@ describe('recusar o veredito', () => {
     expect(reposTestes.rotulosDeRegra(db, obraId)).not.toContain('1-prosa-nao-legenda');
   });
 
-  it('a recorrência conta só a folha do fio', () => {
-    // Uma discussão de 4 turnos sobre a mesma regra é UMA lacuna, não quatro.
-    let pai: number | null = null;
-    for (let i = 0; i < 4; i++) pai = caso('4-sem-decalque', pai).id;
-    const outro = caso('4-sem-decalque', null);
-    expect(outro).toBeTruthy();
-    const r = reposTestes.recorrencias(db, obraId).find((x) => x.secao_regra === '4-sem-decalque');
-    expect(r?.casos).toBe(2); // a folha do fio + o caso solto
+  it('a recorrência conta a folha do fio, não a raiz', () => {
+    // Raiz e folha têm rótulos DIFERENTES de propósito: numa cadeia sem
+    // ramificação o número de raízes é sempre igual ao de folhas, então uma
+    // fixture de rótulo único não pegaria a correlação invertida (contar raiz
+    // em vez de folha). Contar raiz é a regressão que este teste existe para
+    // barrar — um fio já resolvido (a folha mudou de status e saiu da lista)
+    // continuaria empurrando a raiz como pendência para sempre.
+    const raiz = caso('4-sem-decalque', null);
+    const meio = caso(null, raiz.id);
+    caso('1-prosa-nao-legenda', meio.id); // a folha do fio
+    caso('1-prosa-nao-legenda', null); // caso solto, mesma regra da folha
+
+    const recorrencias = reposTestes.recorrencias(db, obraId);
+    expect(recorrencias).toEqual([{ secao_regra: '1-prosa-nao-legenda', casos: 2 }]);
+    expect(recorrencias.find((r) => r.secao_regra === '4-sem-decalque')).toBeUndefined();
   });
 });
