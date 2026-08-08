@@ -40,8 +40,18 @@ export type FaseTraducao = (typeof FASES_TRADUCAO)[number];
 // Categoria é texto livre: o usuário pode criar as suas; as padrão ficam em
 // CATEGORIAS_GLOSSARIO como sugestão. "Apagar" uma categoria = nenhum termo usá-la.
 export type CategoriaGlossario = string;
-export type Veredito = 'correto' | 'incorreto';
-export type StatusCasoTeste = 'confirmado' | 'corrigido' | 'pendente' | 'regra-nova-necessaria';
+// 'escolha-legitima': a tradução não está errada, mas também não é a única leitura
+// defensável. Sem ela isso era espremido em 'correto' com uma regra inventada em cima.
+export type Veredito = 'correto' | 'incorreto' | 'escolha-legitima';
+
+export type StatusCasoTeste =
+  | 'confirmado'
+  | 'corrigido'
+  | 'pendente'
+  | 'regra-nova-necessaria'
+  // O revisor discordou do veredito. Sai das recorrências e dos rótulos oferecidos
+  // ao modelo: veredito recusado não deve continuar empurrando regra nova.
+  | 'rejeitado';
 export type StatusTermoSugerido = 'pendente' | 'aceito' | 'rejeitado';
 
 /**
@@ -312,9 +322,14 @@ export interface CasoTeste {
   id: number;
   frase_id: number;
   obra_id: number;
+  /** Turno anterior do fio; null = raiz. */
+  caso_pai_id: number | null;
   trecho_zh: string;
   pergunta: string;
   veredito: Veredito;
+  /** Trata do motivo declarado na pergunta. Texto principal na tela. */
+  resposta: string;
+  /** Só quando uma regra decide o caso; '' caso contrário. */
   justificativa: string;
   secao_regra: string | null;
   correcao_proposta: string | null;
@@ -322,6 +337,7 @@ export interface CasoTeste {
   trecho_pt_errado: string | null;
   trecho_pt_corrigido: string | null;
   status: StatusCasoTeste;
+  motivo_rejeicao: string | null;
   provedor: string;
   modelo: string;
   criado_em: string;

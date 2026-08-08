@@ -202,14 +202,19 @@ export function rotasFrases(db: BancoDados): Hono {
       const caso = reposTestes.criar(db, {
         frase_id: frase.id,
         obra_id: obra.id,
+        // TODO(Task 3): a Task do contrato da revisão passa a preencher com o
+        // fio de réplicas e a resposta real vinda do provedor.
+        caso_pai_id: null,
         trecho_zh: resposta.trecho_zh,
         pergunta: corpo.data.pergunta,
         veredito: resposta.veredito,
+        resposta: '',
         justificativa: resposta.justificativa,
         secao_regra: resposta.secao_regra,
         correcao_proposta: resposta.correcao_proposta,
         trecho_pt_errado: resposta.trecho_pt_errado ?? null,
         trecho_pt_corrigido: resposta.trecho_pt_corrigido ?? null,
+        motivo_rejeicao: null,
         provedor: provedorId,
         modelo,
         resposta_bruta: resposta.bruta,

@@ -1006,7 +1006,8 @@ export const reposTestes = {
     db: BancoDados,
     dados: Omit<CasoTeste, 'id' | 'criado_em' | 'status'> & { resposta_bruta: string },
   ): CasoTeste {
-    const status: StatusCasoTeste = dados.veredito === 'correto' ? 'confirmado' : 'pendente';
+    // 'escolha-legitima' nasce confirmado, como 'correto': não há o que fazer.
+    const status: StatusCasoTeste = dados.veredito === 'incorreto' ? 'pendente' : 'confirmado';
     // Converge o rótulo: se a obra já usa uma grafia equivalente ("5-mais-que-
     // perfeito" quando o modelo devolveu "5.mais-que-perfeito"), grava a que já
     // existe. Assim o filtro por seção no Banco de Testes acha os casos todos,
@@ -1015,22 +1016,25 @@ export const reposTestes = {
     const info = db
       .prepare(
         `INSERT INTO banco_testes
-          (frase_id, obra_id, trecho_zh, pergunta, veredito, justificativa, secao_regra,
-           correcao_proposta, trecho_pt_errado, trecho_pt_corrigido, status, provedor, modelo, resposta_bruta)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (frase_id, obra_id, caso_pai_id, trecho_zh, pergunta, veredito, resposta, justificativa, secao_regra,
+           correcao_proposta, trecho_pt_errado, trecho_pt_corrigido, status, motivo_rejeicao, provedor, modelo, resposta_bruta)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         dados.frase_id,
         dados.obra_id,
+        dados.caso_pai_id ?? null,
         dados.trecho_zh,
         dados.pergunta,
         dados.veredito,
+        dados.resposta,
         dados.justificativa,
         secao_regra,
         dados.correcao_proposta,
         dados.trecho_pt_errado ?? null,
         dados.trecho_pt_corrigido ?? null,
         status,
+        dados.motivo_rejeicao ?? null,
         dados.provedor,
         dados.modelo,
         dados.resposta_bruta,
