@@ -27,92 +27,41 @@
 ## Ordem e dependências
 
 ```
-Task 1  (independente, pode ir a qualquer momento)
 Task 2  →  Task 3  →  Task 4  ┐
         →  Task 5             ├→  Task 9
 Task 6  →  Task 7             ┘
 Task 2  →  Task 8
 ```
 
+A numeração das tarefas 2–9 é preservada de propósito: a Task 1 foi **removida** (ver
+abaixo) e renumerar quebraria as referências cruzadas dos testes e dos commits.
+
 ---
 
-### Task 1: O gatilho 一直 na regra de anterioridade
+### Task 1: REMOVIDA — o gatilho 一直 virou trabalho de núcleo
 
-Camada **Beta**: texto de chave de estilo, não de núcleo. É a causa raiz dos casos #23/#24 — a lista de gatilhos enumera 向来 (quase sinônimo) mas não 一直, e o modelo adivinha nos dois sentidos.
+Esta tarefa acrescentaria 一直 à lista de gatilhos da chave Beta `mais_que_perfeito`.
+**Seria o conserto errado.** A apuração completa vai para um spec próprio, "Núcleo v3.1 —
+partículas e anterioridade"; o resumo abaixo basta para ninguém reintroduzir esta tarefa
+por engano.
 
-**Files:**
-- Modify: `shared/src/preferenciasEstilo.ts:192`
-- Test: `server/src/db/preferenciasEstilo.test.ts`
+Em resumo: a tabela de partículas polissêmicas do prompt *completo*
+(`server/src/db/promptPadraoInicial.ts:186`) trazia a linha
+*"**一直** · padrão a evitar: confundir com 总 · continuidade ininterrupta e concreta"*.
+O **núcleo enxuto** — o Alfa v3.0 ativo no VPS, 6203 chars — comprimiu as 9 linhas da
+tabela numa única bala que nomeia as partículas sem dizer o que fazer com cada uma. Em
+#24 o modelo glosou 一直 como "(sempre)", que é a glosa de 总: cometeu ao pé da letra o
+erro que a linha apagada nomeava.
 
-**Interfaces:**
-- Consumes: nada.
-- Produces: nada de API. Muda só o texto renderizado da chave `mais_que_perfeito: 'evitar'`.
+Além disso, a lista de gatilhos que esta tarefa editaria (曾经, 已经, 从来, 向来, 从小,
+自幼, 早已, 过) vive na **Beta** e faz trabalho de **Alfa**: dizer o que um advérbio
+chinês significa é universal. Acrescentar 一直 ali aprofundaria a sobreposição entre
+camadas — o modo de falha nº 1 da skill `camadas-do-prompt`, e a explicação de #23/#24
+terem sido decididos nos dois sentidos com três minutos de diferença.
 
-- [ ] **Step 1: Write the failing test**
-
-Em `server/src/db/preferenciasEstilo.test.ts`, acrescente:
-
-```ts
-import { PREFERENCIAS_PADRAO, renderizarPreferencias } from '@dao-tale/shared';
-
-describe('gatilhos de anterioridade', () => {
-  // 一直以为 produziu vereditos opostos na mesma frase (casos #23/#24 da 死人经):
-  // sem o gatilho na lista, a regra 2 ("tinha/havia + particípio") passa a valer e
-  // a IA marca a anterioridade duas vezes.
-  it('lista 一直 junto dos demais advérbios que já marcam anterioridade', () => {
-    const texto = renderizarPreferencias({ ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'evitar' });
-    expect(texto).toContain('一直');
-  });
-
-  it('mantém os gatilhos que já existiam', () => {
-    const texto = renderizarPreferencias({ ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'evitar' });
-    for (const gatilho of ['曾经', '已经', '从来', '向来', '从小', '自幼', '早已']) {
-      expect(texto).toContain(gatilho);
-    }
-  });
-
-  it('a variante permitir não ganha gatilho nenhum', () => {
-    // 'permitir' libera as três formas e não enumera gatilhos: se 一直 vazar para
-    // lá, a chave deixou de ter dois comportamentos distintos.
-    const texto = renderizarPreferencias({ ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'permitir' });
-    expect(texto).not.toContain('一直');
-  });
-});
-```
-
-`renderizarPreferencias` está em `shared/src/preferenciasEstilo.ts:284` e monta a Seção 5 inteira; o bloco do mais-que-perfeito vem da constante `MAIS_QUE_PERFEITO` (linha 188).
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npm -w server run test -- preferenciasEstilo`
-Expected: FAIL no primeiro `it` — `expected '…' to contain '一直'`. O segundo `it` já passa.
-
-- [ ] **Step 3: Write minimal implementation**
-
-Em `shared/src/preferenciasEstilo.ts`, na constante `MAIS_QUE_PERFEITO`, variante `evitar`, linha do "Gatilho no original":
-
-```ts
-    '   **Gatilho no original:** se o chinês trouxer 曾经, 已经, 从来(没), 一直, 向来, 从小, 自幼, 早已 ou o aspecto 过, a anterioridade **já está** no advérbio português que os traduz (`certa vez`, `já`, `nunca`, `sempre`, `desde pequeno`) — então o verbo vai no perfeito simples e **não** se marca de novo. `从来没关心过` → `nunca se importou`, nunca `nunca se importara`. `他还一直以为…` → `ele ainda achava…`, nunca `ele ainda tinha achado…`.',
-```
-
-Duas mudanças: 一直 entra na enumeração (ao lado de 向来, o vizinho semântico), e o exemplo com 一直以为 entra porque é a construção que falhou de verdade.
-
-- [ ] **Step 4: Run tests and typecheck**
-
-Run: `npm -w server run test && npm run typecheck`
-Expected: PASS. Confira que `server/src/db/promptPadraoInicial.test.ts` e `server/src/db/temasDoPrompt.test.ts` continuam verdes — o padrão do tema `mais_que_perfeito` é `/mais[-\s]que[-\s]perfeito|anterioridade|\bfizera\b|\bdissera\b/i` e não olha para os caracteres chineses, então não deve haver efeito colateral.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add shared/src/preferenciasEstilo.ts server/src/db/preferenciasEstilo.test.ts
-git commit -m "一直 entra na lista de gatilhos da anterioridade
-
-Os casos #23/#24 do banco da 死人经 são a mesma frase com vereditos opostos em
-3 minutos, ambos argumentando o mais-que-perfeito. A lista de gatilhos tinha
-向来 mas não 一直: sem o gatilho, a regra 2 passa a valer e a IA marca a
-anterioridade duas vezes; com ele, o perfeito simples é o caminho declarado."
-```
+O conserto certo é versão nova de Alfa com a tabela restaurada, e a chave Beta passando a
+**remeter** ao núcleo em vez de ler chinês. Isso pede corte de versão imutável e medição
+A/B própria, e por isso saiu deste plano.
 
 ---
 
