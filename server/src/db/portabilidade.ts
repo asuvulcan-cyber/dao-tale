@@ -9,6 +9,16 @@ import { reposObras } from './repos.js';
 
 export const VERSAO_SCHEMA = 1;
 
+// Um export gerado ANTES da migração 022 ainda tem 'geral' gravado literalmente em
+// secao_regra — a migração limpou o banco existente, não os arquivos já exportados.
+// Sem normalizar aqui, reimportar um export desses reintroduz o valor de fuga, e ele
+// volta a vazar em recorrencias()/rotulosDeRegra() como se dúvidas sem relação fossem
+// uma lacuna sistemática (mesmo raciocínio da migração 022 e de ia/respostas.ts).
+function normalizarSecaoRegraImportada(s: string | null | undefined): string | null {
+  const t = s?.trim();
+  return t && t.toLowerCase() !== 'geral' ? t : null;
+}
+
 const exportSchema = z.object({
   formato: z.literal('dao-tale-export'),
   versao_schema: z.literal(VERSAO_SCHEMA),
@@ -104,15 +114,27 @@ const exportSchema = z.object({
   ),
   banco_testes: z.array(
     z.object({
+      // id e caso_pai_id existem só para reconstruir o FIO na importação: os casos
+      // ganham id novo, então o pai é remapeado por este par.
+      id: z.number().int().optional(),
+      caso_pai_id: z.number().int().nullable().optional(),
       capitulo_numero: z.number().int(),
       frase_ordem: z.number().int(),
       trecho_zh: z.string(),
       pergunta: z.string(),
-      veredito: z.enum(['correto', 'incorreto']),
+      veredito: z.enum(['correto', 'incorreto', 'escolha-legitima']),
+      // Ausente em export anterior a 2026-08: cai para justificativa.
+      resposta: z.string().optional(),
       justificativa: z.string(),
       secao_regra: z.string().nullable(),
       correcao_proposta: z.string().nullable(),
-      status: z.enum(['confirmado', 'corrigido', 'pendente', 'regra-nova-necessaria']),
+      // Faltavam desde a migração 015 — o par cirúrgico não sobrevivia a um
+      // export/import, e ninguém percebeu porque nada quebra: a correção só
+      // volta a ser aplicada pela frase inteira.
+      trecho_pt_errado: z.string().nullable().optional(),
+      trecho_pt_corrigido: z.string().nullable().optional(),
+      status: z.enum(['confirmado', 'corrigido', 'pendente', 'regra-nova-necessaria', 'rejeitado']),
+      motivo_rejeicao: z.string().nullable().optional(),
       provedor: z.string(),
       modelo: z.string(),
       resposta_bruta: z.string(),
@@ -214,15 +236,21 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
       if (!info) return [];
       return [
         {
+          id: c.id,
+          caso_pai_id: c.caso_pai_id,
           capitulo_numero: info.capitulo_numero,
           frase_ordem: info.frase_ordem,
           trecho_zh: c.trecho_zh,
           pergunta: c.pergunta,
           veredito: c.veredito,
+          resposta: c.resposta,
           justificativa: c.justificativa,
           secao_regra: c.secao_regra,
           correcao_proposta: c.correcao_proposta,
+          trecho_pt_errado: c.trecho_pt_errado,
+          trecho_pt_corrigido: c.trecho_pt_corrigido,
           status: c.status,
+          motivo_rejeicao: c.motivo_rejeicao,
           provedor: c.provedor,
           modelo: c.modelo,
           resposta_bruta: c.resposta_bruta,
@@ -338,28 +366,49 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
       ).run(obraId, capId, t.termo_zh, t.termo_pt, t.categoria, t.contexto, t.status, t.criado_em);
     }
 
+    // Duas passagens: o pai pode vir DEPOIS do filho no arquivo, então primeiro
+    // insere tudo com caso_pai_id nulo e guarda id-antigo → id-novo; só então
+    // religa o fio. Uma passagem só religaria pelo id ERRADO em silêncio.
+    const idNovoPorAntigo = new Map<number, number>();
     for (const c of dados.banco_testes) {
       const fraseId = fraseIdPorChave.get(`${c.capitulo_numero}:${c.frase_ordem}`);
       if (!fraseId) continue;
-      db.prepare(
-        `INSERT INTO banco_testes (frase_id, obra_id, trecho_zh, pergunta, veredito, justificativa, secao_regra,
-           correcao_proposta, status, provedor, modelo, resposta_bruta, criado_em)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        fraseId,
-        obraId,
-        c.trecho_zh,
-        c.pergunta,
-        c.veredito,
-        c.justificativa,
-        c.secao_regra,
-        c.correcao_proposta,
-        c.status,
-        c.provedor,
-        c.modelo,
-        c.resposta_bruta,
-        c.criado_em,
-      );
+      const info = db
+        .prepare(
+          `INSERT INTO banco_testes (frase_id, obra_id, caso_pai_id, trecho_zh, pergunta, veredito,
+             resposta, justificativa, secao_regra, correcao_proposta, trecho_pt_errado, trecho_pt_corrigido,
+             status, motivo_rejeicao, provedor, modelo, resposta_bruta, criado_em)
+           VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          fraseId,
+          obraId,
+          c.trecho_zh,
+          c.pergunta,
+          c.veredito,
+          c.resposta ?? c.justificativa,
+          c.justificativa,
+          normalizarSecaoRegraImportada(c.secao_regra),
+          c.correcao_proposta,
+          c.trecho_pt_errado ?? null,
+          c.trecho_pt_corrigido ?? null,
+          c.status,
+          c.motivo_rejeicao ?? null,
+          c.provedor,
+          c.modelo,
+          c.resposta_bruta,
+          c.criado_em,
+        );
+      if (c.id != null) idNovoPorAntigo.set(c.id, Number(info.lastInsertRowid));
+    }
+    const religar = db.prepare('UPDATE banco_testes SET caso_pai_id = ? WHERE id = ?');
+    for (const c of dados.banco_testes) {
+      if (c.id == null || c.caso_pai_id == null) continue;
+      const filho = idNovoPorAntigo.get(c.id);
+      const pai = idNovoPorAntigo.get(c.caso_pai_id);
+      // Pai fora do arquivo (export parcial) → o caso vira raiz em vez de apontar
+      // para um id qualquer da obra nova.
+      if (filho != null && pai != null) religar.run(pai, filho);
     }
 
     return reposObras.obter(db, obraId)!;

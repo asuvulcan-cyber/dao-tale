@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { camadaDoRotulo } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposFrases, reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
 
@@ -263,19 +264,25 @@ export function rotasCuradoria(db: BancoDados): Hono {
 
   app.get('/obras/:obraId/testes/exportar', (c) => {
     const { casos } = reposTestes.listar(db, Number(c.req.param('obraId')), { limite: 1_000_000 });
-    const linhas = ['id,frase_id,trecho_zh,pergunta,veredito,justificativa,secao_regra,correcao_proposta,status,provedor,modelo,criado_em'];
+    const linhas = [
+      'id,frase_id,caso_pai_id,trecho_zh,pergunta,veredito,resposta,justificativa,secao_regra,camada,correcao_proposta,status,motivo_rejeicao,provedor,modelo,criado_em',
+    ];
     for (const t of casos) {
       linhas.push(
         [
           t.id,
           t.frase_id,
+          t.caso_pai_id ?? '',
           campoCsv(t.trecho_zh),
           campoCsv(t.pergunta),
           t.veredito,
+          campoCsv(t.resposta),
           campoCsv(t.justificativa),
           campoCsv(t.secao_regra),
+          camadaDoRotulo(t.secao_regra ?? '')?.camada ?? '',
           campoCsv(t.correcao_proposta),
           t.status,
+          campoCsv(t.motivo_rejeicao),
           t.provedor,
           t.modelo,
           t.criado_em,
