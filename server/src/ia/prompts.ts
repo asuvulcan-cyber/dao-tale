@@ -383,6 +383,7 @@ export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'o
     '- A regra deve prevenir os erros dos casos apresentados sem contradizer as demais seções do prompt.',
     '- NÃO reescreva regras que já funcionam; NÃO proponha nada genérico que as seções universais já cubram.',
     '- NÃO proponha regra sobre aspas/travessão no diálogo, marcação do pensamento, mais-que-perfeito, nota do tradutor, onomatopeia ou público-alvo: isso é configuração da obra (a Seção 5, quando presente), resolvida por uma chave e não por texto de diretriz.',
+    'A mensagem do usuário pode trazer casos RECUSADOS pelo revisor. Eles são correção de rumo, não material a generalizar: NÃO proponha regra que reproduza o erro apontado neles.',
     'Para cada proposta devolva: secao_regra (o identificador dos casos que a motivaram), regra_proposta (o texto pronto para entrar nas diretrizes) e justificativa (1 frase ligando aos casos).',
     'Se os casos não sustentarem nenhuma regra nova, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
@@ -410,6 +411,16 @@ export function usuarioRefinarPrompt(req: RequisicaoRefinarPrompt): string {
       partes.push(`  Pergunta do revisor: ${c.pergunta}`);
       partes.push(`  Veredito: ${c.veredito} — ${c.justificativa}`);
       if (c.correcao_proposta) partes.push(`  Correção aplicada: ${c.correcao_proposta}`);
+    }
+  }
+  if (req.recusados && req.recusados.length > 0) {
+    partes.push('');
+    partes.push('### Casos em que o revisor RECUSOU o veredito da IA');
+    for (const r of req.recusados) {
+      partes.push(`- ZH: ${r.trecho_zh}`);
+      partes.push(`  Pergunta do revisor: ${r.pergunta}`);
+      partes.push(`  Veredito recusado: ${r.veredito} — ${r.resposta}`);
+      if (r.motivo_rejeicao) partes.push(`  Motivo da recusa: ${r.motivo_rejeicao}`);
     }
   }
   return partes.join('\n');

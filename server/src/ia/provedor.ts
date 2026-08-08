@@ -176,6 +176,10 @@ export interface RequisicaoRefinarPrompt {
     justificativa: string;
     correcao_proposta: string | null;
   }[];
+  /** Casos em que o revisor RECUSOU o veredito da IA (doc 15 §9): é o único
+      lugar do app onde ele escreve POR ESCRITO por que ela errou — correção de
+      rumo, não material a generalizar. */
+  recusados?: { trecho_zh: string; pergunta: string; veredito: string; resposta: string; motivo_rejeicao: string | null }[];
 }
 
 export interface PropostaRefinamento {

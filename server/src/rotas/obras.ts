@@ -6,8 +6,8 @@ import {
   PROVEDORES_IDS,
   MODOS_THINKING,
   TEMPERATURA_MAX,
+  camadaDoRotulo,
   normalizarPreferencias,
-  preferenciaQueCobre,
   resolverTemperatura,
   type Configuracoes,
   type EventoLote,
@@ -422,30 +422,40 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'sem-recorrencias', mensagem: 'Nenhuma seção/regra com 2+ casos recorrentes no banco de testes — nada indica lacuna sistemática do prompt.' } }, 409);
     }
 
-    // Recorrência que é CHAVE (diálogo, mais-que-perfeito, registro…) não vira
-    // diretriz: o próprio prompt de refinamento proíbe propor regra sobre elas.
-    // Filtrar aqui evita pagar uma chamada cuja resposta já se sabe: na 死人经
-    // foram três chamadas seguidas para ouvir "nenhuma regra sustentada", com 7
-    // dos 10 casos sendo mais-que-perfeito.
-    const porPreferencia = todasRecorrencias
-      .map((r) => ({ ...r, preferencia: preferenciaQueCobre(r.secao_regra) }))
-      .filter((r) => r.preferencia !== null);
-    const recorrencias = todasRecorrencias.filter((r) => preferenciaQueCobre(r.secao_regra) === null);
-    if (recorrencias.length === 0) {
-      const lista = porPreferencia.map((r) => `${r.secao_regra} (${r.casos})`).join(', ');
+    // Roteamento por camada dona (doc 15 §7). A partição por tema diz que cada
+    // assunto pertence a UMA camada: recorrência de chave de estilo se resolve
+    // virando a chave, e recorrência de tema do núcleo é versão nova de Alfa ou
+    // desobediência do modelo — nenhuma das duas vira diretriz de obra. Filtrar
+    // aqui evita pagar uma chamada cuja resposta já se sabe.
+    const classificadas = todasRecorrencias.map((r) => ({ ...r, camada: camadaDoRotulo(r.secao_regra)?.camada ?? null }));
+    const daObra = classificadas.filter((r) => r.camada === null || r.camada === 'delta');
+    const deChave = classificadas.filter((r) => r.camada === 'beta');
+    const deNucleo = classificadas.filter((r) => r.camada === 'alfa');
+
+    if (daObra.length === 0) {
+      const lista = (l: typeof classificadas) => l.map((r) => `${r.secao_regra} (${r.casos})`).join(', ');
+      const partes: string[] = [];
+      if (deChave.length > 0) {
+        partes.push(
+          `Chaves de estilo: ${lista(deChave)}. Isso se resolve virando a chave em "Preferências de estilo" — ou o erro é o modelo desobedecendo uma regra que já existe.`,
+        );
+      }
+      if (deNucleo.length > 0) {
+        partes.push(
+          `Regras universais do núcleo: ${lista(deNucleo)}. Ou a regra do núcleo tem buraco — e aí é uma versão nova de Alfa, com as duas medições do registro de temas — ou o modelo desobedeceu, e aí o conserto é temperatura, modelo ou posição no prompt. Escrever diretriz de obra sobre isso criaria sobreposição entre camadas.`,
+        );
+      }
       return c.json(
         {
           erro: {
-            codigo: 'so-preferencias',
-            mensagem:
-              `As recorrências desta obra são preferências de estilo, não lacunas de diretriz: ${lista}. ` +
-              'Isso se resolve virando a chave em "Preferências de estilo" (ou o erro é do modelo desobedecendo uma regra que já existe), ' +
-              'não escrevendo diretriz nova — por isso nem gastei a chamada.',
+            codigo: 'so-camadas-donas',
+            mensagem: `${partes.join(' ')} Nenhuma recorrência é candidata a diretriz de obra — por isso nem gastei a chamada.`,
           },
         },
         409,
       );
     }
+    const recorrencias = daObra;
 
     // Até 5 casos por seção recorrente mantêm a chamada enxuta e representativa.
     const casos = recorrencias.flatMap((r) =>
@@ -476,6 +486,18 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
     }
 
+    // O motivo da recusa é o único lugar do app onde o revisor diz POR ESCRITO
+    // que a IA errou. Sem isso, o refinador só vê os casos em que ela acertou.
+    const recusados = reposTestes
+      .listar(db, obraId, { status: 'rejeitado', limite: 10 })
+      .casos.map((caso) => ({
+        trecho_zh: caso.trecho_zh,
+        pergunta: caso.pergunta,
+        veredito: caso.veredito,
+        resposta: caso.resposta,
+        motivo_rejeicao: caso.motivo_rejeicao,
+      }));
+
     try {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.refinarPrompt(chave, {
@@ -486,6 +508,7 @@ export function rotasObras(db: BancoDados): Hono {
         omega: prompt.texto,
         deltaAtual: prompt.prompt.tipo === 'delta' ? prompt.prompt.conteudo : (extrairCamadas(prompt.prompt.conteudo)?.delta ?? ''),
         casos,
+        recusados,
       });
       registrarEvento(db, {
         obra_id: obraId,
