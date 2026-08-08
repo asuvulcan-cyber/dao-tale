@@ -112,6 +112,19 @@ export interface RequisicaoRevisao {
    *  para o modelo REUSAR um em vez de inventar variação nova a cada chamada —
    *  é o que permite agrupar casos recorrentes e detectar lacuna sistemática. */
   rotulosConhecidos?: string[];
+  /** Turnos anteriores do fio, do mais antigo ao mais recente. Sem eles a réplica
+   *  reinicia a dúvida — foi o que produziu vereditos opostos na mesma frase. */
+  turnosAnteriores?: {
+    pergunta: string;
+    resposta: string;
+    veredito: string;
+    secao_regra: string | null;
+    correcao_proposta: string | null;
+    recusado: boolean;
+    motivo_rejeicao: string | null;
+  }[];
+  /** Quantos turnos ficaram de fora pelo teto — vai dito ao modelo. */
+  turnosOmitidos?: number;
 }
 
 export interface RespostaRevisaoProvedor extends RespostaRevisao {

@@ -200,6 +200,7 @@ export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'omega' | 'glo
     'A PERGUNTA DO USUÁRIO é a premissa da sua análise, não apenas o endereço da frase.',
     'Se a pergunta declara um motivo ("o original diz X", "isto soa Y", "no capítulo anterior ficou Z"), sua resposta DEVE tratar desse motivo — confirmando-o ou refutando-o pelo texto-fonte chinês. Nunca substitua o motivo do usuário por outro argumento.',
     'Se o motivo dele não procede, diga isso e mostre onde no chinês. Concordar por concordar é pior que discordar.',
+    'Quando houver "Discussão até aqui", diga explicitamente se você MANTÉM ou REVISA o veredito anterior, e por quê. Repetir o argumento já contestado sem endereçar a contestação é o pior desfecho possível.',
     'Responda exclusivamente pelo formato estruturado, preenchendo:',
     '- trecho_zh: o trecho EXATO do chinês que fundamenta sua análise;',
     '- resposta: a resposta à dúvida, endereçando o motivo declarado. É o que o revisor lê primeiro;',
@@ -237,6 +238,22 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
     partes.push('### Rótulos de regra já usados nesta obra (REUSE um deles se a regra for a mesma):');
     partes.push(req.rotulosConhecidos.map((r) => `- ${r}`).join('\n'));
     partes.push('Só invente um rótulo novo se nenhum destes descrever a regra em questão.');
+    partes.push('');
+  }
+  if (req.turnosAnteriores && req.turnosAnteriores.length > 0) {
+    partes.push('### Discussão até aqui (você já respondeu isto; o usuário replicou):');
+    if (req.turnosOmitidos && req.turnosOmitidos > 0) {
+      partes.push(`(${req.turnosOmitidos} turno(s) intermediário(s) omitido(s) por tamanho.)`);
+    }
+    req.turnosAnteriores.forEach((t, i) => {
+      partes.push(`[turno ${i + 1}] usuário: ${t.pergunta}`);
+      const regra = t.secao_regra ? ` · regra: ${t.secao_regra}` : '';
+      partes.push(`[turno ${i + 1}] você: (${t.veredito}${regra}) ${t.resposta}`);
+      if (t.correcao_proposta) partes.push(`[turno ${i + 1}] correção que você propôs: ${t.correcao_proposta}`);
+      if (t.recusado) {
+        partes.push(`[turno ${i + 1}] o usuário RECUSOU esse veredito${t.motivo_rejeicao ? `: ${t.motivo_rejeicao}` : '.'}`);
+      }
+    });
     partes.push('');
   }
   partes.push('### FRASE QUESTIONADA:');

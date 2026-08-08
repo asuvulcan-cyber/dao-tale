@@ -1133,6 +1133,29 @@ export const reposTestes = {
       .all(obraId) as { secao_regra: string }[];
     return linhas.map((l) => l.secao_regra);
   },
+
+  /** A cadeia de réplicas da raiz até o caso dado, inclusive. Recursiva por
+      caso_pai_id — sem ela a segunda pergunta sobre a mesma frase não sabe o que
+      a primeira respondeu, e o modelo já devolveu vereditos opostos por isso. */
+  fio(db: BancoDados, casoId: number): CasoTeste[] {
+    return db
+      .prepare(
+        `WITH RECURSIVE cadeia(id) AS (
+           SELECT ?
+           UNION ALL
+           SELECT t.caso_pai_id FROM banco_testes t JOIN cadeia c ON t.id = c.id
+           WHERE t.caso_pai_id IS NOT NULL
+         )
+         SELECT b.* FROM banco_testes b JOIN cadeia ON b.id = cadeia.id
+         ORDER BY b.criado_em, b.id`,
+      )
+      .all(casoId) as CasoTeste[];
+  },
+
+  temFilho(db: BancoDados, casoId: number): boolean {
+    const l = db.prepare('SELECT 1 n FROM banco_testes WHERE caso_pai_id = ? LIMIT 1').get(casoId);
+    return l !== undefined;
+  },
 };
 
 /** Rótulo de regra equivalente já usado na obra (o mais frequente), ou o próprio

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { PROVEDORES_IDS, resolverTemperatura, type ProvedorId } from '@dao-tale/shared';
+import { PROVEDORES_IDS, resolverTemperatura, type CasoTeste, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposTestes, reposUso } from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
@@ -15,7 +15,37 @@ const revisarSchema = z.object({
   pergunta: z.string().min(1),
   provedor: z.enum(PROVEDORES_IDS).optional(),
   modelo: z.string().optional(),
+  caso_pai_id: z.number().int().optional(),
 });
+
+/** Teto de turnos enviados ao modelo. Sem ele uma discussão longa cresce o prompt
+    sem limite e estoura o desenho de cache. Mantém o PRIMEIRO (que fixa a dúvida)
+    e os mais recentes. */
+export const TETO_TURNOS = 6;
+
+export interface TurnoRevisao {
+  pergunta: string;
+  resposta: string;
+  veredito: string;
+  secao_regra: string | null;
+  correcao_proposta: string | null;
+  recusado: boolean;
+  motivo_rejeicao: string | null;
+}
+
+export function montarTurnos(fio: CasoTeste[]): TurnoRevisao[] {
+  const turnos = fio.map((c) => ({
+    pergunta: c.pergunta,
+    resposta: c.resposta,
+    veredito: c.veredito,
+    secao_regra: c.secao_regra,
+    correcao_proposta: c.correcao_proposta,
+    recusado: c.status === 'rejeitado',
+    motivo_rejeicao: c.motivo_rejeicao,
+  }));
+  if (turnos.length <= TETO_TURNOS) return turnos;
+  return [turnos[0], ...turnos.slice(-(TETO_TURNOS - 1))];
+}
 
 export function rotasFrases(db: BancoDados): Hono {
   const app = new Hono();
@@ -154,6 +184,22 @@ export function rotasFrases(db: BancoDados): Hono {
       return ultimas ? lista.slice(-n) : lista.slice(0, n);
     };
 
+    let turnosAnteriores: TurnoRevisao[] | undefined;
+    let omitidos = 0;
+    if (corpo.data.caso_pai_id !== undefined) {
+      const pai = reposTestes.obter(db, corpo.data.caso_pai_id);
+      if (!pai || pai.frase_id !== frase.id) {
+        return c.json({ erro: { codigo: 'pai-invalido', mensagem: 'O caso anterior não existe ou é de outra frase.' } }, 400);
+      }
+      // Replicar no meio de um fio criaria dois ramos sem utilidade nenhuma.
+      if (reposTestes.temFilho(db, pai.id)) {
+        return c.json({ erro: { codigo: 'pai-invalido', mensagem: 'Este caso já tem uma réplica. Responda ao turno mais recente do fio.' } }, 400);
+      }
+      const fio = reposTestes.fio(db, pai.id);
+      turnosAnteriores = montarTurnos(fio);
+      omitidos = fio.length - turnosAnteriores.length;
+    }
+
     const vizinhasAntes = vizinhas((o) => o < frase.ordem, true);
     const vizinhasDepois = vizinhas((o) => o > frase.ordem, false);
     const glossarioTodo = reposGlossario.listar(db, obra.id);
@@ -189,6 +235,8 @@ export function rotasFrases(db: BancoDados): Hono {
         },
         pergunta: corpo.data.pergunta,
         rotulosConhecidos: reposTestes.rotulosDeRegra(db, obra.id),
+        turnosAnteriores,
+        turnosOmitidos: omitidos,
       });
       registrarEvento(db, {
         obra_id: obra.id,
@@ -202,8 +250,7 @@ export function rotasFrases(db: BancoDados): Hono {
       const caso = reposTestes.criar(db, {
         frase_id: frase.id,
         obra_id: obra.id,
-        // O caso_pai_id de verdade (fio de réplicas) chega na Task 4.
-        caso_pai_id: null,
+        caso_pai_id: corpo.data.caso_pai_id ?? null,
         trecho_zh: resposta.trecho_zh,
         pergunta: corpo.data.pergunta,
         veredito: resposta.veredito,
