@@ -63,7 +63,7 @@ sentidos de uma lista incompleta. Ver §3.
 | Delta da obra (`prompts.conteudo`) | **0 chars**, nas duas versões |
 | Chamadas de refinamento | 2, ambas em 2026-08-05 |
 | Frases com edição manual e diferença real | **146** de 485 |
-| Eventos de IA com `custo_estimado` | **0 de 35** |
+| Eventos de IA com `custo_estimado` | **0 de 35** (preços não cadastrados — ver §3.2) |
 
 ## 2. Escopo
 
@@ -73,9 +73,7 @@ regra, roteamento do refino por camada, a gaveta, portabilidade e testes.
 **Não entra:** item 3 (aprender com as edições manuais) e item 4 (varredura obra-inteira).
 A §9 registra os ganchos que este trabalho deixa prontos para eles.
 
-## 3. Fase 0 — três consertos que não dependem deste desenho
-
-Independentes entre si e do resto do spec. Podem ir antes, e valem por si.
+## 3. Fase 0 — o que não depende deste desenho
 
 **3.1 一直 na lista de gatilhos.** Acrescentar 一直 à enumeração de
 [preferenciasEstilo.ts:192](../../../shared/src/preferenciasEstilo.ts#L192), junto de
@@ -83,21 +81,24 @@ Independentes entre si e do resto do spec. Podem ir antes, e valem por si.
 versão nova de Alfa. O teste é o par de #23/#24: com o gatilho presente, a leitura
 correta (`perfeito simples`, sem mais-que-perfeito) deixa de depender de sorte.
 
-**3.2 Preços dos modelos em uso.** `precos_modelos` cobre só `claude:*`; os modelos
-realmente usados (`deepseek:deepseek-v4-flash`, `deepseek:deepseek-v4-pro`,
-`gemini:gemini-flash-latest`) não têm preço, e por isso `custo_estimado` é `NULL` em
-100% dos eventos e a aba Custos está vazia. Cadastrar os três com os valores da tabela
-vigente de cada provedor **no dia do conserto** — não estimar de memória — e rodar
-`POST /telemetria/recalcular`
+**3.2 Preços — não é código, é preenchimento.** `custo_estimado` é `NULL` nos 35 eventos
+porque `precos_modelos` cobre só `claude:*`, e os modelos em uso são
+`deepseek:deepseek-v4-flash`, `deepseek:deepseek-v4-pro` e `gemini:gemini-flash-latest`.
+
+Isso é **decisão deliberada**, não defeito: o comentário de
+[index.ts:607](../../../shared/src/index.ts#L607) diz que só a família Claude vem de
+fábrica, "os preços que dá para afirmar sem inventar", e que todo outro provedor começa
+sem preço para o painel contar "N chamadas sem preço" em vez de exibir US$ 0,00 como se
+fosse grátis. O aviso existe e está na tela
+([Telemetria.tsx:56](../../../web/src/paginas/Telemetria.tsx#L56)): *"35 chamada(s) sem
+preço cadastrado — este total está incompleto"*, com a lista de quais modelos.
+
+A ação, então, é operacional e não entra no plano de implementação: cadastrar os três
+pares em **Configurações → preços**, com os valores da tabela vigente de cada provedor no
+dia, preencher `taxa_usd_brl` (hoje `0`) e rodar `POST /telemetria/recalcular`
 ([sistema.ts:85](../../../server/src/rotas/sistema.ts#L85)) para preencher o histórico.
-Preencher também `taxa_usd_brl`, hoje em `0`.
-
-*Critério de aceite:* nenhum evento novo com `custo_estimado IS NULL` para os modelos
-cadastrados, e a aba Custos mostrando valor diferente de zero.
-
-**3.3 `cotas_diarias` sem deepseek.** A configuração lista gemini, openrouter e groq;
-deepseek é o provedor padrão e está de fora. Acrescentar com a cota real (ou `0` para
-"sem teto", como os outros), para o indicador de cota parar de mentir por omissão.
+São dois minutos de tela, e é o que torna o custo da revisão — e portanto o julgamento
+sobre o fio da §6 — verificável em dinheiro.
 
 ## 4. Dados — migração `022`
 
@@ -289,8 +290,15 @@ export function camadaDoRotulo(rotulo: string): { tema: Tema; camada: Camada } |
 Lê `TEMAS` por `padraoRotulo ?? padrao` sobre o rótulo normalizado, **sem** o recorte
 `filtravel` e **sem** o recorte `dono === 'beta'` que `preferenciaQueCobre` aplica — os
 dois recortes existem porque aquele caminho derruba candidato em silêncio, e este só
-informa. `preferenciaQueCobre` ([index.ts:65](../../../shared/src/index.ts#L65)) passa a
-ser o caso particular: `camadaDoRotulo(r)` com `camada === 'beta'` e `tema.filtravel`.
+informa.
+
+`preferenciaQueCobre` ([index.ts:65](../../../shared/src/index.ts#L65)) **não é
+reescrita em cima dela.** As duas parecem a mesma busca, mas o `find` percorre `TEMAS` na
+ordem do array e para no primeiro casamento: um rótulo que casasse com `nomes_proprios`
+(beta, `filtravel: false`) e com `registro` devolveria `registro` hoje e `null` na versão
+delegada — regressão silenciosa num caminho que descarta candidato pago. As duas funções
+compartilham `normalizarSecaoRegra` e o registro, e mantêm o predicado próprio. O teste
+de não-regressão está na §12.7.
 
 Nada é gravado em coluna: o registro evolui e um valor gravado envelheceria. É a mesma
 razão de `temasNoTexto` ser função pura.
@@ -330,9 +338,8 @@ histórico da gaveta mostram o rótulo com a etiqueta da camada. Hoje, olhando
 
 Hoje a rota filtra só as recorrências cobertas por chave de Beta e devolve `409
 so-preferencias` sem gastar a chamada ([obras.ts:430](../../../server/src/rotas/obras.ts#L430)).
-Esse **comportamento** está certo e se mantém — o que muda por dentro é só a
-implementação de `preferenciaQueCobre`, que passa a derivar de `camadaDoRotulo` (§8.2)
-sem alterar o que devolve. O que falta é o ramo de **Alfa**:
+Esse **comportamento** está certo e se mantém; `preferenciaQueCobre` fica como está, pelo
+motivo da §8.2. O que falta é o ramo de **Alfa**:
 
 ```
 recorrências (≥2 casos · folha do fio · sem rejeitados · secao_regra não nula)
