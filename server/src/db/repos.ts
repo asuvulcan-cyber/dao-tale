@@ -1042,8 +1042,14 @@ export const reposTestes = {
     return this.obter(db, Number(info.lastInsertRowid))!;
   },
 
-  atualizarStatus(db: BancoDados, id: number, status: StatusCasoTeste): CasoTeste | undefined {
-    db.prepare('UPDATE banco_testes SET status = ? WHERE id = ?').run(status, id);
+  atualizarStatus(db: BancoDados, id: number, status: StatusCasoTeste, motivo: string | null = null): CasoTeste | undefined {
+    // O motivo só faz sentido na recusa; em qualquer outro status ele é limpo,
+    // senão um caso reaberto carrega a justificativa de uma recusa desfeita.
+    db.prepare('UPDATE banco_testes SET status = ?, motivo_rejeicao = ? WHERE id = ?').run(
+      status,
+      status === 'rejeitado' ? motivo : null,
+      id,
+    );
     return this.obter(db, id);
   },
 
@@ -1090,8 +1096,12 @@ export const reposTestes = {
   recorrencias(db: BancoDados, obraId: number): { secao_regra: string; casos: number }[] {
     const linhas = db
       .prepare(
-        `SELECT secao_regra FROM banco_testes
-         WHERE obra_id = ? AND status IN ('pendente','regra-nova-necessaria','corrigido') AND secao_regra IS NOT NULL`,
+        `SELECT secao_regra FROM banco_testes t
+         WHERE obra_id = ? AND status IN ('pendente','regra-nova-necessaria','corrigido')
+           AND secao_regra IS NOT NULL
+           -- Só a FOLHA de cada fio: uma discussão de quatro réplicas sobre a mesma
+           -- regra é uma lacuna, não quatro.
+           AND NOT EXISTS (SELECT 1 FROM banco_testes f WHERE f.caso_pai_id = t.id)`,
       )
       .all(obraId) as { secao_regra: string }[];
 
@@ -1127,7 +1137,7 @@ export const reposTestes = {
     const linhas = db
       .prepare(
         `SELECT secao_regra, COUNT(*) n FROM banco_testes
-         WHERE obra_id = ? AND secao_regra IS NOT NULL AND secao_regra <> 'geral'
+         WHERE obra_id = ? AND secao_regra IS NOT NULL AND secao_regra <> 'geral' AND status <> 'rejeitado'
          GROUP BY secao_regra ORDER BY n DESC LIMIT 30`,
       )
       .all(obraId) as { secao_regra: string }[];

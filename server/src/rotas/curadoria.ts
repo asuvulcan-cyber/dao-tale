@@ -241,10 +241,13 @@ export function rotasCuradoria(db: BancoDados): Hono {
 
   app.patch('/testes/:id', async (c) => {
     const corpo = z
-      .object({ status: z.enum(['confirmado', 'corrigido', 'pendente', 'regra-nova-necessaria']) })
+      .object({
+        status: z.enum(['confirmado', 'corrigido', 'pendente', 'regra-nova-necessaria', 'rejeitado']),
+        motivo_rejeicao: z.string().max(500).nullable().optional(),
+      })
       .safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
-    const caso = reposTestes.atualizarStatus(db, Number(c.req.param('id')), corpo.data.status);
+    const caso = reposTestes.atualizarStatus(db, Number(c.req.param('id')), corpo.data.status, corpo.data.motivo_rejeicao ?? null);
     if (!caso) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Caso não encontrado.' } }, 404);
     return c.json(caso);
   });

@@ -453,7 +453,7 @@ export function rotasObras(db: BancoDados): Hono {
         .listar(db, obraId, { secao_regra: r.secao_regra, limite: 5 })
         // Mesmo conjunto de status que `recorrencias` conta: corrigido é o erro
         // que o humano validou, e é o que mais ensina.
-        .casos.filter((caso) => caso.status !== 'confirmado')
+        .casos.filter((caso) => caso.status !== 'confirmado' && caso.status !== 'rejeitado' && !reposTestes.temFilho(db, caso.id))
         .map((caso) => ({
           secao_regra: r.secao_regra,
           trecho_zh: caso.trecho_zh,
