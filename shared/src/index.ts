@@ -705,8 +705,11 @@ export interface InfoBackup {
 export interface RespostaRevisao {
   trecho_zh: string;
   veredito: Veredito;
+  /** Trata do motivo declarado na pergunta. Texto principal na tela. */
+  resposta: string;
+  /** Só quando uma regra decide o caso; '' caso contrário. */
   justificativa: string;
-  secao_regra: string;
+  secao_regra: string | null;
   correcao_proposta: string | null;
   /** Par cirúrgico: o menor trecho do PT que muda e o que ele vira. A correção
    * é aplicada por aqui (ver `aplicarCorrecao`); nulo = modelo não cooperou. */

@@ -203,30 +203,42 @@ export const provedorMock: ProvedorIA = {
 
   async revisarFrase(_chave, req: RequisicaoRevisao) {
     await espera(latenciaMs());
-    // Heurística simulada: perguntas que sugerem erro geram veredito "incorreto".
     const pareceErro = /errad|incorret|estranh|dúvida|duvido|não seria/i.test(req.pergunta);
+    // "preferência"/"soa melhor" exercita o terceiro veredito, que não existia.
+    const preferencia = /prefer|soa melhor|gosto|estilo/i.test(req.pergunta);
+    const trecho_zh = [...req.frase.texto_zh].slice(0, 8).join('');
     const dados = pareceErro
       ? {
-          trecho_zh: [...req.frase.texto_zh].slice(0, 8).join(''),
+          trecho_zh,
           veredito: 'incorreto' as const,
-          justificativa:
-            '[simulado] A escolha diverge da regra de consistência do glossário; correção proposta abaixo.',
-          secao_regra: 'mock-1.1-consistencia',
+          resposta: '[simulado] O motivo que você deu procede: o original sustenta a leitura alternativa.',
+          justificativa: '[simulado] A escolha diverge da regra de consistência do glossário.',
+          secao_regra: 'mock-1.1-consistencia' as string | null,
           correcao_proposta: `[correção simulada] ${req.frase.texto_pt || req.frase.texto_zh}`,
-          // Âncora cirúrgica: a primeira palavra do PT, que existe no texto e
-          // portanto exercita o caminho de troca pontual pela rota real.
           trecho_pt_errado: (req.frase.texto_pt ?? '').split(/\s+/)[0] || null,
           trecho_pt_corrigido: '[trecho simulado]',
         }
-      : {
-          trecho_zh: [...req.frase.texto_zh].slice(0, 8).join(''),
-          veredito: 'correto' as const,
-          justificativa: '[simulado] A tradução atual respeita as regras do prompt mãe.',
-          secao_regra: 'geral',
-          correcao_proposta: null,
-          trecho_pt_errado: null,
-          trecho_pt_corrigido: null,
-        };
+      : preferencia
+        ? {
+            trecho_zh,
+            veredito: 'escolha-legitima' as const,
+            resposta: '[simulado] As duas leituras se defendem; o original não desempata.',
+            justificativa: '',
+            secao_regra: null as string | null,
+            correcao_proposta: null,
+            trecho_pt_errado: null,
+            trecho_pt_corrigido: null,
+          }
+        : {
+            trecho_zh,
+            veredito: 'correto' as const,
+            resposta: '[simulado] O motivo que você levantou não se sustenta no texto-fonte.',
+            justificativa: '',
+            secao_regra: null as string | null,
+            correcao_proposta: null,
+            trecho_pt_errado: null,
+            trecho_pt_corrigido: null,
+          };
     return { ...dados, bruta: JSON.stringify(dados), uso: usoSimulado('revisao', req, dados) };
   },
 };

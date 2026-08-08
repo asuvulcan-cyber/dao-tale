@@ -79,6 +79,9 @@ describe('coerência schema ⇄ zod (a fonte única não pode divergir da valida
       CONTRATO_REVISAO.zod.parse({
         trecho_zh: '灵',
         veredito: 'correto',
+        // resposta é o campo obrigatório do contrato novo — sem ele o exemplo
+        // mínimo não é mais mínimo válido.
+        resposta: 'ok',
         justificativa: 'ok',
         secao_regra: 'geral',
         correcao_proposta: null,

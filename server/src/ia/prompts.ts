@@ -197,13 +197,16 @@ export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'omega' | 'glo
     '',
     '## PROTOCOLO DE REVISÃO (instruções do aplicativo)',
     'Você é o revisor da tradução acima descrita. O usuário questionará uma escolha de tradução de UMA frase específica.',
-    'Avalie a tradução questionada contra o texto-fonte chinês, as regras do prompt da obra e o glossário.',
+    'A PERGUNTA DO USUÁRIO é a premissa da sua análise, não apenas o endereço da frase.',
+    'Se a pergunta declara um motivo ("o original diz X", "isto soa Y", "no capítulo anterior ficou Z"), sua resposta DEVE tratar desse motivo — confirmando-o ou refutando-o pelo texto-fonte chinês. Nunca substitua o motivo do usuário por outro argumento.',
+    'Se o motivo dele não procede, diga isso e mostre onde no chinês. Concordar por concordar é pior que discordar.',
     'Responda exclusivamente pelo formato estruturado, preenchendo:',
     '- trecho_zh: o trecho EXATO do chinês que fundamenta sua análise;',
-    '- veredito: "correto" se a tradução atual está adequada, "incorreto" se precisa de correção;',
-    '- justificativa: explicação objetiva citando a regra/seção do prompt da obra aplicável;',
-    '- secao_regra: identificador curto e estável da seção/regra citada (ex.: "3.2-nomes-proprios"); use "geral" se nenhuma regra específica se aplica;',
-    '- correcao_proposta: a frase COMPLETA corrigida em PT-BR se veredito for "incorreto"; null se "correto".',
+    '- resposta: a resposta à dúvida, endereçando o motivo declarado. É o que o revisor lê primeiro;',
+    '- veredito: "correto" se a tradução atual está adequada; "incorreto" se precisa de correção; "escolha-legitima" quando ela não está errada mas também não é a única leitura defensável (o que está em jogo é preferência, não regra);',
+    '- secao_regra: identificador curto e estável da regra, SOMENTE quando uma regra do prompt é o que decide o caso. Caso contrário, null — a maior parte das dúvidas de tradução não tem regra por trás, e forçar uma faz a resposta ficar sobre um assunto que o usuário não levantou;',
+    '- justificativa: a regra e por que ela se aplica. String vazia quando secao_regra for null;',
+    '- correcao_proposta: a frase COMPLETA corrigida em PT-BR se veredito for "incorreto"; null nos demais.',
     '- trecho_pt_errado: o MENOR pedaço da tradução ATUAL que precisa mudar, copiado dela letra por letra (mesmos acentos e pontuação). É por ele que a correção é aplicada: o app troca SÓ esse pedaço e conserva todo o resto da frase.',
     '- trecho_pt_corrigido: o que esse pedaço deve virar.',
     '- Não inclua aspas de diálogo, travessão nem a pontuação final da frase no trecho, a menos que o erro seja justamente essa marca. Se o problema for a frase inteira (ordem das orações, sentido trocado), aí sim o trecho pode ser a frase toda.',
@@ -248,7 +251,7 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
     for (const f of req.vizinhasDepois) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);
     partes.push('');
   }
-  partes.push('### PERGUNTA DO USUÁRIO:');
+  partes.push('### PERGUNTA DO USUÁRIO (a premissa da sua análise — trate do motivo que ela declara):');
   partes.push(req.pergunta);
   return partes.join('\n');
 }

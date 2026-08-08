@@ -34,9 +34,22 @@ export const respostaExtrairTermosSchema = z.object({
 
 export const respostaRevisaoSchema = z.object({
   trecho_zh: z.string(),
-  veredito: z.enum(['correto', 'incorreto']),
-  justificativa: z.string(),
-  secao_regra: z.string().default('geral'),
+  veredito: z.enum(['correto', 'incorreto', 'escolha-legitima']),
+  // O texto que trata do motivo declarado na pergunta. Obrigatório: era a
+  // ausência dele que fazia a justificativa virar sobre outro assunto.
+  resposta: z.string(),
+  // '' quando nenhuma regra decide o caso. Par natural de secao_regra.
+  justificativa: z.string().default(''),
+  // 'geral' era o valor de fuga do contrato antigo e virava recorrência falsa:
+  // três dúvidas sem relação contadas como uma lacuna sistemática.
+  secao_regra: z
+    .string()
+    .nullable()
+    .default(null)
+    .transform((s) => {
+      const t = s?.trim();
+      return t && t.toLowerCase() !== 'geral' ? t : null;
+    }),
   correcao_proposta: z.string().nullable().default(null),
   // Par cirúrgico: o menor trecho do PT que muda, e o que ele vira. Permite
   // trocar SÓ o que está errado, preservando pontuação, aspas e o resto da
