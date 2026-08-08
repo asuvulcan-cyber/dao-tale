@@ -114,6 +114,84 @@ describe('revisão com glossário no usuário (A4 da auditoria)', () => {
   });
 });
 
+// Achado da revisão da Task 4: o bloco "Discussão até aqui" não tinha teste —
+// é a parte do fio de réplicas que efetivamente chega ao modelo.
+describe('discussão até aqui (fio de réplicas)', () => {
+  const base: RequisicaoRevisao = {
+    modelo: 'm',
+    omega: 'Regras.',
+    glossario: [],
+    vizinhasAntes: [],
+    vizinhasDepois: [],
+    frase: { texto_zh: '齐夏睁开了眼睛。', texto_pt: 'Qi Xia abriu os olhos.', texto_pt_original_ia: null },
+    pergunta: 'E agora, ainda está errado?',
+  };
+
+  it('renderiza o cabeçalho e os turnos em ordem, antes da frase questionada', () => {
+    const req: RequisicaoRevisao = {
+      ...base,
+      turnosAnteriores: [
+        {
+          pergunta: 'Isso não está errado?',
+          resposta: 'Não, está correto.',
+          veredito: 'correto',
+          secao_regra: null,
+          correcao_proposta: null,
+          recusado: false,
+          motivo_rejeicao: null,
+        },
+        {
+          pergunta: 'Mas o glossário diz outra coisa.',
+          resposta: 'De fato, revejo: está incorreto.',
+          veredito: 'incorreto',
+          secao_regra: 'mock-1.1-consistencia',
+          correcao_proposta: 'Qi Xia abriu os olhos dela.',
+          recusado: false,
+          motivo_rejeicao: null,
+        },
+      ],
+    };
+    const texto = usuarioRevisao(req);
+    expect(texto).toContain('### Discussão até aqui (você já respondeu isto; o usuário replicou):');
+    // A ordem no texto precisa ser: cabeçalho → turno 1 (pergunta, resposta) →
+    // turno 2 (pergunta, resposta) → frase questionada. Fora dessa ordem, o
+    // modelo lê a réplica antes de saber o que já respondeu.
+    const posicoes = [
+      'Discussão até aqui',
+      'Isso não está errado?',
+      'Não, está correto.',
+      'Mas o glossário diz outra coisa.',
+      'De fato, revejo',
+      '### FRASE QUESTIONADA:',
+    ].map((trecho) => texto.indexOf(trecho));
+    expect(posicoes.every((p) => p >= 0)).toBe(true);
+    expect(posicoes).toEqual([...posicoes].sort((a, b) => a - b));
+  });
+
+  it('avisa quantos turnos ficaram de fora pelo teto', () => {
+    const req: RequisicaoRevisao = {
+      ...base,
+      turnosAnteriores: [
+        {
+          pergunta: 'primeira',
+          resposta: 'resposta',
+          veredito: 'correto',
+          secao_regra: null,
+          correcao_proposta: null,
+          recusado: false,
+          motivo_rejeicao: null,
+        },
+      ],
+      turnosOmitidos: 3,
+    };
+    expect(usuarioRevisao(req)).toContain('(3 turno(s) intermediário(s) omitido(s) por tamanho.)');
+  });
+
+  it('sem turnosAnteriores, o bloco de discussão nem aparece', () => {
+    expect(usuarioRevisao(base)).not.toContain('Discussão até aqui');
+  });
+});
+
 describe('extração de termos com glossário no usuário (M2 da auditoria)', () => {
   const base: RequisicaoExtrairTermos = {
     modelo: 'm',
