@@ -108,10 +108,11 @@ export interface RequisicaoRevisao {
   vizinhasDepois: { texto_zh: string; texto_pt: string }[];
   frase: { texto_zh: string; texto_pt: string; texto_pt_original_ia: string | null };
   pergunta: string;
-  /** Rótulos de `secao_regra` já usados nesta obra. Vão na mensagem do usuário
-   *  para o modelo REUSAR um em vez de inventar variação nova a cada chamada —
-   *  é o que permite agrupar casos recorrentes e detectar lacuna sistemática. */
-  rotulosConhecidos?: string[];
+  /** Rótulos de `secao_regra` já usados nesta obra, com a camada dona. Vão na
+   *  mensagem do usuário AGRUPADOS por camada e em ordem alfabética: quando iam
+   *  ordenados por frequência, o rótulo mais usado era o mais oferecido, o mais
+   *  escolhido, e voltava maior ainda. */
+  rotulosConhecidos?: { rotulo: string; camada: 'alfa' | 'beta' | 'delta' | null }[];
   /** Turnos anteriores do fio, do mais antigo ao mais recente. Sem eles a réplica
    *  reinicia a dúvida — foi o que produziu vereditos opostos na mesma frase. */
   turnosAnteriores?: {

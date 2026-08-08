@@ -139,6 +139,12 @@ export const TEMAS: readonly Tema[] = [
     titulo: 'Nomes próprios',
     resolucao: 'a política resolve-se pela chave Nomes próprios; o nome específico, pelo glossário',
     padrao: /nomes? pr[óo]prios? *[—:]|(?:em|para) pinyin|pinyin, sem|translitera(?:r|ndo) o (?:nome|lugar)/i,
+    // `padrao` depende de adjacência ("nome próprios —", "em pinyin") e por isso
+    // nunca casa contra um RÓTULO normalizado: normalizarSecaoRegra ordena as
+    // palavras alfabeticamente e junta por hífen, o que destrói qualquer sequência
+    // de espaços que o padrão exija. Os outros temas multi-palavra de Beta (diálogo,
+    // pensamento, registro) já tinham um padraoRotulo por isso; faltava este.
+    padraoRotulo: /nomes?[\s-]?proprios?|pinyin|translitera/,
     filtravel: false,
   },
   {

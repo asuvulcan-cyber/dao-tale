@@ -90,14 +90,16 @@ describe('recorrencias', () => {
     expect(reposTestes.recorrencias(db, obraId)).toEqual([]);
   });
 
-  it('devolve os rótulos já usados, para a revisão reaproveitar em vez de inventar', () => {
+  it('devolve os rótulos já usados, com a camada dona de cada um', () => {
     caso('5-mais-que-perfeito', 'corrigido');
     caso('5-mais-que-perfeito', 'corrigido');
     caso('4-sem-decalque', 'pendente');
-    caso('geral', 'pendente');
     const rotulos = reposTestes.rotulosDeRegra(db, obraId);
-    expect(rotulos[0]).toBe('5-mais-que-perfeito'); // mais frequente primeiro
-    expect(rotulos).toContain('4-sem-decalque');
-    expect(rotulos).not.toContain('geral'); // 'geral' não identifica regra nenhuma
+    // A SELEÇÃO ainda é por frequência (a query teria escolhido estes dois entre
+    // 30 mesmo com mais candidatos); a APRESENTAÇÃO é alfabética de propósito —
+    // é o que tira o ranking de frequência da vista do modelo.
+    expect(rotulos.map((r) => r.rotulo)).toEqual(['4-sem-decalque', '5-mais-que-perfeito']);
+    expect(rotulos.find((r) => r.rotulo === '5-mais-que-perfeito')?.camada).toBe('beta');
+    expect(rotulos.find((r) => r.rotulo === '4-sem-decalque')?.camada).toBe('alfa');
   });
 });

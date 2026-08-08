@@ -28,10 +28,12 @@ import type {
   PrecosModelos,
   PreferenciasEstilo,
   TemperaturasPapel,
+  Camada,
 } from '@dao-tale/shared';
 import {
   CONFIG_PADRAO,
   aplicarCorrecao,
+  camadaDoRotulo,
   normalizarSecaoRegra,
   normalizarPreferencias,
   normalizarTemperaturas,
@@ -1131,17 +1133,22 @@ export const reposTestes = {
     return rotuloConvergido(db, obraId, rotulo);
   },
 
-  /** Todos os rótulos de regra já usados nesta obra, do mais frequente ao menos.
-   *  Vai no prompt de refinamento para o modelo REUSAR em vez de inventar. */
-  rotulosDeRegra(db: BancoDados, obraId: number): string[] {
+  /** Rótulos já usados na obra, com a camada dona de cada um.
+      A SELEÇÃO continua por frequência — numa obra com 200 rótulos, cortar
+      alfabeticamente descartaria tudo depois do "m". O que muda é a APRESENTAÇÃO:
+      a lista sai ordenada alfabeticamente, para o modelo não ver o ranking e
+      realimentar o rótulo mais usado. */
+  rotulosDeRegra(db: BancoDados, obraId: number): { rotulo: string; camada: Camada | null }[] {
     const linhas = db
       .prepare(
         `SELECT secao_regra, COUNT(*) n FROM banco_testes
-         WHERE obra_id = ? AND secao_regra IS NOT NULL AND secao_regra <> 'geral' AND status <> 'rejeitado'
+         WHERE obra_id = ? AND secao_regra IS NOT NULL AND status <> 'rejeitado'
          GROUP BY secao_regra ORDER BY n DESC LIMIT 30`,
       )
       .all(obraId) as { secao_regra: string }[];
-    return linhas.map((l) => l.secao_regra);
+    return linhas
+      .map((l) => ({ rotulo: l.secao_regra, camada: camadaDoRotulo(l.secao_regra)?.camada ?? null }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
   },
 
   /** A cadeia de réplicas da raiz até o caso dado, inclusive. Recursiva por

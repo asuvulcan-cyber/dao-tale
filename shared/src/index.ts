@@ -1,7 +1,7 @@
 // Tipos de domínio e contratos da API — fonte única de verdade entre server e web.
 
 import type { PreferenciasEstilo } from './preferenciasEstilo.js';
-import { TEMAS } from './temasDoPrompt.js';
+import { TEMAS, type Camada, type Tema } from './temasDoPrompt.js';
 import { TEMPERATURAS_PADRAO, type TemperaturasPapel } from './temperatura.js';
 
 // Tokens de pigmento/tipografia como dado, para o alvo EPUB (doc 12 §6).
@@ -76,6 +76,24 @@ export function preferenciaQueCobre(rotulo: string): keyof PreferenciasEstilo | 
   const n = normalizarSecaoRegra(rotulo);
   const tema = TEMAS.find((t) => t.dono === 'beta' && t.filtravel && (t.padraoRotulo ?? t.padrao).test(n));
   return (tema?.id as keyof PreferenciasEstilo) ?? null;
+}
+
+/**
+ * Qual tema do registro este rótulo de regra invoca, e qual camada é dona dele.
+ *
+ * `preferenciaQueCobre` NÃO é reescrita em cima desta. As duas parecem a mesma
+ * busca, mas o `find` para no primeiro casamento da ordem do array: um rótulo que
+ * casasse com `nomes_proprios` (beta, filtravel: false) e com `registro` devolveria
+ * `registro` hoje e `null` na versão delegada — regressão silenciosa num caminho
+ * que descarta candidato pago. As duas compartilham o registro e a normalização, e
+ * mantêm o predicado próprio.
+ *
+ * null = rótulo sem tema conhecido, ou seja, candidato legítimo a diretriz de obra.
+ */
+export function camadaDoRotulo(rotulo: string): { tema: Tema; camada: Camada } | null {
+  const n = normalizarSecaoRegra(rotulo);
+  const tema = TEMAS.find((t) => (t.padraoRotulo ?? t.padrao).test(n));
+  return tema ? { tema, camada: tema.dono } : null;
 }
 
 /**

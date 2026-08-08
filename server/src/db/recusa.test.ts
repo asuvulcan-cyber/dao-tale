@@ -43,9 +43,9 @@ describe('recusar o veredito', () => {
 
   it('caso rejeitado sai dos rótulos oferecidos ao modelo', () => {
     const a = caso('1-prosa-nao-legenda', null);
-    expect(reposTestes.rotulosDeRegra(db, obraId)).toContain('1-prosa-nao-legenda');
+    expect(reposTestes.rotulosDeRegra(db, obraId).map((r) => r.rotulo)).toContain('1-prosa-nao-legenda');
     reposTestes.atualizarStatus(db, a.id, 'rejeitado', null);
-    expect(reposTestes.rotulosDeRegra(db, obraId)).not.toContain('1-prosa-nao-legenda');
+    expect(reposTestes.rotulosDeRegra(db, obraId).map((r) => r.rotulo)).not.toContain('1-prosa-nao-legenda');
   });
 
   it('a recorrência conta a folha do fio, não a raiz', () => {

@@ -232,12 +232,18 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
     partes.push('');
   }
   if (req.rotulosConhecidos && req.rotulosConhecidos.length > 0) {
-    // Sem isto o modelo devolve "5-mais-que-perfeito", "5.mais-que-perfeito" e
-    // "mais-que-perfeito" para a mesma regra, e a contagem de recorrência se
-    // fragmenta a ponto de nunca acusar lacuna nenhuma.
-    partes.push('### Rótulos de regra já usados nesta obra (REUSE um deles se a regra for a mesma):');
-    partes.push(req.rotulosConhecidos.map((r) => `- ${r}`).join('\n'));
-    partes.push('Só invente um rótulo novo se nenhum destes descrever a regra em questão.');
+    const diretriz = req.rotulosConhecidos.filter((r) => r.camada === null || r.camada === 'delta');
+    const chaves = req.rotulosConhecidos.filter((r) => r.camada === 'beta');
+    const nucleo = req.rotulosConhecidos.filter((r) => r.camada === 'alfa');
+    partes.push('### Rótulos de regra já usados nesta obra');
+    const linha = (t: string, l: typeof diretriz) =>
+      l.length > 0 && partes.push(`${t}: ${l.map((r) => r.rotulo).join(', ')}`);
+    linha('Diretrizes da obra', diretriz);
+    linha('Chaves de estilo (Seção 5)', chaves);
+    linha('Regras universais do núcleo', nucleo);
+    partes.push(
+      'Use um destes SÓ se a regra em questão for exatamente a mesma. A maior parte das dúvidas não é de regra — nesse caso deixe secao_regra em null.',
+    );
     partes.push('');
   }
   if (req.turnosAnteriores && req.turnosAnteriores.length > 0) {
