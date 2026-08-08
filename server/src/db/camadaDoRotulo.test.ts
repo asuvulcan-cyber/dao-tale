@@ -57,6 +57,37 @@ describe('camadaDoRotulo', () => {
   });
 });
 
+describe('padraoRotulo de nomes_proprios não invade território do Alfa', () => {
+  // Achado da revisão (rodada 1): `translitera` solto no padraoRotulo casava como
+  // substring em QUALQUER rótulo que mencionasse transliteração, mesmo quando o
+  // dono do tema é outro — e como nomes_proprios está no índice 6 do array e
+  // `TEMAS.find` para no primeiro casamento, ele interceptava rótulos de
+  // `unidades`, `decalque` e `glossario`, todos posteriores. É a MESMA armadilha
+  // que o `padrao` de texto corrido já tinha caído (comentário do topo do
+  // arquivo, medição de 2026-08-06) — só que pelo caminho do rótulo, onde nenhum
+  // teste olhava.
+  //
+  // Estreitar nomes_proprios sozinho já tirava os três daqui de beta, mas dois
+  // caíam em null: unidades e glossario tinham o MESMO defeito de origem que
+  // nomes_proprios tinha (padrao dependente de ordem/espaço, que a normalização
+  // sempre destrói) — só que ninguém tinha testado esse ângulo neles ainda. Os
+  // dois ganharam padraoRotulo pela mesma razão, para os três resolverem para a
+  // camada certa de verdade, não só para deixarem de mentir "beta".
+  it('não intercepta rótulos de temas de Alfa que citam transliteração', () => {
+    expect(camadaDoRotulo('unidade-transliterada')?.camada).toBe('alfa');
+    expect(camadaDoRotulo('unidade-transliterada')?.tema.id).toBe('unidades');
+    expect(camadaDoRotulo('decalque-transliterado')?.camada).toBe('alfa');
+    expect(camadaDoRotulo('decalque-transliterado')?.tema.id).toBe('decalque');
+    expect(camadaDoRotulo('termo-novo-transliterado')?.camada).toBe('alfa');
+    expect(camadaDoRotulo('termo-novo-transliterado')?.tema.id).toBe('glossario');
+  });
+
+  it('continua reconhecendo a política de nomes próprios de verdade', () => {
+    expect(camadaDoRotulo('5-nomes-proprios')?.tema.id).toBe('nomes_proprios');
+    expect(camadaDoRotulo('nomes proprios: em pinyin')?.tema.id).toBe('nomes_proprios');
+  });
+});
+
 describe('rótulos enviados ao modelo', () => {
   it('não expõe o ranking de frequência', () => {
     // O laço: mais usado → mais oferecido → mais escolhido → mais usado ainda.

@@ -144,7 +144,14 @@ export const TEMAS: readonly Tema[] = [
     // palavras alfabeticamente e junta por hífen, o que destrói qualquer sequência
     // de espaços que o padrão exija. Os outros temas multi-palavra de Beta (diálogo,
     // pensamento, registro) já tinham um padraoRotulo por isso; faltava este.
-    padraoRotulo: /nomes?[\s-]?proprios?|pinyin|translitera/,
+    //
+    // SEM `translitera` solto: "unidade transliterada" é o falso positivo medido em
+    // 2026-08-06 (comentário do topo deste arquivo) para o `padrao` de texto corrido —
+    // um `padraoRotulo` com `translitera` solto reabre a MESMA ferida pelo outro
+    // caminho, casando "unidade-transliterada", "decalque-transliterado" e
+    // "termo-novo-transliterado", todos de temas de Alfa que vêm depois deste no
+    // array. `pinyin` sozinho já cobre os casos reais de rótulo desta chave.
+    padraoRotulo: /nomes?-?proprios?|pinyin/,
     filtravel: false,
   },
   {
@@ -165,6 +172,13 @@ export const TEMAS: readonly Tema[] = [
     titulo: 'Glossário',
     resolucao: 'o glossário é lei acima de todas as camadas; termos entram pelo glossário da obra',
     padrao: /gloss[áa]rio|termos? novos?/i,
+    // O `padrao` já tentava reconhecer "termos novos" — mas exige a ordem e o espaço
+    // exatos, que `normalizarSecaoRegra` nunca preserva (ordena as palavras e junta
+    // por hífen). Achado da revisão da Task 6: sem este padraoRotulo, um rótulo como
+    // "termo-novo-transliterado" (normaliza para "novo-termo-transliterado") não
+    // reconhecia glossario — e como nada mais no registro reconhecia esse rótulo
+    // também, ele caía em null em vez de alfa.
+    padraoRotulo: /\bglossario\b|\bnovos?\b.*\btermos?\b/,
     filtravel: false,
   },
   {
@@ -173,6 +187,11 @@ export const TEMAS: readonly Tema[] = [
     titulo: 'Unidades de medida',
     resolucao: 'vive no Alfa: a conversão zh→pt-BR é objetiva e vale para qualquer obra',
     padrao: /unidades? de medida|时辰|\b里\b|\b丈\b|\b斤\b|tael/i,
+    // Mesmo achado: "unidade-transliterada" é vocabulário legítimo do tema (é a
+    // própria frase medida no cabeçalho deste arquivo), mas `padrao` exige "de
+    // medida" junto, que a normalização derruba. `\bunidades?\b` sozinho já basta —
+    // é palavra de domínio específica deste registro, sem colisão com outro tema.
+    padraoRotulo: /\bunidades?\b/,
     filtravel: false,
   },
   {
