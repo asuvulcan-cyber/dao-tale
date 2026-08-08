@@ -102,18 +102,41 @@ describe('migração 022', () => {
 
   it('aceita o veredito escolha-legitima e o status rejeitado', () => {
     const db = abrirBanco(':memory:');
-    // Insere direto para exercitar o CHECK, sem passar pelos repos.
-    const inserir = () =>
+    const obraId = reposObras.criar(db, { titulo: 'Obra' }).id;
+    const cap = reposCapitulos.criar(db, obraId, { numero: 1, texto_origem: '甲说。' }, [
+      { texto_zh: '甲说。', paragrafo: 0 },
+    ]);
+    const fraseId = reposFrases.listarPorCapitulo(db, cap.id)[0].id;
+    // Insere com ids VÁLIDOS: com frase_id nulo, o NOT NULL pode disparar antes do
+    // CHECK e o teste passaria mesmo com o CHECK antigo — verde pelo motivo errado.
+    expect(() =>
       db
         .prepare(
           `INSERT INTO banco_testes (frase_id, obra_id, trecho_zh, pergunta, veredito,
              resposta, justificativa, status, provedor, modelo, resposta_bruta)
-           VALUES (NULL, NULL, 'z', 'p', 'escolha-legitima', 'r', '', 'rejeitado', 'mock', 'm', '{}')`,
+           VALUES (?, ?, 'z', 'p', 'escolha-legitima', 'r', '', 'rejeitado', 'mock', 'm', '{}')`,
         )
-        .run();
-    // frase_id/obra_id são NOT NULL: o CHECK de veredito/status é avaliado antes,
-    // então um CHECK antigo falharia com "CHECK constraint failed", não com NOT NULL.
-    expect(inserir).toThrowError(/NOT NULL/);
+        .run(fraseId, obraId),
+    ).not.toThrow();
+  });
+
+  it('continua recusando veredito e status fora do enum', () => {
+    const db = abrirBanco(':memory:');
+    const obraId = reposObras.criar(db, { titulo: 'Obra' }).id;
+    const cap = reposCapitulos.criar(db, obraId, { numero: 1, texto_origem: '甲说。' }, [
+      { texto_zh: '甲说。', paragrafo: 0 },
+    ]);
+    const fraseId = reposFrases.listarPorCapitulo(db, cap.id)[0].id;
+    // O rebuild não pode ter afrouxado o CHECK para "qualquer texto".
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO banco_testes (frase_id, obra_id, trecho_zh, pergunta, veredito,
+             resposta, justificativa, status, provedor, modelo, resposta_bruta)
+           VALUES (?, ?, 'z', 'p', 'talvez', 'r', '', 'pendente', 'mock', 'm', '{}')`,
+        )
+        .run(fraseId, obraId),
+    ).toThrowError(/CHECK/);
   });
 
   it('preserva os índices da tabela original', () => {
