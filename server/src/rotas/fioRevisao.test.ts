@@ -85,6 +85,33 @@ describe('turnos enviados ao modelo', () => {
     expect(turnos[0].pergunta).toBe('p1');
     expect(turnos.at(-1)!.pergunta).toBe('p9');
   });
+
+  it('leva a justificativa do banco até o turno', () => {
+    // Encanamento CasoTeste.justificativa -> TurnoRevisao.justificativa. A mutação
+    // `justificativa: ''` em montarTurnos passava pela suíte inteira: os testes de
+    // prompts.test.ts constroem o turno à mão e os daqui usavam justificativa vazia.
+    const c = reposTestes.criar(db, {
+      frase_id: fraseId,
+      obra_id: obraId,
+      caso_pai_id: null,
+      trecho_zh: '甲',
+      pergunta: 'p',
+      veredito: 'incorreto',
+      resposta: 'trata do seu motivo',
+      justificativa: 'Conforme a regra 5-mais-que-perfeito.',
+      secao_regra: '5-mais-que-perfeito',
+      correcao_proposta: null,
+      trecho_pt_errado: null,
+      trecho_pt_corrigido: null,
+      motivo_rejeicao: null,
+      provedor: 'mock',
+      modelo: 'mock-v1',
+      resposta_bruta: '{}',
+    });
+    const turnos = montarTurnos(reposTestes.fio(db, c.id));
+    expect(turnos[0].justificativa).toBe('Conforme a regra 5-mais-que-perfeito.');
+    expect(turnos[0].resposta).toBe('trata do seu motivo');
+  });
 });
 
 // Achado da revisão: a validação de caso_pai_id na rota não tinha teste — um
