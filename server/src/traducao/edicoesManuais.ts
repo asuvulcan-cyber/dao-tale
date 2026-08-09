@@ -216,3 +216,36 @@ export function classificarEdicoes(
   }
   return saida;
 }
+
+/**
+ * Amostra até `maximo` itens ESPALHADOS pela lista (índices igualmente
+ * distribuídos do começo ao fim), preservando a ordem original — em vez de um
+ * trecho contíguo de uma ponta.
+ *
+ * Existe porque `paraMineracao` ordena as frases por POSIÇÃO NO LIVRO
+ * (capítulo, ordem), não por quando a edição foi feita — a tabela `frases` não
+ * tem carimbo de tempo de edição, então "as N mais recentes" não é uma amostra
+ * realizável a partir deste schema (achado da revisão da rodada 1). Um
+ * `slice(-N)` pegaria só o fim do livro: se o revisor termina os capítulos
+ * 1–20 e depois volta ao capítulo 3 para corrigir mais frases, essas correções
+ * frescas ficam de fora sempre que o capítulo 20 já tiver N edições da mesma
+ * rota. Espalhar é também MELHOR para o propósito, não só um remendo: a
+ * instrução do sistema em `sistemaRefinarPromptPartes` diz que uma correção
+ * isolada é gosto e só vira regra quando o mesmo tipo se repete — uma amostra
+ * espalhada pela obra evidencia repetição ao longo do livro inteiro; um bloco
+ * do último capítulo só mostra o último capítulo.
+ */
+export function amostrarEspalhado<T>(lista: T[], maximo: number): T[] {
+  if (maximo <= 0 || lista.length === 0) return [];
+  if (lista.length <= maximo) return lista;
+  if (maximo === 1) return [lista[Math.floor((lista.length - 1) / 2)]];
+  // Índices igualmente espaçados entre o primeiro (0) e o último (length-1),
+  // arredondados — cobre as duas pontas e distribui o resto pelo meio. O Set
+  // deduplica o raro empate de arredondamento quando `maximo` está muito perto
+  // de `lista.length`.
+  const indices = new Set<number>();
+  for (let i = 0; i < maximo; i++) {
+    indices.add(Math.round((i * (lista.length - 1)) / (maximo - 1)));
+  }
+  return [...indices].map((i) => lista[i]);
+}

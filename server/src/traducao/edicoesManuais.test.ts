@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PREFERENCIAS_PADRAO } from '@dao-tale/shared';
-import { classificarEdicoes } from './edicoesManuais.js';
+import { amostrarEspalhado, classificarEdicoes } from './edicoesManuais.js';
 
 const base = { id: 1, ordem: 0, capitulo_numero: 1, texto_zh: '甲', editado_manualmente: true, origem_edicao: null };
 const glossario = [
@@ -110,5 +110,36 @@ describe('classificarEdicoes', () => {
     expect(
       classificarEdicoes([{ ...base, texto_pt_original_ia: null, texto_pt: 'x' }], glossario, PREFERENCIAS_PADRAO),
     ).toHaveLength(0);
+  });
+});
+
+describe('amostrarEspalhado', () => {
+  it('lista de 100 devolve 15 cobrindo começo, meio e fim', () => {
+    const lista = Array.from({ length: 100 }, (_, i) => i);
+    const amostra = amostrarEspalhado(lista, 15);
+    expect(amostra).toHaveLength(15);
+    // Cobre as duas pontas — um recorte contíguo do fim (o bug corrigido) nunca
+    // incluiria o índice 0.
+    expect(amostra[0]).toBe(0);
+    expect(amostra[amostra.length - 1]).toBe(99);
+    // Espalhada pelo meio, não um bloco contíguo: o maior salto entre vizinhos
+    // não pode ser muito maior que o passo médio (100/15 ≈ 6,7).
+    const saltos = amostra.slice(1).map((v, i) => v - amostra[i]);
+    expect(Math.max(...saltos)).toBeLessThanOrEqual(8);
+    // Ordem original preservada (crescente).
+    expect([...amostra].sort((a, b) => a - b)).toEqual(amostra);
+  });
+
+  it('lista de 10 (≤ o teto) devolve as 10 na ordem original', () => {
+    const lista = Array.from({ length: 10 }, (_, i) => i);
+    expect(amostrarEspalhado(lista, 15)).toEqual(lista);
+  });
+
+  it('lista vazia devolve vazia', () => {
+    expect(amostrarEspalhado([], 15)).toEqual([]);
+  });
+
+  it('teto 0 ou negativo devolve vazia mesmo com lista não vazia', () => {
+    expect(amostrarEspalhado([1, 2, 3], 0)).toEqual([]);
   });
 });

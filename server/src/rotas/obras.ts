@@ -16,7 +16,7 @@ import {
 } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposFrases, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
-import { classificarEdicoes } from '../traducao/edicoesManuais.js';
+import { amostrarEspalhado, classificarEdicoes } from '../traducao/edicoesManuais.js';
 import { jobEmExecucao } from '../traducao/job.js';
 import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote } from '../traducao/lote.js';
 import { checkpointDaObra } from '../traducao/checkpoint.js';
@@ -500,13 +500,26 @@ export function rotasObras(db: BancoDados): Hono {
       }));
 
     // Só a rota `diretriz`: o resto tem dono em outra camada e o refinador é
-    // proibido de propor sobre eles. Teto de 15, as mais recentes — mesmo espírito
-    // do teto de 5 casos por seção recorrente.
+    // proibido de propor sobre eles. Teto de 15, ESPALHADAS pela obra — não "as
+    // mais recentes": `paraMineracao` ordena por posição no livro (capítulo,
+    // ordem), e a tabela `frases` não tem carimbo de tempo de edição, então
+    // "recente" não é uma amostra que o schema consiga dar. Um `slice` do fim
+    // privilegiaria só o último capítulo revisado; espalhar mostra repetição ao
+    // longo da obra inteira, que é o próprio critério que separa gosto isolado
+    // de regra (ver instrução em `sistemaRefinarPromptPartes`). Mesmo espírito
+    // do teto de 5 casos por seção recorrente, adaptado para este sinal.
     const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
-    const edicoes = classificarEdicoes(reposFrases.paraMineracao(db, obraId), reposGlossario.listar(db, obraId), prefs)
-      .filter((e) => e.rota === 'diretriz')
-      .slice(-15)
-      .map((e) => ({ trecho_zh: e.texto_zh, ia: e.ia, voce: e.voce, mudou: { de: e.de, para: e.para } }));
+    const edicoesDiretriz = classificarEdicoes(
+      reposFrases.paraMineracao(db, obraId),
+      reposGlossario.listar(db, obraId),
+      prefs,
+    ).filter((e) => e.rota === 'diretriz');
+    const edicoes = amostrarEspalhado(edicoesDiretriz, 15).map((e) => ({
+      trecho_zh: e.texto_zh,
+      ia: e.ia,
+      voce: e.voce,
+      mudou: { de: e.de, para: e.para },
+    }));
 
     try {
       reposUso.registrar(db, provedorId, modelo);

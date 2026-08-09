@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { abrirBanco, type BancoDados } from '../db/index.js';
 import { reposCapitulos, reposFrases, reposObras, reposTestes } from '../db/repos.js';
 import { criarApp } from '../app.js';
+import { provedorMock } from '../ia/mock.js';
+import type { RequisicaoRefinarPrompt } from '../ia/provedor.js';
 import type { Hono } from 'hono';
 
 // Doc 15 §7: a partição por tema diz que cada assunto pertence a UMA camada.
@@ -74,5 +76,63 @@ describe('roteamento do refino por camada', () => {
 
     const todas = await (await app.request(`/api/obras/${obraId}/edicoes-manuais`)).json();
     expect(todas.map((e: { rota: string }) => e.rota).sort()).toEqual(['diretriz', 'tipografia']);
+  });
+});
+
+// Achado da revisão da rodada 1: o teste acima chama `GET /edicoes-manuais`,
+// que é DELIBERADAMENTE não filtrada (a tela precisa ver o quadro inteiro) —
+// então ele não protege o `.filter((e) => e.rota === 'diretriz')` nem o teto
+// dentro da rota `POST .../sugerir-refinamento`. Alguém podia trocar `===` por
+// `!==`, ou apagar o filtro/teto inteiros, que a suíte continuava verde. Este
+// bloco inspeciona o `RequisicaoRefinarPrompt` que de fato chega ao provedor.
+describe('o que chega ao provedor (trava de rota do refinamento)', () => {
+  it('só edições de rota diretriz entram em req.edicoes, até um teto de 15', async () => {
+    // Recorrência que libera a chamada paga (mesmo padrão dos testes acima).
+    caso('1-prosa-nao-legenda', null);
+    caso('1-prosa-nao-legenda', null);
+
+    // 20 candidatas a diretriz — acima do teto de 15, para o mesmo teste também
+    // provar o corte — mais uma de tipografia e uma de chave-estilo, que têm
+    // dono em outra camada e NUNCA podem chegar ao provedor.
+    const N_DIRETRIZ = 20;
+    const textosZh = ['甲。', '乙。', ...Array.from({ length: N_DIRETRIZ }, (_, i) => `frase${i}。`)];
+    const cap = reposCapitulos.criar(
+      db,
+      obraId,
+      { numero: 9, texto_origem: textosZh.join('\n') },
+      textosZh.map((texto_zh) => ({ texto_zh, paragrafo: 0 })),
+    );
+    const frases = reposFrases.listarPorCapitulo(db, cap.id);
+
+    // Rota tipografia: só o caractere da aspa muda.
+    reposFrases.aplicarTraducaoIa(db, frases[0].id, 'ele disse ‘vá’ agora');
+    reposFrases.editarTexto(db, frases[0].id, "ele disse 'vá' agora");
+    // Rota chave-estilo: mais-que-perfeito desfeito (dono é Beta).
+    reposFrases.aplicarTraducaoIa(db, frases[1].id, 'concluindo que ele errara');
+    reposFrases.editarTexto(db, frases[1].id, 'concluindo que ele errou');
+    // Rota diretriz: vocabulário sem tema/glossário — a única elegível.
+    for (let i = 0; i < N_DIRETRIZ; i++) {
+      reposFrases.aplicarTraducaoIa(db, frases[2 + i].id, 'ele já é um morto');
+      reposFrases.editarTexto(db, frases[2 + i].id, 'ele já é um cadáver');
+    }
+
+    const spy = vi.spyOn(provedorMock, 'refinarPrompt');
+    try {
+      const r = await app.request(`/api/obras/${obraId}/prompts/sugerir-refinamento`, { method: 'POST' });
+      expect(r.status).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(1);
+      const reqEnviado = spy.mock.calls[0][1] as RequisicaoRefinarPrompt;
+
+      // Teto: 20 edições candidatas, só 15 chegam ao provedor.
+      expect(reqEnviado.edicoes).toHaveLength(15);
+      // Rota: nenhuma das 15 é a de tipografia ou a de chave-estilo — só a
+      // classificada como diretriz (identificada aqui pelo próprio conteúdo,
+      // já que o payload não carrega o campo `rota`).
+      expect(reqEnviado.edicoes!.every((e) => e.ia === 'ele já é um morto' && e.voce === 'ele já é um cadáver')).toBe(
+        true,
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

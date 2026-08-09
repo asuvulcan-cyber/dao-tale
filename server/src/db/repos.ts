@@ -506,6 +506,19 @@ export const reposCapitulos = {
 
 // ── Frases ─────────────────────────────────────────────────────────────────
 
+/** Forma que `paraMineracao` devolve (subconjunto de `Frase` + `capitulo_numero`,
+    que não existe no domínio `Frase`) — nomeada para tipar o SELECT e o mapa de
+    booleano sem recorrer a `as never`, que anulava a checagem da query inteira. */
+type LinhaMineracao = {
+  id: number;
+  ordem: number;
+  capitulo_numero: number;
+  texto_zh: string;
+  texto_pt_original_ia: string | null;
+  texto_pt: string;
+  origem_edicao: string | null;
+};
+
 export const reposFrases = {
   listarPorCapitulo(db: BancoDados, capituloId: number): Frase[] {
     return (
@@ -520,29 +533,18 @@ export const reposFrases = {
 
   /** Frases da obra com o que a mineração de edições manuais precisa, já com o
       número do capítulo — a classificação é pura e não consulta o banco. */
-  paraMineracao(
-    db: BancoDados,
-    obraId: number,
-  ): {
-    id: number;
-    ordem: number;
-    capitulo_numero: number;
-    texto_zh: string;
-    texto_pt_original_ia: string | null;
-    texto_pt: string;
-    editado_manualmente: boolean;
-    origem_edicao: string | null;
-  }[] {
-    return (
-      db
-        .prepare(
-          `SELECT f.id, f.ordem, c.numero capitulo_numero, f.texto_zh,
-                  f.texto_pt_original_ia, f.texto_pt, f.editado_manualmente, f.origem_edicao
-           FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
-           WHERE c.obra_id = ? ORDER BY c.numero, f.ordem`,
-        )
-        .all(obraId) as { editado_manualmente: number }[]
-    ).map((l) => ({ ...l, editado_manualmente: !!l.editado_manualmente })) as never;
+  paraMineracao(db: BancoDados, obraId: number): (LinhaMineracao & { editado_manualmente: boolean })[] {
+    const linhas = db
+      .prepare(
+        `SELECT f.id, f.ordem, c.numero capitulo_numero, f.texto_zh,
+                f.texto_pt_original_ia, f.texto_pt, f.editado_manualmente, f.origem_edicao
+         FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
+         WHERE c.obra_id = ? ORDER BY c.numero, f.ordem`,
+      )
+      .all(obraId) as (LinhaMineracao & { editado_manualmente: number })[];
+    // Mesmo padrão de `paraFrase` (linha ~60): SQLite guarda booleano como 0/1;
+    // o domínio usa `boolean`.
+    return linhas.map((l) => ({ ...l, editado_manualmente: !!l.editado_manualmente }));
   },
 
   editarTexto(db: BancoDados, id: number, textoPt: string, origem: string | null = null): Frase | undefined {
