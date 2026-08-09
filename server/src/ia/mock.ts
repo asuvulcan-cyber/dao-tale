@@ -246,10 +246,13 @@ export const provedorMock: ProvedorIA = {
   async passeEstilo(_chave, req: RequisicaoPasseEstilo) {
     await espera(latenciaMs());
     // Simula os dois desfechos: consertar o trecho acusado, e descartar quando o
-    // trecho contém "prepara" — a classe de falso positivo do scanner por sufixo.
+    // trecho é um dos falsos positivos JÁ DOCUMENTADOS do scanner por sufixo —
+    // "romãzeira", "Voadora" e "prepara" (ver respostas.ts). Ancorado ao termo
+    // INTEIRO (não substring): "roma" sem o ã casaria "aroma"/"romance"/"romano",
+    // que não são o que este mock pretende simular.
     const correcoes = req.alvos.flatMap((a) =>
       a.violacoes.map((v) => {
-        const falsoPositivo = /prepara|roma|voadora/i.test(v.trecho);
+        const falsoPositivo = /^(?:prepara|rom[aã]zeira|voadora)$/i.test(v.trecho.trim());
         return falsoPositivo
           ? { ordem: a.ordem, regra: v.regra, trecho_pt_errado: null, trecho_pt_corrigido: null, descartar: true }
           : {
