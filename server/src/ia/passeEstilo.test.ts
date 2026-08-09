@@ -89,9 +89,13 @@ describe('provedorMock.passeEstilo', () => {
     [2, 'romãzeira'],
     [3, 'prepara'],
     [4, 'Voadora'],
-  ])('descarta sem par o falso positivo conhecido "%s" (ordem %i)', async (ordem, _trecho) => {
+  ])('descarta sem par o falso positivo conhecido (ordem %i): "%s"', async (ordem: number, trecho: string) => {
     const r = await provedorMock.passeEstilo(null, reqMock);
     const c = r.correcoes.find((c) => c.ordem === ordem);
-    expect(c).toMatchObject({ descartar: true, trecho_pt_errado: null, trecho_pt_corrigido: null });
+    expect(c, `trecho "${trecho}" na ordem ${ordem}`).toMatchObject({
+      descartar: true,
+      trecho_pt_errado: null,
+      trecho_pt_corrigido: null,
+    });
   });
 });
