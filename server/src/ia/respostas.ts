@@ -37,7 +37,14 @@ export const respostaRevisaoSchema = z.object({
   veredito: z.enum(['correto', 'incorreto', 'escolha-legitima']),
   // O texto que trata do motivo declarado na pergunta. Obrigatório: era a
   // ausência dele que fazia a justificativa virar sobre outro assunto.
-  resposta: z.string(),
+  // .min(1): resposta é hoje o ÚNICO texto que a gaveta mostra — justificativa
+  // foi esvaziada por contrato. Os provedores "compat" (deepseek, openrouter,
+  // groq, mistral) não têm schema forçado pela API, só instrução em prosa:
+  // sem o mínimo, "resposta": "" passa o zod inteiro e produz um turno em
+  // branco na tela, sem nenhuma indicação de que algo falhou. Vazio é falha
+  // do modelo — tem de virar erro visível (ErroProvedor, ver contratos.ts),
+  // não silêncio.
+  resposta: z.string().min(1),
   // '' quando nenhuma regra decide o caso. Par natural de secao_regra.
   justificativa: z.string().default(''),
   // 'geral' era o valor de fuga do contrato antigo e virava recorrência falsa:

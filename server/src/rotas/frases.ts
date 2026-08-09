@@ -26,6 +26,12 @@ export const TETO_TURNOS = 6;
 export interface TurnoRevisao {
   pergunta: string;
   resposta: string;
+  // O ARGUMENTO por trás de secao_regra — sem ele o turno seguinte recebe só o
+  // RÓTULO da regra citada, não a tese que o modelo defendeu com ela. É essa
+  // tese que a réplica contesta, e "diga se MANTÉM ou REVISA" fica sem objeto
+  // quando só o rótulo chega: o modelo pode reformular a mesma tese sem notar
+  // que é a tese já contestada — exatamente o defeito que o fio existe para impedir.
+  justificativa: string;
   veredito: string;
   secao_regra: string | null;
   correcao_proposta: string | null;
@@ -37,6 +43,7 @@ export function montarTurnos(fio: CasoTeste[]): TurnoRevisao[] {
   const turnos = fio.map((c) => ({
     pergunta: c.pergunta,
     resposta: c.resposta,
+    justificativa: c.justificativa,
     veredito: c.veredito,
     secao_regra: c.secao_regra,
     correcao_proposta: c.correcao_proposta,

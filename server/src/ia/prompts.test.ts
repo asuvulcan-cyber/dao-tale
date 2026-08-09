@@ -6,11 +6,13 @@ import {
   sistemaContracapa,
   sistemaContracapaPartes,
   sistemaExtrairTermos,
+  sistemaRefinarPromptPartes,
   sistemaRevisao,
   sistemaTraducao,
   sistemaTraducaoPartes,
   usuarioContracapa,
   usuarioExtrairTermos,
+  usuarioRefinarPrompt,
   usuarioRevisao,
   usuarioTraducao,
 } from './prompts.js';
@@ -18,6 +20,7 @@ import { PROMPT_CONTRACAPA } from './promptContracapa.js';
 import type {
   RequisicaoContracapa,
   RequisicaoExtrairTermos,
+  RequisicaoRefinarPrompt,
   RequisicaoRevisao,
   RequisicaoTraducaoBloco,
 } from './provedor.js';
@@ -134,6 +137,7 @@ describe('discussão até aqui (fio de réplicas)', () => {
         {
           pergunta: 'Isso não está errado?',
           resposta: 'Não, está correto.',
+          justificativa: '',
           veredito: 'correto',
           secao_regra: null,
           correcao_proposta: null,
@@ -143,6 +147,7 @@ describe('discussão até aqui (fio de réplicas)', () => {
         {
           pergunta: 'Mas o glossário diz outra coisa.',
           resposta: 'De fato, revejo: está incorreto.',
+          justificativa: '',
           veredito: 'incorreto',
           secao_regra: 'mock-1.1-consistencia',
           correcao_proposta: 'Qi Xia abriu os olhos dela.',
@@ -175,6 +180,7 @@ describe('discussão até aqui (fio de réplicas)', () => {
         {
           pergunta: 'primeira',
           resposta: 'resposta',
+          justificativa: '',
           veredito: 'correto',
           secao_regra: null,
           correcao_proposta: null,
@@ -189,6 +195,44 @@ describe('discussão até aqui (fio de réplicas)', () => {
 
   it('sem turnosAnteriores, o bloco de discussão nem aparece', () => {
     expect(usuarioRevisao(base)).not.toContain('Discussão até aqui');
+  });
+
+  // Item 2 da revisão final: o fio mandava o RÓTULO da regra (secao_regra) mas
+  // não o ARGUMENTO (justificativa) — a réplica ficava sem o que contestar.
+  describe('justificativa da regra no turno anterior', () => {
+    const turno = (justificativa: string) => ({
+      pergunta: 'Isso não está errado?',
+      resposta: 'Não, a anterioridade pede o composto.',
+      justificativa,
+      veredito: 'incorreto' as const,
+      secao_regra: '5-mais-que-perfeito',
+      correcao_proposta: null,
+      recusado: false,
+      motivo_rejeicao: null,
+    });
+
+    it('justificativa distinta de resposta aparece no texto', () => {
+      const req: RequisicaoRevisao = {
+        ...base,
+        turnosAnteriores: [turno('Conforme a regra do mais-que-perfeito, a anterioridade pede o composto.')],
+      };
+      expect(usuarioRevisao(req)).toContain(
+        '[turno 1] justificativa da regra: Conforme a regra do mais-que-perfeito, a anterioridade pede o composto.',
+      );
+    });
+
+    it('justificativa igual a resposta (casos migrados da base antiga) não duplica', () => {
+      const req: RequisicaoRevisao = {
+        ...base,
+        turnosAnteriores: [turno('Não, a anterioridade pede o composto.')],
+      };
+      expect(usuarioRevisao(req)).not.toContain('justificativa da regra:');
+    });
+
+    it('justificativa vazia não emite linha vazia', () => {
+      const req: RequisicaoRevisao = { ...base, turnosAnteriores: [turno('')] };
+      expect(usuarioRevisao(req)).not.toContain('justificativa da regra:');
+    });
   });
 });
 
@@ -309,5 +353,48 @@ describe('contracapa (título/sinopse de obra)', () => {
     expect(sistemaContracapa({ ...comFlag, glossario: [] })).toBe(sistema);
     // Sem a flag, o glossário inteiro fica no sistema (comportamento legado).
     expect(sistemaContracapa(req)).toContain('齐夏 → Qi Xia');
+  });
+});
+
+// Item 3 da revisão final: usuarioRefinarPrompt e sistemaRefinarPromptPartes
+// não tinham NENHUM teste, apesar de a seção "Casos em que o revisor RECUSOU
+// o veredito" carregar motivo_rejeicao — texto escrito pelo usuário — para
+// dentro de um prompt que propõe regras novas para a obra (chamada paga).
+describe('refinamento do prompt — casos recusados (doc 15 §9)', () => {
+  const base: RequisicaoRefinarPrompt = {
+    modelo: 'm',
+    omega: 'Regras.',
+    deltaAtual: '',
+    casos: [],
+  };
+
+  const recusado = {
+    trecho_zh: '齐夏睁开了眼睛。',
+    pergunta: 'Isso não é "abriu os olhos dela"?',
+    veredito: 'incorreto',
+    resposta: 'Não, o original não marca gênero aqui.',
+    motivo_rejeicao: 'O glossário já resolve isso — não precisa de regra nova.',
+  };
+
+  it('com um caso recusado, o cabeçalho da seção e o motivo aparecem na mensagem do usuário', () => {
+    const usuario = usuarioRefinarPrompt({ ...base, recusados: [recusado] });
+    expect(usuario).toContain('### Casos em que o revisor RECUSOU o veredito da IA');
+    expect(usuario).toContain(recusado.motivo_rejeicao);
+    expect(usuario).toContain(recusado.trecho_zh);
+    expect(usuario).toContain(recusado.pergunta);
+  });
+
+  it('a instrução de não generalizar os casos recusados está no bloco de sistema', () => {
+    const sistema = sistemaRefinarPromptPartes(base).operacional;
+    expect(sistema).toMatch(/RECUSADOS/);
+    expect(sistema).toContain('correção de rumo, não material a generalizar');
+  });
+
+  it('sem o campo recusados (ausente), a seção não aparece', () => {
+    expect(usuarioRefinarPrompt(base)).not.toContain('RECUSOU o veredito');
+  });
+
+  it('com recusados vazio, a seção não aparece', () => {
+    expect(usuarioRefinarPrompt({ ...base, recusados: [] })).not.toContain('RECUSOU o veredito');
   });
 });

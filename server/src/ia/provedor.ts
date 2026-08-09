@@ -118,6 +118,10 @@ export interface RequisicaoRevisao {
   turnosAnteriores?: {
     pergunta: string;
     resposta: string;
+    /** O argumento por trás de secao_regra, quando uma regra decidiu o turno.
+     *  Sem ela o modelo vê o RÓTULO da regra mas não a TESE que defendeu com
+     *  ela — e "diga se MANTÉM ou REVISA" fica sem o que contestar. */
+    justificativa: string;
     veredito: string;
     secao_regra: string | null;
     correcao_proposta: string | null;

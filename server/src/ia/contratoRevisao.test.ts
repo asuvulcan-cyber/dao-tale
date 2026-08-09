@@ -34,6 +34,13 @@ describe('contrato da revisão', () => {
     expect(() => respostaRevisaoSchema.parse({ trecho_zh: 'z', veredito: 'correto' })).toThrow();
   });
 
+  // resposta é o ÚNICO texto que a gaveta mostra hoje; um modelo "compat" (sem
+  // schema forçado pela API) pode devolver "" e passar batido se só checarmos
+  // presença da chave. Vazio precisa lançar tanto quanto ausente.
+  it('rejeita resposta vazia', () => {
+    expect(() => respostaRevisaoSchema.parse({ trecho_zh: 'z', veredito: 'correto', resposta: '' })).toThrow();
+  });
+
   it('o schema da ferramenta pede resposta e não pede secao_regra', () => {
     expect(CONTRATO_REVISAO.schema.required).toContain('resposta');
     expect(CONTRATO_REVISAO.schema.required).not.toContain('secao_regra');

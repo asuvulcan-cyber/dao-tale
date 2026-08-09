@@ -255,6 +255,14 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
       partes.push(`[turno ${i + 1}] usuário: ${t.pergunta}`);
       const regra = t.secao_regra ? ` · regra: ${t.secao_regra}` : '';
       partes.push(`[turno ${i + 1}] você: (${t.veredito}${regra}) ${t.resposta}`);
+      // O rótulo de secao_regra sozinho não basta: sem o ARGUMENTO, "diga se
+      // MANTÉM ou REVISA o veredito anterior" fica sem objeto — o modelo pode
+      // reformular a mesma tese sem perceber que é a tese já contestada. Guard
+      // igual ao de GavetaRevisao.tsx: nos casos migrados da base antiga
+      // (022) justificativa === resposta, e repetir aqui seria só ruído.
+      if (t.justificativa && t.justificativa !== t.resposta) {
+        partes.push(`[turno ${i + 1}] justificativa da regra: ${t.justificativa}`);
+      }
       if (t.correcao_proposta) partes.push(`[turno ${i + 1}] correção que você propôs: ${t.correcao_proposta}`);
       if (t.recusado) {
         partes.push(`[turno ${i + 1}] o usuário RECUSOU esse veredito${t.motivo_rejeicao ? `: ${t.motivo_rejeicao}` : '.'}`);
