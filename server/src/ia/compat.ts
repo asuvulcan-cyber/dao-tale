@@ -6,12 +6,14 @@ import {
   type UsoChamada,
   type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
+  type RequisicaoPasseEstilo,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
   type RequisicaoQa,
   type RespostaContracapa,
   type RespostaExtrairTermos,
+  type RespostaPasseEstilo,
   type RespostaQa,
   type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
@@ -20,12 +22,14 @@ import {
 import {
   sistemaContracapa,
   sistemaExtrairTermos,
+  sistemaPasseEstilo,
   sistemaQa,
   sistemaRefinarPrompt,
   sistemaRevisao,
   sistemaTraducao,
   usuarioContracapa,
   usuarioExtrairTermos,
+  usuarioPasseEstilo,
   usuarioQa,
   usuarioRefinarPrompt,
   usuarioRevisao,
@@ -34,6 +38,7 @@ import {
 import {
   CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_PASSE_ESTILO,
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
@@ -320,6 +325,20 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
       } catch (e) {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');
+        }
+        throw e;
+      }
+    },
+
+    async passeEstilo(chave, req: RequisicaoPasseEstilo): Promise<RespostaPasseEstilo> {
+      const sistema = `${sistemaPasseEstilo(req)}\n\n${instrucaoJson(CONTRATO_PASSE_ESTILO)}`;
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioPasseEstilo(req));
+      try {
+        const dados = CONTRATO_PASSE_ESTILO.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          throw new ErroProvedor('Resposta do modelo fora do contrato do passe de estilo.', 'transitorio');
         }
         throw e;
       }

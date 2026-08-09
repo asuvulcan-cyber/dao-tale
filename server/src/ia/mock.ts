@@ -3,6 +3,7 @@ import {
   type ProvedorIA,
   type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
+  type RequisicaoPasseEstilo,
   type RequisicaoQa,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
@@ -240,5 +241,26 @@ export const provedorMock: ProvedorIA = {
             trecho_pt_corrigido: null,
           };
     return { ...dados, bruta: JSON.stringify(dados), uso: usoSimulado('revisao', req, dados) };
+  },
+
+  async passeEstilo(_chave, req: RequisicaoPasseEstilo) {
+    await espera(latenciaMs());
+    // Simula os dois desfechos: consertar o trecho acusado, e descartar quando o
+    // trecho contém "prepara" — a classe de falso positivo do scanner por sufixo.
+    const correcoes = req.alvos.flatMap((a) =>
+      a.violacoes.map((v) => {
+        const falsoPositivo = /prepara|roma|voadora/i.test(v.trecho);
+        return falsoPositivo
+          ? { ordem: a.ordem, regra: v.regra, trecho_pt_errado: null, trecho_pt_corrigido: null, descartar: true }
+          : {
+              ordem: a.ordem,
+              regra: v.regra,
+              trecho_pt_errado: v.trecho,
+              trecho_pt_corrigido: `[simulado] ${v.trecho}`,
+              descartar: false,
+            };
+      }),
+    );
+    return { correcoes, bruta: JSON.stringify({ correcoes }), uso: usoSimulado('estilo', req, { correcoes }) };
   },
 };

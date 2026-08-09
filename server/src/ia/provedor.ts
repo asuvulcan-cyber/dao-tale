@@ -239,6 +239,34 @@ export interface RespostaQa {
   uso: UsoChamada;
 }
 
+// ── Passe de estilo: conserto pontual das violações do scanner ─────────────
+// A varredura determinística (estiloViolacoes.ts) aponta e não tinha como
+// ajudar a consertar. Este passe propõe o MESMO par cirúrgico da revisão
+// (trecho_pt_errado/trecho_pt_corrigido) — nunca retradução, porque
+// retraduzir apagaria as correções que o revisor já tinha feito na mesma
+// frase. `descartar` existe porque o scanner é heurístico e erra.
+
+export interface RequisicaoPasseEstilo {
+  modelo: string;
+  temperatura?: number;
+  omega: string;
+  alvos: { ordem: number; texto_pt: string; violacoes: { regra: string; trecho: string }[] }[];
+  /** Frases vizinhas, só para o modelo entender o trecho. Nunca corrigidas. */
+  vizinhas: { ordem: number; texto_pt: string }[];
+}
+
+export interface RespostaPasseEstilo {
+  correcoes: {
+    ordem: number;
+    regra: string;
+    trecho_pt_errado: string | null;
+    trecho_pt_corrigido: string | null;
+    descartar: boolean;
+  }[];
+  bruta: string;
+  uso: UsoChamada;
+}
+
 // ── Erros classificados (doc 05 §2: transitório vs fatal; 'limite' é o 429 —
 // transitório por natureza, mas com tratamento próprio quando o usuário optou
 // por não passar da cota gratuita; 'truncado' é resposta cortada por
@@ -276,4 +304,5 @@ export interface ProvedorIA {
   extrairTermos(chave: string | null, req: RequisicaoExtrairTermos): Promise<RespostaExtrairTermos>;
   refinarPrompt(chave: string | null, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt>;
   analisarQa(chave: string | null, req: RequisicaoQa): Promise<RespostaQa>;
+  passeEstilo(chave: string | null, req: RequisicaoPasseEstilo): Promise<RespostaPasseEstilo>;
 }

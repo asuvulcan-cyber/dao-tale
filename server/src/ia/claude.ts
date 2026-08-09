@@ -6,12 +6,14 @@ import {
   type ProvedorIA,
   type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
+  type RequisicaoPasseEstilo,
   type RequisicaoQa,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
   type RespostaContracapa,
   type RespostaExtrairTermos,
+  type RespostaPasseEstilo,
   type RespostaQa,
   type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
@@ -20,12 +22,14 @@ import {
 import {
   sistemaContracapaPartes,
   sistemaExtrairTermosPartes,
+  sistemaPasseEstiloPartes,
   sistemaQaPartes,
   sistemaRefinarPromptPartes,
   sistemaRevisaoPartes,
   sistemaTraducaoPartes,
   usuarioContracapa,
   usuarioExtrairTermos,
+  usuarioPasseEstilo,
   usuarioQa,
   usuarioRefinarPrompt,
   usuarioRevisao,
@@ -35,6 +39,7 @@ import {
 import {
   CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_PASSE_ESTILO,
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
@@ -278,6 +283,32 @@ export const provedorClaude: ProvedorIA = {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async passeEstilo(chave, req: RequisicaoPasseEstilo): Promise<RespostaPasseEstilo> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo,
+        max_tokens: 8192,
+        ...amostragem(req),
+        system: sistemaEmBlocos(sistemaPasseEstiloPartes(req)),
+        messages: [{ role: 'user', content: usuarioPasseEstilo(req) }],
+        ...ferramenta(CONTRATO_PASSE_ESTILO),
+      });
+      if (resposta.stop_reason === 'max_tokens') {
+        throw new ErroProvedor('A Anthropic truncou o passe de estilo no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = extrairToolUse(resposta, CONTRATO_PASSE_ESTILO.ferramenta);
+      const dados = CONTRATO_PASSE_ESTILO.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato do passe de estilo.', 'transitorio');
       }
       throw classificarErro(e);
     }

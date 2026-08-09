@@ -6,12 +6,14 @@ import {
   type ProvedorIA,
   type RequisicaoContracapa,
   type RequisicaoExtrairTermos,
+  type RequisicaoPasseEstilo,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
   type RequisicaoQa,
   type RespostaContracapa,
   type RespostaExtrairTermos,
+  type RespostaPasseEstilo,
   type RespostaQa,
   type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
@@ -20,12 +22,14 @@ import {
 import {
   sistemaContracapa,
   sistemaExtrairTermos,
+  sistemaPasseEstilo,
   sistemaQa,
   sistemaRefinarPrompt,
   sistemaRevisao,
   sistemaTraducao,
   usuarioContracapa,
   usuarioExtrairTermos,
+  usuarioPasseEstilo,
   usuarioQa,
   usuarioRefinarPrompt,
   usuarioRevisao,
@@ -34,6 +38,7 @@ import {
 import {
   CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
+  CONTRATO_PASSE_ESTILO,
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
@@ -51,6 +56,7 @@ const SCHEMA_EXTRAIR_TERMOS_GEMINI = paraGemini(CONTRATO_EXTRAIR_TERMOS.schema);
 const SCHEMA_REVISAO_GEMINI = paraGemini(CONTRATO_REVISAO.schema);
 const SCHEMA_REFINAR_GEMINI = paraGemini(CONTRATO_REFINAR_PROMPT.schema);
 const SCHEMA_QA_GEMINI = paraGemini(CONTRATO_QA.schema);
+const SCHEMA_PASSE_ESTILO_GEMINI = paraGemini(CONTRATO_PASSE_ESTILO.schema);
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof ApiError) {
@@ -294,6 +300,30 @@ export const provedorGemini: ProvedorIA = {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato de QA.', 'transitorio');
+      }
+      throw classificarErro(e);
+    }
+  },
+
+  async passeEstilo(chave, req: RequisicaoPasseEstilo): Promise<RespostaPasseEstilo> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await gerar(cliente, req.modelo, usuarioPasseEstilo(req), {
+        systemInstruction: sistemaPasseEstilo(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_PASSE_ESTILO_GEMINI,
+        ...amostragem(req),
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+        throw new ErroProvedor('O Gemini truncou o passe de estilo no limite de tokens de saída.', 'truncado');
+      }
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_PASSE_ESTILO.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata, resposta.modelVersion) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) {
+        throw new ErroProvedor('Resposta do modelo fora do contrato do passe de estilo.', 'transitorio');
       }
       throw classificarErro(e);
     }

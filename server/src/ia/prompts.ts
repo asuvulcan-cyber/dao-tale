@@ -2,6 +2,7 @@ import type { EntradaGlossario } from '@dao-tale/shared';
 import type {
   RequisicaoContracapa,
   RequisicaoExtrairTermos,
+  RequisicaoPasseEstilo,
   RequisicaoQa,
   RequisicaoRefinarPrompt,
   RequisicaoRevisao,
@@ -430,6 +431,44 @@ export function usuarioRefinarPrompt(req: RequisicaoRefinarPrompt): string {
       partes.push(`  Veredito recusado: ${r.veredito} — ${r.resposta}`);
       if (r.motivo_rejeicao) partes.push(`  Motivo da recusa: ${r.motivo_rejeicao}`);
     }
+  }
+  return partes.join('\n');
+}
+
+// ── Passe de estilo ────────────────────────────────────────────────────────
+// A varredura de estilo já aponta as violações e não tinha como ajudar a
+// consertar: na 死人经 o revisor desfez 57 mais-que-perfeitos à mão, um por um.
+// Este passe propõe o conserto PONTUAL de cada uma — nunca retradução, porque
+// retraduzir apagaria as correções que o revisor já tinha feito na mesma frase.
+
+export function sistemaPasseEstiloPartes(req: Pick<RequisicaoPasseEstilo, 'omega'>): PartesSistema {
+  const operacional = [
+    '## TAREFA: PASSE DE ESTILO',
+    'Você receberá frases já traduzidas com uma ou mais VIOLAÇÕES DE ESTILO apontadas por uma varredura automática, e o trecho que disparou cada uma.',
+    'Conserte APENAS A VIOLAÇÃO apontada. NÃO retraduza a frase, não melhore o que não foi apontado, não mexa em pontuação, aspas ou ordem das orações que estejam fora da violação.',
+    'Para cada violação devolva o par: trecho_pt_errado (cópia EXATA de um pedaço do texto atual, e ÚNICO na frase — se a palavra se repetir, inclua as vizinhas necessárias) e trecho_pt_corrigido.',
+    'A varredura é heurística e erra: se a ocorrência apontada NÃO for uma violação de verdade, devolva descartar: true e deixe o par em null. Isso é resposta legítima e esperada.',
+    'As frases marcadas como contexto servem só para você entender o trecho — NÃO as corrija.',
+    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+  ].join('\n');
+  return { base: req.omega.trim(), operacional };
+}
+
+export function sistemaPasseEstilo(req: Pick<RequisicaoPasseEstilo, 'omega'>): string {
+  return juntarPartes(sistemaPasseEstiloPartes(req));
+}
+
+export function usuarioPasseEstilo(req: RequisicaoPasseEstilo): string {
+  const partes: string[] = [];
+  if (req.vizinhas.length > 0) {
+    partes.push('### Contexto (NÃO corrigir):');
+    for (const v of req.vizinhas) partes.push(`[${v.ordem}] ${v.texto_pt}`);
+    partes.push('');
+  }
+  partes.push('### Frases a consertar:');
+  for (const a of req.alvos) {
+    partes.push(`[${a.ordem}] ${a.texto_pt}`);
+    for (const v of a.violacoes) partes.push(`    violação: ${v.regra} — trecho acusado: "${v.trecho}"`);
   }
   return partes.join('\n');
 }

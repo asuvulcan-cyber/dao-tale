@@ -4,6 +4,7 @@ import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
 import {
   respostaContracapaSchema,
   respostaExtrairTermosSchema,
+  respostaPasseEstiloSchema,
   respostaQaSchema,
   respostaRefinarPromptSchema,
   respostaRevisaoSchema,
@@ -256,6 +257,40 @@ export const CONTRATO_QA: Contrato<typeof respostaQaSchema> = {
     required: ['apontamentos'],
   },
   notasInstrucao: ['Se a tradução estiver boa, use "apontamentos": []. NÃO reescreva a tradução — apenas aponte.'],
+};
+
+export const CONTRATO_PASSE_ESTILO: Contrato<typeof respostaPasseEstiloSchema> = {
+  ferramenta: 'entregar_passe_estilo',
+  descricao: 'Entrega o conserto pontual das violações de estilo apontadas.',
+  zod: respostaPasseEstiloSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      correcoes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ordem: { type: 'integer', description: 'número da frase, como recebido' },
+            regra: { type: 'string', description: 'a violação apontada, ecoada para conferência' },
+            trecho_pt_errado: {
+              type: ['string', 'null'],
+              description: 'o MENOR pedaço da tradução atual que muda, copiado LETRA POR LETRA e ÚNICO na frase',
+            },
+            trecho_pt_corrigido: { type: ['string', 'null'], description: 'o que esse pedaço deve virar' },
+            descartar: { type: 'boolean', description: 'true = não há violação de verdade aqui' },
+          },
+          required: ['ordem'],
+        },
+      },
+    },
+    required: ['correcoes'],
+  },
+  notasInstrucao: [
+    'Se não houver nada a consertar, use "correcoes": [].',
+    'trecho_pt_errado tem de ser cópia EXATA de um pedaço do texto atual e ÚNICO na frase: se a palavra se repetir, inclua as vizinhas necessárias para desambiguar.',
+    'Quando a violação apontada for falso positivo, devolva descartar: true e deixe o par em null.',
+  ],
 };
 
 export const CONTRATO_REFINAR_PROMPT: Contrato<typeof respostaRefinarPromptSchema> = {

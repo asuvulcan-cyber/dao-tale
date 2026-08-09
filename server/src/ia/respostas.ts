@@ -106,3 +106,25 @@ export const respostaQaSchema = z.object({
     )
     .default([]),
 });
+
+// Passe de estilo: a IA propõe o conserto SÓ das violações que o scanner acusou.
+// `descartar` existe porque o scanner é heurístico por sufixo — "romãzeira",
+// "Voadora" e "prepara" já apareceram como falso positivo. Dar ao modelo uma saída
+// honesta é melhor que forçá-lo a inventar correção para o que está certo.
+export const respostaPasseEstiloSchema = z.object({
+  correcoes: z
+    .array(
+      z
+        .object({
+          ordem: z.coerce.number().int(),
+          regra: z.string().default(''),
+          trecho_pt_errado: z.string().nullable().default(null),
+          trecho_pt_corrigido: z.string().nullable().default(null),
+          descartar: z.boolean().default(false),
+        })
+        .refine((c) => c.descartar || (!!c.trecho_pt_errado && c.trecho_pt_corrigido != null), {
+          message: 'correção sem par cirúrgico só é válida quando descartar = true',
+        }),
+    )
+    .default([]),
+});
