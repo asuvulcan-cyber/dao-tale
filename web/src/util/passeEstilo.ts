@@ -40,13 +40,26 @@ export interface CorrecaoPasse {
  * A `regra` vem ECOADA pelo modelo — o schema aceita string vazia — então ela
  * é preferência, não requisito: com uma violação só na frase, é ela.
  *
- * Quando sobram várias candidatas e nem o trecho ancora, devolve `null` de
- * propósito: sem botão Dispensar o revisor perde uma conveniência; com um
- * palpite ele silencia a violação errada e nunca fica sabendo.
+ * `ocorrencia` é a posição desta correção entre as que citam a mesma
+ * (ordem, regra), e existe porque no DESCARTE não há mais nada com que
+ * desempatar: `respostaPasseEstiloSchema` obriga `trecho_pt_errado: null`
+ * quando `descartar` é true, então o desempate por texto é estruturalmente
+ * indisponível justamente no grupo cuja única razão de existir é dispensar.
+ * Duas violações de mais-que-perfeito na mesma frase é o caso comum, não o
+ * exótico. O modelo recebe as violações de uma frase em lista e devolve uma
+ * correção por violação, na mesma ordem — a enésima correção fala da enésima
+ * violação, e é esse o desempate.
+ *
+ * Uma versão anterior devolvia `null` no empate, para não silenciar a violação
+ * errada. Estava errado por dois motivos: no descarte o empate é a REGRA e não
+ * a exceção, e a linha ficava sem botão nenhum; e "não escolher" não é mais
+ * seguro que escolher por posição — só é mais opaco. A escolha agora é
+ * determinística e vai no title do botão, para o revisor ver qual alerta some.
  */
 export function violacaoDaCorrecao(
   violacoes: ViolacaoEstilo[],
   correcao: { ordem: number; regra: string; trecho_pt_errado: string | null },
+  ocorrencia = 0,
 ): ViolacaoEstilo | null {
   const daFrase = violacoes.filter((v) => v.ordem === correcao.ordem);
   if (daFrase.length === 0) return null;
@@ -55,6 +68,14 @@ export function violacaoDaCorrecao(
   const candidatas = mesmaRegra.length > 0 ? mesmaRegra : daFrase;
   if (candidatas.length === 1) return candidatas[0];
 
+  // O trecho continua sendo o sinal mais forte quando existe: ele veio do texto
+  // real, e a posição é só uma suposição sobre a ordem da resposta.
   const errado = correcao.trecho_pt_errado ?? '';
-  return candidatas.find((v) => v.trecho !== '' && errado.includes(v.trecho)) ?? null;
+  const porTrecho = candidatas.find((v) => v.trecho !== '' && errado.includes(v.trecho));
+  if (porTrecho) return porTrecho;
+
+  // Grampeado ao fim da lista: dispensar as anteriores encolhe `candidatas`
+  // entre um clique e o outro, e um índice fora da faixa não pode virar
+  // `undefined` num tipo que promete `ViolacaoEstilo | null`.
+  return candidatas[Math.min(ocorrencia, candidatas.length - 1)];
 }

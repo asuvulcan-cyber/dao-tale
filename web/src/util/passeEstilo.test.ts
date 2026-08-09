@@ -38,11 +38,30 @@ describe('violacaoDaCorrecao', () => {
     );
   });
 
-  it('não adivinha: empate sem âncora no trecho devolve null', () => {
-    // Duas da mesma regra e um trecho que não contém nenhuma das duas. Chutar a
-    // primeira dispensaria a violação errada — e em silêncio.
+  it('descarte (trecho_pt_errado null) casa por posição — é o único desempate que sobra', () => {
+    // `respostaPasseEstiloSchema` OBRIGA o par a ser null quando descartar=true,
+    // então não existe texto para ancorar. Sem o desempate por posição, o grupo
+    // "a IA acha que não é violação" ficava sem botão de dispensar em toda frase
+    // com duas violações da mesma regra — que é o caso comum, não o exótico.
+    const primeira = violacao(7, 'mais-que-perfeito', 'errara');
+    const segunda = violacao(7, 'mais-que-perfeito', 'fizera');
+    const descarte = correcao(7, 'mais-que-perfeito', null);
+    expect(violacaoDaCorrecao([primeira, segunda], descarte, 0)).toBe(primeira);
+    expect(violacaoDaCorrecao([primeira, segunda], descarte, 1)).toBe(segunda);
+  });
+
+  it('empate sem âncora no trecho cai na posição, não em null', () => {
+    // A IA parafraseou ao copiar o trecho. Escolher por posição e mostrar o alvo
+    // no botão é melhor que sumir com o botão: some o alerta que o revisor vê.
     const violacoes = [violacao(7, 'mais-que-perfeito', 'errara'), violacao(7, 'mais-que-perfeito', 'fizera')];
-    expect(violacaoDaCorrecao(violacoes, correcao(7, 'mais-que-perfeito', 'parafraseou tudo'))).toBeNull();
+    expect(violacaoDaCorrecao(violacoes, correcao(7, 'mais-que-perfeito', 'parafraseou tudo'), 1)).toBe(violacoes[1]);
+  });
+
+  it('ocorrência além do fim da lista grampeia na última', () => {
+    // Acontece entre um clique e o outro: dispensar a primeira encolhe a
+    // varredura, e a correção de índice 1 passa a ver uma lista de um item só.
+    const so = violacao(7, 'mais-que-perfeito', 'fizera');
+    expect(violacaoDaCorrecao([so], correcao(7, 'mais-que-perfeito', null), 5)).toBe(so);
   });
 
   it('frase sem violação na varredura devolve null', () => {

@@ -73,6 +73,13 @@ const GRUPOS: { rota: RotaEdicao; titulo: string; cor: CorEtiqueta; oQueFazer: s
   },
 ];
 
+/** Plural irregular, escrito por extenso.
+ *
+ *  O padrão `frase{n === 1 ? '' : 's'}` que o resto do app usa só serve a plural
+ *  regular. "Edição" e "manual" não são: com 146 edições a tela escrevia
+ *  "146 ediçãoões manualis", e cada cabeçalho de grupo, "37 ediçãoões". */
+const plural = (n: number, um: string, muitos: string) => (n === 1 ? um : muitos);
+
 export function EdicoesManuais() {
   const { obraId } = useParams();
   const navegar = useNavigate();
@@ -123,7 +130,7 @@ export function EdicoesManuais() {
       {edicoes && total > 0 && (
         <>
           <p className="mb-4 text-sm text-tinta-2">
-            {total} edição{total === 1 ? '' : 'ões'} manual{total === 1 ? '' : 'is'} ·{' '}
+            {total} {plural(total, 'edição manual', 'edições manuais')} ·{' '}
             <span className="font-medium text-jade-forte">
               {candidatas} candidata{candidatas === 1 ? '' : 's'} a diretriz
             </span>{' '}
@@ -140,7 +147,7 @@ export function EdicoesManuais() {
                     <Etiqueta cor={g.cor}>{g.rota}</Etiqueta>
                     <span className="font-display font-semibold">{g.titulo}</span>
                     <span className="text-sm text-tinta-2">
-                      {doGrupo.length} edição{doGrupo.length === 1 ? '' : 'ões'}
+                      {doGrupo.length} {plural(doGrupo.length, 'edição', 'edições')}
                     </span>
                   </summary>
 

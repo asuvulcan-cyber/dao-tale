@@ -213,6 +213,19 @@ function GerenciadorPrompts({
   const ehDelta = ativo?.tipo === 'delta';
   const ehLegado = !!obraId && !!ativo && ativo.tipo !== 'delta';
 
+  /**
+   * A MESMA condição do botão "Refinar com IA", aplicada também a quem chega
+   * por `?painel=refinar`.
+   *
+   * Sem isto, uma obra de prompt `completo` legado (a obra 2 do usuário é
+   * exatamente isso) ou sem versão nenhuma recebia o painel aberto por link e
+   * SEM botão para fechá-lo — a tela nunca o deixaria abrir pelo próprio botão.
+   * É guarda de renderização, e não de estado inicial, porque `ehDelta` depende
+   * de `versoes`, que chega depois da montagem. Quem não pode refinar cai no
+   * aviso de formato antigo, que já explica o que fazer antes.
+   */
+  const podeRefinar = !!obraId && ehDelta;
+
   const abrir = (novo: typeof painel) => {
     setPainel((atual) => (atual === novo ? 'ver' : novo));
     if (novo !== 'nova') setRascunhoInicial(null);
@@ -226,7 +239,7 @@ function GerenciadorPrompts({
             {painel === 'preferencias' ? 'Fechar preferências' : 'Preferências de estilo'}
           </Botao>
         )}
-        {obraId && ehDelta && (
+        {podeRefinar && (
           <Botao variante="secundario" onClick={() => abrir('refinar')}>
             {painel === 'refinar' ? 'Fechar refinamento' : 'Refinar com IA'}
           </Botao>
@@ -326,7 +339,7 @@ function GerenciadorPrompts({
                 })
               }
             />
-          ) : painel === 'refinar' && obraId ? (
+          ) : painel === 'refinar' && podeRefinar && obraId ? (
             <RefinadorIA
               obraId={obraId}
               aoUsarRascunho={(texto) => {
