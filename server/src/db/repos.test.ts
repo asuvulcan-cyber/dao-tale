@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abrirBanco } from './index.js';
 import { reposCapitulos, reposFrases, reposObras } from './repos.js';
+import { classificarEdicoes } from '../traducao/edicoesManuais.js';
 
 describe('reposFrases.reabrirParaTraducao', () => {
   it('frases com erro voltam à fila em qualquer retomada (regressão)', () => {
@@ -48,5 +49,52 @@ describe('reposFrases.substituirTermo (A3 — fronteira de palavra)', () => {
     expect(depois.map((f) => f.texto_pt)).toEqual(['Rios corre.', 'Riordan chegou.', 'Rios de Janeiro.']);
     // As trocadas ficam marcadas como edição manual; a intacta, não.
     expect(depois.map((f) => f.editado_manualmente)).toEqual([true, false, true]);
+  });
+});
+
+describe('reposFrases.substituirTermo grava origem_edicao (achado da revisão da Task 2, consertado na Task 6)', () => {
+  it('frases trocadas em lote não entram em classificarEdicoes — só a edição digitada entra', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra' });
+    const cap = reposCapitulos.criar(db, obra.id, { numero: 1, texto_origem: '甲。乙。丙。' }, [
+      { texto_zh: '甲。', paragrafo: 0 },
+      { texto_zh: '乙。', paragrafo: 0 },
+      { texto_zh: '丙。', paragrafo: 0 },
+    ]);
+    const frases = reposFrases.listarPorCapitulo(db, cap.id);
+    reposFrases.aplicarTraducaoIa(db, frases[0].id, 'Rio corre.');
+    reposFrases.aplicarTraducaoIa(db, frases[1].id, 'Rio seca.');
+    reposFrases.aplicarTraducaoIa(db, frases[2].id, 'Ele já é um morto.');
+
+    // Substituição em lote: dezenas de frases mudam pela MESMA regra — não é o
+    // revisor digitando dezenas de correções independentes, e não pode parecer uma.
+    reposFrases.substituirTermo(db, { obraId: obra.id, de: 'Rio', para: 'Rios' });
+    // Edição de verdade, digitada à mão: continua sem origem, e É o sinal que
+    // classificarEdicoes deve ler.
+    reposFrases.editarTexto(db, frases[2].id, 'Ele já é um cadáver.');
+
+    const depois = reposFrases.listarPorCapitulo(db, cap.id);
+    expect(depois[0].origem_edicao).toBe('substituicao');
+    expect(depois[1].origem_edicao).toBe('substituicao');
+    expect(depois[2].origem_edicao).toBeNull();
+
+    const classificadas = classificarEdicoes(
+      depois.map((f) => ({
+        id: f.id,
+        ordem: f.ordem,
+        capitulo_numero: cap.numero,
+        texto_zh: f.texto_zh,
+        texto_pt_original_ia: f.texto_pt_original_ia,
+        texto_pt: f.texto_pt,
+        editado_manualmente: f.editado_manualmente,
+        origem_edicao: f.origem_edicao,
+      })),
+      [],
+    );
+
+    // Só a edição digitada (terceira frase) entra; as duas trocadas em lote, não —
+    // mesmo tendo editado_manualmente = 1 e texto_pt diferente do da IA.
+    expect(classificadas).toHaveLength(1);
+    expect(classificadas[0].frase_id).toBe(frases[2].id);
   });
 });

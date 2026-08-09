@@ -535,7 +535,11 @@ export const reposFrases = {
       (fronteira Unicode, como substituirTermoGlossario) — nunca dentro de outra
       palavra ("Rio" em "Riordan"). Com `previa`, só conta as frases REALMENTE
       afetadas por essa regra, batendo com o que a aplicação de fato muda (a
-      prévia antiga contava frases por substring e subestimava/superestimava). */
+      prévia antiga contava frases por substring e subestimava/superestimava).
+      Grava `origem_edicao = 'substituicao'` (achado da revisão da Task 6): sem
+      isso, uma troca em lote de dezenas de frases parecia dezenas de edições
+      DIGITADAS pelo revisor para `classificarEdicoes`, ensinando a mesma lição
+      dezenas de vezes e inundando o relatório de refinamento. */
   substituirTermo(
     db: BancoDados,
     opcoes: { obraId: number; capituloId?: number; de: string; para: string; previa?: boolean },
@@ -559,7 +563,9 @@ export const reposFrases = {
     const capitulos = new Set(afetadas.map((a) => a.capitulo_id)).size;
 
     if (!opcoes.previa && afetadas.length > 0) {
-      const upd = db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?');
+      const upd = db.prepare(
+        "UPDATE frases SET texto_pt = ?, editado_manualmente = 1, origem_edicao = 'substituicao' WHERE id = ?",
+      );
       db.transaction(() => {
         for (const a of afetadas) upd.run(a.texto, a.id);
       })();
@@ -570,7 +576,8 @@ export const reposFrases = {
   /** Troca a tradução de um termo do glossário nas frases JÁ traduzidas, com duas
       travas contra troca errada: (1) só nas frases cujo texto-fonte contém o termo
       chinês; (2) só ocorrências isoladas por palavra (fronteira Unicode), nunca
-      dentro de outra palavra. `previa` só conta. Marca as frases como editadas. */
+      dentro de outra palavra. `previa` só conta. Marca as frases como editadas, com
+      `origem_edicao = 'substituicao'` pelo mesmo motivo de `substituirTermo`. */
   substituirTermoGlossario(
     db: BancoDados,
     opcoes: { obraId: number; termoZh: string; de: string; para: string; previa: boolean },
@@ -590,7 +597,9 @@ export const reposFrases = {
     const capitulos = new Set(afetadas.map((a) => a.capitulo_id)).size;
 
     if (!opcoes.previa && afetadas.length > 0) {
-      const upd = db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?');
+      const upd = db.prepare(
+        "UPDATE frases SET texto_pt = ?, editado_manualmente = 1, origem_edicao = 'substituicao' WHERE id = ?",
+      );
       db.transaction(() => {
         for (const a of afetadas) upd.run(a.texto, a.id);
       })();
