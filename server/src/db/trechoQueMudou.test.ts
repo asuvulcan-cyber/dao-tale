@@ -11,13 +11,13 @@ describe('trechoQueMudou', () => {
 
   it('pega inserção pura', () => {
     expect(trechoQueMudou('o mestre era rico', 'o mestre era muito rico')).toEqual({
-      de: '',
-      para: 'muito ',
+      de: 'rico',
+      para: 'muito rico',
     });
   });
 
   it('pega remoção pura', () => {
-    expect(trechoQueMudou('deu um sinal', 'deu sinal')).toEqual({ de: 'um ', para: '' });
+    expect(trechoQueMudou('deu um sinal', 'deu sinal')).toEqual({ de: 'um sinal', para: 'sinal' });
   });
 
   it('textos iguais devolvem par vazio', () => {
@@ -34,6 +34,14 @@ describe('trechoQueMudou', () => {
   it('prefixo e sufixo comuns não se sobrepõem', () => {
     // "aa" -> "aaa": o sufixo comum não pode consumir letras que o prefixo já contou,
     // senão o trecho sai negativo e a função devolve lixo.
-    expect(trechoQueMudou('aa', 'aaa')).toEqual({ de: '', para: 'a' });
+    expect(trechoQueMudou('aa', 'aaa')).toEqual({ de: 'aa', para: 'aaa' });
+  });
+
+  it('não parte a palavra no meio — é o caso que motiva a expansão', () => {
+    // Sem expansão isto devolveria { de: 'ara', para: 'ou' }, ilegível no relatório.
+    expect(trechoQueMudou('concluindo que ele errara.', 'concluindo que ele errou.')).toEqual({
+      de: 'errara.',
+      para: 'errou.',
+    });
   });
 });

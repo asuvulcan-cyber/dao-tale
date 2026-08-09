@@ -169,11 +169,17 @@ export function aplicarCorrecao(
 }
 
 /**
- * O menor trecho que difere entre dois textos: corta o prefixo e o sufixo comuns.
+ * O menor trecho que difere entre dois textos: corta o prefixo e o sufixo comuns,
+ * depois expande até a fronteira de palavra.
  *
  * É o INVERSO de `aplicarCorrecao` — dela sai o par que a correção cirúrgica
  * consumiria. Serve para ler o que o revisor mudou à mão sem despejar a frase
- * inteira no relatório: `morto -> cadáver` ensina; a frase de 200 caracteres não.
+ * inteira no relatório: `morto -> cadáver` ensina; `ara -> ou` não (ilegível).
+ *
+ * O corte por caractere é minimal mas pode partir palavras no meio. A expansão
+ * até espaço em branco devolve trechos legíveis: `errara -> errou` em vez de
+ * `ara -> ou`. Serve tanto para humanos lerem num relatório quanto para ir dentro
+ * de um prompt como exemplo do que mudou.
  */
 export function trechoQueMudou(antes: string, depois: string): { de: string; para: string } {
   let i = 0;
@@ -182,6 +188,17 @@ export function trechoQueMudou(antes: string, depois: string): { de: string; par
   // senão os índices se cruzam e o slice devolve lixo.
   let j = 0;
   while (j < antes.length - i && j < depois.length - i && antes[antes.length - 1 - j] === depois[depois.length - 1 - j]) j++;
+
+  // Textos iguais: nada a expandir, e expandir aqui comeria a última palavra.
+  if (i === antes.length && i === depois.length) return { de: '', para: '' };
+
+  // O corte por caractere parte palavras no meio ("ara" -> "ou", "M" -> "O ato de m").
+  // Isso é minimal e ilegível: a função existe para um humano ler o par no relatório
+  // e para ele ir dentro de um prompt. Expandir até a fronteira de palavra devolve
+  // "errara" -> "errou" e "Matar" -> "O ato de matar".
+  while (i > 0 && !/\s/.test(antes[i - 1])) i--;
+  while (j > 0 && !/\s/.test(antes[antes.length - j])) j--;
+
   return { de: antes.slice(i, antes.length - j), para: depois.slice(i, depois.length - j) };
 }
 
