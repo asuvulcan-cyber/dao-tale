@@ -307,6 +307,9 @@ export interface Frase {
   texto_pt_original_ia: string | null;
   editado_manualmente: boolean;
   status_traducao: StatusTraducaoFrase;
+  /** De onde veio a última edição: null = digitada pelo revisor; 'revisao',
+   *  'passe-estilo' ou 'qa' = aprovada num botão. */
+  origem_edicao: string | null;
 }
 
 export interface EntradaGlossario {
@@ -428,6 +431,7 @@ export const PAPEIS_IA = [
   'refinamento',
   'titulo',
   'comparador',
+  'estilo',
 ] as const;
 export type PapelIa = (typeof PAPEIS_IA)[number];
 

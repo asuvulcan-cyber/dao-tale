@@ -518,8 +518,15 @@ export const reposFrases = {
     return l ? paraFrase(l) : undefined;
   },
 
-  editarTexto(db: BancoDados, id: number, textoPt: string): Frase | undefined {
-    db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(textoPt, id);
+  editarTexto(db: BancoDados, id: number, textoPt: string, origem: string | null = null): Frase | undefined {
+    // `origem` NULA é edição digitada pelo revisor — é o que a mineração de edições
+    // manuais lê. Quem aplica por botão (revisão, passe de estilo, QA) passa a sua
+    // origem, para a mesma lição não ser contada duas vezes.
+    db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1, origem_edicao = ? WHERE id = ?').run(
+      textoPt,
+      origem,
+      id,
+    );
     return this.obter(db, id);
   },
 
@@ -1070,10 +1077,12 @@ export const reposTestes = {
       // marca editado_manualmente para que "sobrescrever preservando editadas"
       // não reabra a frase e a IA não apague a correção; e conta certo na
       // métrica de edição do checkpoint (doc 09 §4).
-      db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(
-        resultado.texto,
-        caso.frase_id,
-      );
+      // origem_edicao = 'revisao': aceitar pelo botão é decisão registrada em outro
+      // canal (banco_testes) — não pode entrar na mineração de edições manuais como
+      // se o revisor tivesse digitado, senão a mesma lição é contada duas vezes.
+      db.prepare(
+        "UPDATE frases SET texto_pt = ?, editado_manualmente = 1, origem_edicao = 'revisao' WHERE id = ?",
+      ).run(resultado.texto, caso.frase_id);
       db.prepare("UPDATE banco_testes SET status = 'corrigido' WHERE id = ?").run(id);
       return { caso: this.obter(db, id)!, frase: reposFrases.obter(db, caso.frase_id)! };
     })();
@@ -1607,7 +1616,12 @@ export const reposQa = {
     if (!a) return undefined;
     if (!a.sugestao || !a.frase_id) return 'sem-sugestao';
     return db.transaction(() => {
-      db.prepare('UPDATE frases SET texto_pt = ?, editado_manualmente = 1 WHERE id = ?').run(a.sugestao, a.frase_id);
+      // origem_edicao = 'qa': aceitar a sugestão pelo botão é decisão registrada no
+      // apontamento, não uma edição digitada — a mineração de edições manuais não
+      // pode recontá-la.
+      db.prepare(
+        "UPDATE frases SET texto_pt = ?, editado_manualmente = 1, origem_edicao = 'qa' WHERE id = ?",
+      ).run(a.sugestao, a.frase_id);
       db.prepare("UPDATE qa_apontamentos SET status = 'aceito' WHERE id = ?").run(id);
       return { apontamento: this.obter(db, id)!, frase: reposFrases.obter(db, a.frase_id!)! };
     })();
