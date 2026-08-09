@@ -215,7 +215,19 @@ describe('portabilidade — fio de réplicas (Task 8)', () => {
     fraseId = reposFrases.listarPorCapitulo(db, cap.id)[0].id;
   });
 
-  function criarCaso({ pergunta, pai }: { pergunta: string; pai: number | null }): CasoTeste {
+  function criarCaso({
+    pergunta,
+    pai,
+    justificativa = '',
+  }: {
+    pergunta: string;
+    pai: number | null;
+    // Vazio por padrão (maioria dos testes de fio não olha para este campo).
+    // O teste de retrocompatibilidade abaixo passa um valor não-vazio e
+    // distinguível — senão a asserção de fallback (`resposta ?? justificativa`)
+    // não distingue o comportamento certo de um bug que grave '' fixo.
+    justificativa?: string;
+  }): CasoTeste {
     return reposTestes.criar(db, {
       frase_id: fraseId,
       obra_id: obraId,
@@ -224,7 +236,7 @@ describe('portabilidade — fio de réplicas (Task 8)', () => {
       pergunta,
       veredito: 'incorreto',
       resposta: `resposta de ${pergunta}`,
-      justificativa: '',
+      justificativa,
       secao_regra: null,
       correcao_proposta: null,
       trecho_pt_errado: null,
@@ -262,7 +274,10 @@ describe('portabilidade — fio de réplicas (Task 8)', () => {
   });
 
   it('importa export antigo, sem os campos novos', () => {
-    criarCaso({ pergunta: 'única', pai: null });
+    // justificativa não-vazia e distinguível: com os dois lados vazios ('' === ''),
+    // a asserção abaixo passaria mesmo se o fallback estivesse quebrado (achado da
+    // revisão — provado por mutação, ver Step 4 do relatório da rodada 1).
+    criarCaso({ pergunta: 'única', pai: null, justificativa: 'porque a regra 3.2 manda' });
     const dados = exportarObra(db, obraId);
     expect(dados).toBeDefined();
     for (const c of dados!.banco_testes) {
@@ -277,7 +292,31 @@ describe('portabilidade — fio de réplicas (Task 8)', () => {
     const casos = db.prepare('SELECT * FROM banco_testes WHERE obra_id = ?').all(nova.id) as CasoTeste[];
     // Sem `resposta` no arquivo, ela recebe a justificativa: o texto que existe.
     expect(casos[0].resposta).toBe(casos[0].justificativa);
+    expect(casos[0].resposta).not.toBe('');
     expect(casos[0].caso_pai_id).toBeNull();
+  });
+
+  it('export novo com resposta própria não é sobrescrito pela justificativa', () => {
+    // Sentido oposto do teste acima: quando o arquivo TEM resposta própria (export
+    // gerado por esta versão), ela precisa sobreviver ao roundtrip — `resposta ??
+    // justificativa` só cai para justificativa quando resposta está AUSENTE, nunca
+    // quando ela existe. Sem este teste, uma regressão que sempre preferisse
+    // justificativa (ex.: `c.justificativa ?? c.resposta`) passaria despercebida.
+    criarCaso({
+      pergunta: 'com resposta própria',
+      pai: null,
+      justificativa: 'justificativa não deveria vencer',
+    });
+    const dados = exportarObra(db, obraId);
+    expect(dados).toBeDefined();
+    // Reimporta tal como o export saiu — sem apagar `resposta`, ao contrário do
+    // teste de retrocompatibilidade acima.
+    const nova = importarObra(db, dados!);
+    expect('erro' in nova).toBe(false);
+    if ('erro' in nova) return;
+    const casos = db.prepare('SELECT * FROM banco_testes WHERE obra_id = ?').all(nova.id) as CasoTeste[];
+    expect(casos[0].resposta).toBe('resposta de com resposta própria');
+    expect(casos[0].resposta).not.toBe(casos[0].justificativa);
   });
 
   it('export parcial (pai fora do arquivo) faz o filho virar raiz, não apontar para id qualquer', () => {
