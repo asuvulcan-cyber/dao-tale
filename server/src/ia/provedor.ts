@@ -184,6 +184,9 @@ export interface RequisicaoRefinarPrompt {
       lugar do app onde ele escreve POR ESCRITO por que ela errou — correção de
       rumo, não material a generalizar. */
   recusados?: { trecho_zh: string; pergunta: string; veredito: string; resposta: string; motivo_rejeicao: string | null }[];
+  /** Correções que o revisor digitou sem pedir revisão — o sinal mais forte que
+   *  existe, e o mais bruto: a IA nunca soube que elas aconteceram. */
+  edicoes?: { trecho_zh: string; ia: string; voce: string; mudou: { de: string; para: string } }[];
 }
 
 export interface PropostaRefinamento {

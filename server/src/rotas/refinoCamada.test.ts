@@ -56,4 +56,23 @@ describe('roteamento do refino por camada', () => {
     const r = await app.request(`/api/obras/${obraId}/prompts/sugerir-refinamento`, { method: 'POST' });
     expect(r.status).toBe(200);
   });
+
+  it('só a rota diretriz vai ao refinador', async () => {
+    // Uma edição de tipografia e uma de vocabulário na mesma obra: só a segunda
+    // pode chegar à chamada paga.
+    const cap = reposCapitulos.criar(db, obraId, { numero: 2, texto_origem: '乙说。丙说。' }, [
+      { texto_zh: '乙说。', paragrafo: 0 },
+      { texto_zh: '丙说。', paragrafo: 0 },
+    ]);
+    const [f1, f2] = reposFrases.listarPorCapitulo(db, cap.id);
+    // Tipografia: só o caractere da aspa muda.
+    reposFrases.aplicarTraducaoIa(db, f1.id, 'ele disse ‘vá’ agora');
+    reposFrases.editarTexto(db, f1.id, "ele disse 'vá' agora");
+    // Vocabulário sem tema/glossário: candidata a diretriz.
+    reposFrases.aplicarTraducaoIa(db, f2.id, 'ele já é um morto');
+    reposFrases.editarTexto(db, f2.id, 'ele já é um cadáver');
+
+    const todas = await (await app.request(`/api/obras/${obraId}/edicoes-manuais`)).json();
+    expect(todas.map((e: { rota: string }) => e.rota).sort()).toEqual(['diretriz', 'tipografia']);
+  });
 });

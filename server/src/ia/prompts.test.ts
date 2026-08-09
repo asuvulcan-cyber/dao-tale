@@ -6,6 +6,7 @@ import {
   sistemaContracapa,
   sistemaContracapaPartes,
   sistemaExtrairTermos,
+  sistemaRefinarPrompt,
   sistemaRefinarPromptPartes,
   sistemaRevisao,
   sistemaTraducao,
@@ -396,5 +397,34 @@ describe('refinamento do prompt — casos recusados (doc 15 §9)', () => {
 
   it('com recusados vazio, a seção não aparece', () => {
     expect(usuarioRefinarPrompt({ ...base, recusados: [] })).not.toContain('RECUSOU o veredito');
+  });
+});
+
+describe('refinamento — edições manuais', () => {
+  const req = {
+    omega: 'PROMPT',
+    deltaAtual: '',
+    casos: [],
+    edicoes: [
+      { trecho_zh: '他已经是死人', ia: 'ele já é um morto', voce: 'ele já é um cadáver', mudou: { de: 'morto', para: 'cadáver' } },
+    ],
+  };
+
+  it('traz a seção com o par e a frase inteira', () => {
+    const u = usuarioRefinarPrompt(req);
+    expect(u).toMatch(/corrigiu à mão/i);
+    expect(u).toContain('morto');
+    expect(u).toContain('cadáver');
+    // A frase inteira precisa ir: "morto -> cadáver" isolado não diz por quê.
+    expect(u).toContain('ele já é um morto');
+  });
+
+  it('sem edições a seção não aparece', () => {
+    expect(usuarioRefinarPrompt({ ...req, edicoes: [] })).not.toMatch(/corrigiu à mão/i);
+    expect(usuarioRefinarPrompt({ ...req, edicoes: undefined })).not.toMatch(/corrigiu à mão/i);
+  });
+
+  it('o sistema avisa que edição só vira regra quando se repete', () => {
+    expect(sistemaRefinarPrompt(req)).toMatch(/se repete|repetir/i);
   });
 });

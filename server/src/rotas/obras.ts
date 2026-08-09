@@ -15,7 +15,8 @@ import {
   type ProvedorId,
 } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
+import { reposCapitulos, reposFrases, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
+import { classificarEdicoes } from '../traducao/edicoesManuais.js';
 import { jobEmExecucao } from '../traducao/job.js';
 import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote } from '../traducao/lote.js';
 import { checkpointDaObra } from '../traducao/checkpoint.js';
@@ -498,6 +499,15 @@ export function rotasObras(db: BancoDados): Hono {
         motivo_rejeicao: caso.motivo_rejeicao,
       }));
 
+    // Só a rota `diretriz`: o resto tem dono em outra camada e o refinador é
+    // proibido de propor sobre eles. Teto de 15, as mais recentes — mesmo espírito
+    // do teto de 5 casos por seção recorrente.
+    const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
+    const edicoes = classificarEdicoes(reposFrases.paraMineracao(db, obraId), reposGlossario.listar(db, obraId), prefs)
+      .filter((e) => e.rota === 'diretriz')
+      .slice(-15)
+      .map((e) => ({ trecho_zh: e.texto_zh, ia: e.ia, voce: e.voce, mudou: { de: e.de, para: e.para } }));
+
     try {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.refinarPrompt(chave, {
@@ -509,6 +519,7 @@ export function rotasObras(db: BancoDados): Hono {
         deltaAtual: prompt.prompt.tipo === 'delta' ? prompt.prompt.conteudo : (extrairCamadas(prompt.prompt.conteudo)?.delta ?? ''),
         casos,
         recusados,
+        edicoes,
       });
       registrarEvento(db, {
         obra_id: obraId,
@@ -522,6 +533,16 @@ export function rotasObras(db: BancoDados): Hono {
     } catch (e) {
       return c.json({ erro: { codigo: 'provedor', mensagem: (e as Error).message } }, 502);
     }
+  });
+
+  // Leitura para a tela: todas as edições manuais já classificadas por rota,
+  // incluindo as que NÃO viram diretriz (têm dono em outra camada) — a tela
+  // mostra o quadro inteiro, e só o refinamento acima filtra por 'diretriz'.
+  app.get('/obras/:id/edicoes-manuais', (c) => {
+    const obraId = Number(c.req.param('id'));
+    if (!reposObras.obter(db, obraId)) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
+    return c.json(classificarEdicoes(reposFrases.paraMineracao(db, obraId), reposGlossario.listar(db, obraId), prefs));
   });
 
   // Copia o prompt padrão ativo como v1.0 da obra (só quando ela não tem versões).

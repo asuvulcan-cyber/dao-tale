@@ -393,6 +393,7 @@ export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'o
     '- NÃO reescreva regras que já funcionam; NÃO proponha nada genérico que as seções universais já cubram.',
     '- NÃO proponha regra sobre aspas/travessão no diálogo, marcação do pensamento, mais-que-perfeito, nota do tradutor, onomatopeia ou público-alvo: isso é configuração da obra (a Seção 5, quando presente), resolvida por uma chave e não por texto de diretriz.',
     'A mensagem do usuário pode trazer casos RECUSADOS pelo revisor. Eles são correção de rumo, não material a generalizar: NÃO proponha regra que reproduza o erro apontado neles.',
+    'A mensagem pode trazer CORREÇÕES QUE O REVISOR FEZ À MÃO. São o padrão que ele pratica sem pedir, e portanto o sinal mais forte — mas também o mais bruto: uma correção isolada é gosto, não regra. Só proponha regra quando o mesmo tipo de correção se repetir em casos diferentes.',
     'Para cada proposta devolva: secao_regra (o identificador dos casos que a motivaram), regra_proposta (o texto pronto para entrar nas diretrizes) e justificativa (1 frase ligando aos casos).',
     'Se os casos não sustentarem nenhuma regra nova, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
@@ -404,7 +405,9 @@ export function sistemaRefinarPrompt(req: Pick<RequisicaoRefinarPrompt, 'omega' 
   return juntarPartes(sistemaRefinarPromptPartes(req));
 }
 
-export function usuarioRefinarPrompt(req: RequisicaoRefinarPrompt): string {
+export function usuarioRefinarPrompt(
+  req: Pick<RequisicaoRefinarPrompt, 'casos' | 'recusados' | 'edicoes'>,
+): string {
   const porSecao = new Map<string, RequisicaoRefinarPrompt['casos']>();
   for (const caso of req.casos) {
     const lista = porSecao.get(caso.secao_regra) ?? [];
@@ -430,6 +433,16 @@ export function usuarioRefinarPrompt(req: RequisicaoRefinarPrompt): string {
       partes.push(`  Pergunta do revisor: ${r.pergunta}`);
       partes.push(`  Veredito recusado: ${r.veredito} — ${r.resposta}`);
       if (r.motivo_rejeicao) partes.push(`  Motivo da recusa: ${r.motivo_rejeicao}`);
+    }
+  }
+  if (req.edicoes && req.edicoes.length > 0) {
+    partes.push('');
+    partes.push('### Correções que o revisor corrigiu à mão (a IA nunca soube)');
+    for (const e of req.edicoes) {
+      partes.push(`- ZH: ${e.trecho_zh}`);
+      partes.push(`  A IA escreveu: ${e.ia}`);
+      partes.push(`  O revisor deixou: ${e.voce}`);
+      partes.push(`  O que mudou: "${e.mudou.de}" → "${e.mudou.para}"`);
     }
   }
   return partes.join('\n');
