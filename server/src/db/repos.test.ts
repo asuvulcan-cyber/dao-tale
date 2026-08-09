@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PREFERENCIAS_PADRAO } from '@dao-tale/shared';
 import { abrirBanco } from './index.js';
 import { reposCapitulos, reposFrases, reposObras } from './repos.js';
 import { classificarEdicoes } from '../traducao/edicoesManuais.js';
@@ -90,10 +91,61 @@ describe('reposFrases.substituirTermo grava origem_edicao (achado da revisão da
         origem_edicao: f.origem_edicao,
       })),
       [],
+      PREFERENCIAS_PADRAO,
     );
 
     // Só a edição digitada (terceira frase) entra; as duas trocadas em lote, não —
     // mesmo tendo editado_manualmente = 1 e texto_pt diferente do da IA.
+    expect(classificadas).toHaveLength(1);
+    expect(classificadas[0].frase_id).toBe(frases[2].id);
+  });
+});
+
+describe('reposFrases.substituirTermoGlossario grava origem_edicao (rodada de correção 1 — a irmã de substituirTermo não tinha teste)', () => {
+  it('frases trocadas em lote pelo glossário não entram em classificarEdicoes — só a edição digitada entra', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra' });
+    const cap = reposCapitulos.criar(db, obra.id, { numero: 1, texto_origem: '金鹏堡。金鹏堡。丙。' }, [
+      { texto_zh: '金鹏堡。', paragrafo: 0 },
+      { texto_zh: '金鹏堡。', paragrafo: 0 },
+      { texto_zh: '丙。', paragrafo: 0 },
+    ]);
+    const frases = reposFrases.listarPorCapitulo(db, cap.id);
+    reposFrases.aplicarTraducaoIa(db, frases[0].id, 'A Fortaleza Jinpeng caiu.');
+    reposFrases.aplicarTraducaoIa(db, frases[1].id, 'A Fortaleza Jinpeng resistiu.');
+    reposFrases.aplicarTraducaoIa(db, frases[2].id, 'Ele já é um morto.');
+
+    // Substituição em lote pelo termo do glossário: mesma regra, dezenas de frases.
+    reposFrases.substituirTermoGlossario(db, {
+      obraId: obra.id,
+      termoZh: '金鹏堡',
+      de: 'Fortaleza Jinpeng',
+      para: 'Fortaleza do Peng Dourado',
+      previa: false,
+    });
+    // Edição de verdade, digitada à mão.
+    reposFrases.editarTexto(db, frases[2].id, 'Ele já é um cadáver.');
+
+    const depois = reposFrases.listarPorCapitulo(db, cap.id);
+    expect(depois[0].origem_edicao).toBe('substituicao');
+    expect(depois[1].origem_edicao).toBe('substituicao');
+    expect(depois[2].origem_edicao).toBeNull();
+
+    const classificadas = classificarEdicoes(
+      depois.map((f) => ({
+        id: f.id,
+        ordem: f.ordem,
+        capitulo_numero: cap.numero,
+        texto_zh: f.texto_zh,
+        texto_pt_original_ia: f.texto_pt_original_ia,
+        texto_pt: f.texto_pt,
+        editado_manualmente: f.editado_manualmente,
+        origem_edicao: f.origem_edicao,
+      })),
+      [],
+      PREFERENCIAS_PADRAO,
+    );
+
     expect(classificadas).toHaveLength(1);
     expect(classificadas[0].frase_id).toBe(frases[2].id);
   });
