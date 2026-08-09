@@ -292,13 +292,28 @@ export function Docs() {
           <p>
             Estranhou uma escolha de tradução? Selecione a frase no editor e faça uma pergunta ("esse nome não
             deveria seguir o glossário?", "esse tom está certo aqui?"). O <strong>Protocolo de Revisão</strong>{' '}
-            devolve uma análise estruturada: o trecho chinês que fundamenta a resposta, um veredito
-            (correto/incorreto), a justificativa citando a regra do prompt mãe e, se for o caso, a frase corrigida
-            completa — que você aplica com um clique.
+            responde à pergunta que você fez — a resposta trata do motivo que você declarou, e não de um resumo
+            genérico da frase. Junto vêm o trecho chinês que fundamenta a resposta e, se for o caso, a frase
+            corrigida completa, que você aplica com um clique.
           </p>
           <p>
-            Cada revisão vira um caso no <strong>Banco de testes</strong> da obra. Marque os casos como
-            confirmados/corrigidos e use os que exigirem "regra nova" como lembrete de atualizar o prompt mãe.
+            O veredito tem <strong>três</strong> valores: <em>correto</em>, <em>incorreto</em> e{' '}
+            <em>escolha legítima</em> — este último para quando a tradução não está errada, mas também não é a
+            única leitura defensável. Sem ele, toda divergência de gosto era espremida em "correto" com uma regra
+            inventada em cima. <strong>Regra e justificativa só aparecem quando uma regra decide o caso</strong>;
+            na maioria das perguntas não há regra nenhuma em jogo, e o campo fica vazio de propósito.
+          </p>
+          <p>
+            A revisão é uma <strong>conversa</strong>, não um oráculo. No pé da resposta você pode{' '}
+            <strong>replicar</strong> — pedir alternativa, dar contexto, contestar — e a IA responde sabendo o que
+            já disse no fio. E pode <strong>discordar</strong>: o veredito é descartado (com um motivo opcional,
+            que vira insumo do refinamento do prompt) e para de contar como padrão recorrente. Replicar e discordar
+            são gestos diferentes: um continua a discussão, o outro a encerra.
+          </p>
+          <p>
+            Cada turno vira um caso no <strong>Banco de testes</strong> da obra, com a etiqueta da camada dona da
+            regra citada (Alfa, Beta ou Delta). Marque os casos como confirmados/corrigidos e use os que exigirem
+            "regra nova" como lembrete de atualizar a camada certa.
           </p>
         </Secao>
 

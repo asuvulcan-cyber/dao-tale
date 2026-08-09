@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CATEGORIAS_GLOSSARIO, type CategoriaGlossario, type EstadoSaude, type EstadoSessao } from '@dao-tale/shared';
+import {
+  camadaDoRotulo,
+  CATEGORIAS_GLOSSARIO,
+  type Camada,
+  type CategoriaGlossario,
+  type EstadoSaude,
+  type EstadoSessao,
+  type Veredito,
+} from '@dao-tale/shared';
 import { api } from './api';
 import { CHAVE_SESSAO, usarSessao } from './sessao';
 
@@ -362,4 +370,44 @@ export const STATUS_CASO_ROTULO: Record<string, { texto: string; cor: CorEtiquet
   corrigido: { texto: 'Corrigido', cor: 'indigo' },
   pendente: { texto: 'Pendente', cor: 'ocre' },
   'regra-nova-necessaria': { texto: 'Regra nova necessária', cor: 'selo' },
+  // Veredito recusado pelo revisor: sai das recorrências e dos rótulos oferecidos
+  // ao modelo. Neutro de propósito — descartar não é erro nem acerto, é decisão.
+  rejeitado: { texto: 'Descartado', cor: 'neutro' },
 };
+
+// 'escolha-legitima' é o terceiro veredito: a tradução não está errada, mas também
+// não é a única leitura defensável. Ocre porque é o pigmento de ATENÇÃO no app —
+// pede um olhar, não conserto.
+export const VEREDITO_ROTULO: Record<Veredito, { texto: string; cor: CorEtiqueta }> = {
+  correto: { texto: 'Correto', cor: 'jade' },
+  incorreto: { texto: 'Incorreto', cor: 'selo' },
+  'escolha-legitima': { texto: 'Escolha legítima', cor: 'ocre' },
+};
+
+const CAMADA_ROTULO: Record<Camada, { texto: string; explica: string }> = {
+  alfa: { texto: 'Alfa', explica: 'núcleo universal zh→pt-BR — vale para todas as obras' },
+  beta: { texto: 'Beta', explica: 'preferência de estilo — resolve-se por chave, não por diretriz' },
+  delta: { texto: 'Delta', explica: 'diretriz desta obra' },
+};
+
+/**
+ * De que camada é a regra que a IA citou (doc 15 §3).
+ *
+ * Existe porque o rótulo sozinho não diz onde consertar: "mais-que-perfeito" é
+ * toggle de Beta e nunca vira diretriz nova, enquanto um rótulo sem tema conhecido
+ * é candidato legítimo a Delta. Rótulo sem tema não ganha etiqueta — silêncio aqui
+ * significa "isto é da obra".
+ */
+export function EtiquetaCamada({ rotulo }: { rotulo: string }) {
+  const dono = camadaDoRotulo(rotulo);
+  if (!dono) return null;
+  const info = CAMADA_ROTULO[dono.camada];
+  return (
+    <span
+      className="inline-block rounded bg-papel-fundo px-1.5 py-0.5 text-xs text-tinta-2"
+      title={`${dono.tema.titulo} — ${info.explica}`}
+    >
+      {info.texto}
+    </span>
+  );
+}

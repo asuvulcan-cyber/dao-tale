@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CapituloResumo, CasoTeste, StatusCasoTeste } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, CabecalhoPagina, Etiqueta, STATUS_CASO_ROTULO } from '../App';
+import { Aviso, Botao, CabecalhoPagina, Etiqueta, EtiquetaCamada, STATUS_CASO_ROTULO, VEREDITO_ROTULO } from '../App';
 
 const POR_PAGINA = 25;
 
@@ -105,8 +105,11 @@ export function BancoTestes() {
         </select>
         <select value={veredito} onChange={(e) => mudarFiltro(setVeredito)(e.target.value)} className="entrada text-sm">
           <option value="">Todos os vereditos</option>
-          <option value="correto">Correto</option>
-          <option value="incorreto">Incorreto</option>
+          {Object.entries(VEREDITO_ROTULO).map(([valor, r]) => (
+            <option key={valor} value={valor}>
+              {r.texto}
+            </option>
+          ))}
         </select>
         <select value={capitulo} onChange={(e) => mudarFiltro(setCapitulo)(e.target.value)} className="entrada text-sm">
           <option value="">Todos os capítulos</option>
@@ -156,12 +159,22 @@ export function BancoTestes() {
       <div className="space-y-3">
         {casos?.map((caso) => {
           const rotulo = STATUS_CASO_ROTULO[caso.status];
+          const veredito = VEREDITO_ROTULO[caso.veredito];
+          // A migração 022 copiou `justificativa` para `resposta` nos casos anteriores
+          // ao fio; repetir o mesmo texto em duas linhas não informa nada.
+          const justificativaPropria = caso.justificativa && caso.justificativa !== caso.resposta;
           return (
             <div key={caso.id} className="cartao p-4 text-sm">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Etiqueta cor={rotulo.cor}>{rotulo.texto}</Etiqueta>
-                <Etiqueta cor={caso.veredito === 'correto' ? 'jade' : 'selo'}>{caso.veredito}</Etiqueta>
-                {caso.secao_regra && <Etiqueta>{caso.secao_regra}</Etiqueta>}
+                <Etiqueta cor={veredito.cor}>{veredito.texto}</Etiqueta>
+                {caso.caso_pai_id != null && <Etiqueta>réplica</Etiqueta>}
+                {caso.secao_regra && (
+                  <>
+                    <Etiqueta>{caso.secao_regra}</Etiqueta>
+                    <EtiquetaCamada rotulo={caso.secao_regra} />
+                  </>
+                )}
                 <span className="font-mono text-xs text-tinta-2">
                   #{caso.id} · {caso.provedor}/{caso.modelo} · {new Date(caso.criado_em).toLocaleString('pt-BR')}
                 </span>
@@ -170,9 +183,16 @@ export function BancoTestes() {
               <p className="mb-1">
                 <span className="font-medium">Pergunta:</span> {caso.pergunta}
               </p>
-              <p className="mb-1 text-tinta">
-                <span className="font-medium">Justificativa:</span> {caso.justificativa}
-              </p>
+              {/* `resposta` é o texto principal: ela trata do motivo declarado na
+                  pergunta. Regra e justificativa só existem quando uma REGRA decide
+                  o caso — mostrá-las sempre imprimia um rótulo sem texto embaixo. */}
+              <p className="mb-1 text-tinta">{caso.resposta}</p>
+              {justificativaPropria && <p className="mb-1 text-xs text-tinta-2">{caso.justificativa}</p>}
+              {caso.motivo_rejeicao && (
+                <p className="mb-1 text-xs text-tinta-2">
+                  <span className="font-medium">Você discordou:</span> {caso.motivo_rejeicao}
+                </p>
+              )}
               {caso.correcao_proposta && (
                 <p className="mb-2 rounded border border-ocre/40 bg-ocre-tint px-2 py-1">
                   <span className="font-medium">Correção proposta:</span> {caso.correcao_proposta}
@@ -192,7 +212,9 @@ export function BancoTestes() {
                     Marcar “regra nova necessária”
                   </Botao>
                 )}
-                {caso.status === 'regra-nova-necessaria' && (
+                {/* `rejeitado` entra aqui porque discordar é a única decisão da gaveta
+                    que não tem volta lá — sem esta saída, um clique errado é definitivo. */}
+                {(caso.status === 'regra-nova-necessaria' || caso.status === 'rejeitado') && (
                   <Botao
                     variante="secundario"
                     onClick={() => mudarStatus.mutate({ id: caso.id, status: 'pendente' })}
