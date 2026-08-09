@@ -24,8 +24,20 @@ interface TermoExtraido {
  * Regra e justificativa descem para uma linha discreta e só aparecem quando uma
  * REGRA decide o caso; na maioria das revisões elas vêm vazias, e um parágrafo
  * vazio no meio da conversa é pior que ausência.
+ *
+ * `acaoProposta` é o que torna a caixa da correção acionável. A caixa NÃO decide
+ * sozinha se pode ser aplicada: quem sabe disso é o fio inteiro, e uma caixa ocre
+ * sem botão promete uma decisão que não existe naquele ponto da tela.
  */
-function TurnoFio({ caso, frase }: { caso: CasoTeste; frase: Frase }) {
+function TurnoFio({
+  caso,
+  frase,
+  acaoProposta,
+}: {
+  caso: CasoTeste;
+  frase: Frase;
+  acaoProposta?: React.ReactNode;
+}) {
   const veredito = VEREDITO_ROTULO[caso.veredito];
   const status = STATUS_CASO_ROTULO[caso.status];
   // A migração 022 copiou `justificativa` para `resposta` nos casos anteriores ao
@@ -67,7 +79,25 @@ function TurnoFio({ caso, frase }: { caso: CasoTeste; frase: Frase }) {
           </p>
         )}
         {caso.correcao_proposta && (
-          <div className="rounded border border-ocre/50 bg-ocre-tint p-2">{caso.correcao_proposta}</div>
+          <div
+            className={
+              acaoProposta || caso.status === 'corrigido'
+                ? 'rounded border border-ocre/50 bg-ocre-tint p-2'
+                : // Ocre é o pigmento de "isto pede uma decisão sua". Sem ação possível
+                  // aqui, a caixa fica neutra: ela é registro do que a IA propôs, não um
+                  // botão que sumiu.
+                  'rounded border border-linha bg-papel-fundo/60 p-2 text-tinta-2'
+            }
+          >
+            <p className="mb-1 text-xs font-medium">Correção proposta</p>
+            <p>{caso.correcao_proposta}</p>
+            {acaoProposta}
+            {!acaoProposta && caso.status === 'corrigido' && (
+              <p className="mt-2">
+                <Etiqueta cor="indigo">Correção aplicada</Etiqueta>
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -97,12 +127,25 @@ export function GavetaRevisao({
   const [dividindo, setDividindo] = useState(false);
   const [textoPt, setTextoPt] = useState(frase.texto_pt);
 
+  /**
+   * Fecha a caixa de discordância APAGANDO o motivo — os dois são um estado só.
+   *
+   * `motivo_rejeicao` não é um rascunho: ele alimenta a seção "casos em que o revisor
+   * RECUSOU o veredito" do refinamento do prompt da obra. Um motivo escrito sobre o
+   * veredito do turno 3 e gravado na recusa do turno 4 não é só um campo sujo — é
+   * insumo errado indo para a proposta de regras. Por isso todo caminho que fecha a
+   * caixa passa por aqui, e nunca por `setDiscordando(false)` sozinho.
+   */
+  function fecharDiscordancia() {
+    setDiscordando(false);
+    setMotivoRejeicao('');
+  }
+
   // Limpa o painel ao trocar de frase.
   useEffect(() => {
     setPergunta('');
     setReplica('');
-    setDiscordando(false);
-    setMotivoRejeicao('');
+    fecharDiscordancia();
     setErro('');
     setDividindo(false);
     setCandidatos(null);
@@ -138,6 +181,11 @@ export function GavetaRevisao({
   const anteriores = fios.slice(1);
   const ultimo = corrente?.at(-1);
 
+  // Turno novo = veredito novo. A caixa aberta apontava para o turno anterior, e o
+  // motivo escrito nela não pode viajar junto — vale para qualquer origem do turno,
+  // não só para a réplica feita aqui.
+  useEffect(() => fecharDiscordancia(), [ultimo?.id]);
+
   const invalidarCasos = () => {
     clienteQuery.invalidateQueries({ queryKey: ['testes-frase', frase.id] });
     clienteQuery.invalidateQueries({ queryKey: ['testes-capitulo', capituloId] });
@@ -154,7 +202,7 @@ export function GavetaRevisao({
       else setReplica('');
       // O turno novo tem veredito próprio: um "Discordo" aberto sobre o anterior
       // ficaria apontando para um caso que não é mais o pé do fio.
-      setDiscordando(false);
+      fecharDiscordancia();
       setErro('');
       invalidarCasos();
     },
@@ -188,8 +236,7 @@ export function GavetaRevisao({
         motivo_rejeicao: motivoRejeicao.trim() || null,
       }),
     onSuccess: () => {
-      setDiscordando(false);
-      setMotivoRejeicao('');
+      fecharDiscordancia();
       setErro('');
       invalidarCasos();
     },
@@ -267,17 +314,66 @@ export function GavetaRevisao({
     }
   }
 
+  /**
+   * Qual proposta ainda dá para aplicar: a do turno MAIS RECENTE que tenha uma, não
+   * a do último turno.
+   *
+   * O fio torna comum o caso que o desenho de um resultado só não previa: turno 1
+   * volta `incorreto` com uma correção boa, você replica "e se fosse X?", e o turno
+   * 2 volta `escolha-legitima` sem proposta nenhuma. Olhando só o último turno, o
+   * botão sumia e a correção do turno 1 ficava órfã na tela — desenhada, com cara de
+   * acionável, e só aplicável indo até o Banco de testes.
+   *
+   * `corrigido` e `rejeitado` saem: um já foi aplicado, e no outro o revisor recusou
+   * justamente o juízo que propôs aquele texto.
+   */
+  const alvoProposta = corrente
+    ?.slice()
+    .reverse()
+    .find((c) => c.correcao_proposta && c.status !== 'corrigido' && c.status !== 'rejeitado');
+
   // A proposta SUBSTITUI a frase inteira. Quando ela é bem menor que o texto
   // atual, quase sempre é a IA devolvendo só o trecho que consertou — aplicar
   // apagaria o resto sem aviso.
   const propostaEncurtaDemais =
-    !!ultimo?.correcao_proposta &&
-    aplicarCorrecao_previa(frase.texto_pt, ultimo).tipo === 'frase-inteira' &&
-    propostaPareceTrecho(frase.texto_pt, ultimo.correcao_proposta);
+    !!alvoProposta?.correcao_proposta &&
+    aplicarCorrecao_previa(frase.texto_pt, alvoProposta).tipo === 'frase-inteira' &&
+    propostaPareceTrecho(frase.texto_pt, alvoProposta.correcao_proposta);
 
-  // Veredito descartado não oferece a própria correção: quem discordou do juízo não
-  // deveria poder aplicar o texto que ele propôs sem antes reabrir o caso.
-  const podeAplicar = !!ultimo?.correcao_proposta && ultimo.status !== 'corrigido' && ultimo.status !== 'rejeitado';
+  // Anda junto com a caixa da proposta a que se refere — se ficasse no pé do fio,
+  // apontaria para o turno errado sempre que a conversa passasse da proposta.
+  const acaoProposta = alvoProposta && (
+    <div className="mt-2 space-y-2">
+      {propostaEncurtaDemais && (
+        <p className="rounded border border-erro/40 bg-papel-alto px-2 py-1 text-xs">
+          <strong>Atenção:</strong> a proposta é bem mais curta que a frase atual (
+          {alvoProposta.correcao_proposta!.trim().length} contra {frase.texto_pt.trim().length} caracteres). Ela
+          pode ser só o trecho corrigido — e aplicar <strong>substitui a frase inteira</strong>, apagando o resto.
+          Confira antes; se for o caso, edite a frase à mão em vez de aplicar.
+        </p>
+      )}
+      <Botao
+        onClick={() => {
+          const proposta = alvoProposta.correcao_proposta!;
+          if (
+            propostaEncurtaDemais &&
+            !window.confirm(
+              'A correção proposta é bem mais curta que a frase atual e pode ser só um trecho dela.\n\n' +
+                'Aplicar SUBSTITUI a frase inteira:\n\n' +
+                `ATUAL:\n${frase.texto_pt}\n\nFICARÁ:\n${proposta}\n\n` +
+                'Aplicar mesmo assim?',
+            )
+          ) {
+            return;
+          }
+          aplicarCorrecao.mutate(alvoProposta.id);
+        }}
+        disabled={aplicarCorrecao.isPending}
+      >
+        Aplicar correção
+      </Botao>
+    </div>
+  );
 
   return (
     // Gaveta flutuante: sobre o papel, nunca reflui o texto. Arrastável pelo cabeçalho.
@@ -387,50 +483,21 @@ export function GavetaRevisao({
           <div className="space-y-2 border-t border-linha/60 pt-3">
             {corrente.map((caso, i) => (
               <div key={caso.id} className={i > 0 ? 'border-t border-linha/40 pt-2' : undefined}>
-                <TurnoFio caso={caso} frase={frase} />
+                {/* Aplicar pertence à caixa da proposta; discordar pertence ao pé do
+                    fio, porque é o veredito corrente que se recusa. */}
+                <TurnoFio
+                  caso={caso}
+                  frase={frase}
+                  acaoProposta={caso.id === alvoProposta?.id ? acaoProposta : undefined}
+                />
               </div>
             ))}
 
-            {/* As decisões valem sobre o ÚLTIMO turno: é ele que tem a proposta e o
-                veredito ainda de pé. */}
-            {podeAplicar && propostaEncurtaDemais && (
-              <p className="rounded border border-erro/40 bg-papel-alto px-2 py-1 text-xs">
-                <strong>Atenção:</strong> a proposta é bem mais curta que a frase atual (
-                {ultimo.correcao_proposta!.trim().length} contra {frase.texto_pt.trim().length} caracteres). Ela pode
-                ser só o trecho corrigido — e aplicar <strong>substitui a frase inteira</strong>, apagando o resto.
-                Confira antes; se for o caso, edite a frase à mão em vez de aplicar.
-              </p>
-            )}
             <div className="flex flex-wrap items-center gap-2">
-              {ultimo.correcao_proposta &&
-                (podeAplicar ? (
-                  <Botao
-                    onClick={() => {
-                      const proposta = ultimo.correcao_proposta!;
-                      if (
-                        propostaEncurtaDemais &&
-                        !window.confirm(
-                          'A correção proposta é bem mais curta que a frase atual e pode ser só um trecho dela.\n\n' +
-                            'Aplicar SUBSTITUI a frase inteira:\n\n' +
-                            `ATUAL:\n${frase.texto_pt}\n\nFICARÁ:\n${proposta}\n\n` +
-                            'Aplicar mesmo assim?',
-                        )
-                      ) {
-                        return;
-                      }
-                      aplicarCorrecao.mutate(ultimo.id);
-                    }}
-                    disabled={aplicarCorrecao.isPending}
-                  >
-                    Aplicar correção
-                  </Botao>
-                ) : ultimo.status === 'corrigido' ? (
-                  <Etiqueta cor="indigo">Correção aplicada</Etiqueta>
-                ) : null)}
               {ultimo.status !== 'rejeitado' && (
                 <Botao
                   variante="secundario"
-                  onClick={() => setDiscordando((d) => !d)}
+                  onClick={() => (discordando ? fecharDiscordancia() : setDiscordando(true))}
                   title="Descarta este veredito — para discutir, responda no pé do fio"
                 >
                   Discordo
@@ -451,13 +518,7 @@ export function GavetaRevisao({
                   <Botao variante="perigo" onClick={() => rejeitar.mutate(ultimo.id)} disabled={rejeitar.isPending}>
                     Descartar o veredito
                   </Botao>
-                  <Botao
-                    variante="secundario"
-                    onClick={() => {
-                      setDiscordando(false);
-                      setMotivoRejeicao('');
-                    }}
-                  >
+                  <Botao variante="secundario" onClick={fecharDiscordancia}>
                     Cancelar
                   </Botao>
                 </div>
