@@ -169,6 +169,23 @@ export function aplicarCorrecao(
 }
 
 /**
+ * O menor trecho que difere entre dois textos: corta o prefixo e o sufixo comuns.
+ *
+ * É o INVERSO de `aplicarCorrecao` — dela sai o par que a correção cirúrgica
+ * consumiria. Serve para ler o que o revisor mudou à mão sem despejar a frase
+ * inteira no relatório: `morto -> cadáver` ensina; a frase de 200 caracteres não.
+ */
+export function trechoQueMudou(antes: string, depois: string): { de: string; para: string } {
+  let i = 0;
+  while (i < antes.length && i < depois.length && antes[i] === depois[i]) i++;
+  // O sufixo comum não pode invadir o que o prefixo já contou ("aa" -> "aaa"),
+  // senão os índices se cruzam e o slice devolve lixo.
+  let j = 0;
+  while (j < antes.length - i && j < depois.length - i && antes[antes.length - 1 - j] === depois[depois.length - 1 - j]) j++;
+  return { de: antes.slice(i, antes.length - j), para: depois.slice(i, depois.length - j) };
+}
+
+/**
  * A correção proposta parece ser só um PEDAÇO da frase, e não a frase inteira?
  *
  * O contrato manda a IA devolver "a frase COMPLETA corrigida", mas ela nem
