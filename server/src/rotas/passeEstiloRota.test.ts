@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abrirBanco, type BancoDados } from '../db/index.js';
 import { criarApp } from '../app.js';
 import { reposFrases } from '../db/repos.js';
+import { provedorMock } from '../ia/mock.js';
 import type { Hono } from 'hono';
 
 // Passe de estilo: propõe o conserto das violações que a varredura determinística
@@ -25,16 +26,24 @@ async function chamar(metodo: string, rota: string, corpo?: unknown): Promise<Re
 }
 
 describe('passe de estilo', () => {
+  let obraId: number;
   let capId: number;
   let capLimpoId: number;
   let fraseId: number;
   let ordemComErrara: number;
+
+  // As espionagens de provedorMock (vizinhas, previa/descartar) não podem vazar
+  // de um it() para o próximo — o objeto é um singleton compartilhado pelo módulo.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     db = abrirBanco(':memory:');
     app = criarApp(db);
 
     const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Obra' }));
+    obraId = obra.id;
 
     // Capítulo com uma frase que o scanner acusa (mais-que-perfeito: "errara")
     // e outra limpa, para provar que só a acusada vai ao provedor.
@@ -125,5 +134,76 @@ describe('passe de estilo', () => {
     const f = reposFrases.obter(db, fraseId)!;
     expect(f.texto_pt).toContain('errou');
     expect(f.origem_edicao).toBe('passe-estilo');
+  });
+
+  // O provedor mock só ecoa `req.alvos` — nunca lê `req.vizinhas` — então um bug
+  // no filtro que as monta é invisível para os testes acima (a resposta não muda).
+  // `vizinhas` vai dentro do prompt: se o filtro mandasse o capítulo inteiro em
+  // vez de só os ordem±1, cada passe ficaria caro sem ninguém perceber. Espiona
+  // a chamada real ao provedor para verificar o que a ROTA de fato monta.
+  it('manda como vizinhas só as frases adjacentes aos alvos — nunca o capítulo inteiro', async () => {
+    const criado = await json(
+      await chamar('POST', `/api/obras/${obraId}/capitulos`, {
+        numero: 9,
+        texto_origem: '甲说。乙走了。丙笑了。丁哭了。戊来了。',
+      }),
+    );
+    const capId5 = criado.capitulo.id;
+    const frases5 = (await json(await chamar('GET', `/api/capitulos/${capId5}`))).frases;
+    expect(frases5).toHaveLength(5);
+    // Só a frase de ordem 2 (índice 2) tem violação; as outras quatro são limpas.
+    await chamar('PATCH', `/api/frases/${frases5[0].id}`, { texto_pt: 'Ele partiu.' });
+    await chamar('PATCH', `/api/frases/${frases5[1].id}`, { texto_pt: 'Ela chegou.' });
+    await chamar('PATCH', `/api/frases/${frases5[2].id}`, { texto_pt: 'Ele errara o caminho.' });
+    await chamar('PATCH', `/api/frases/${frases5[3].id}`, { texto_pt: 'Ela saiu.' });
+    await chamar('PATCH', `/api/frases/${frases5[4].id}`, { texto_pt: 'Ele dormiu.' });
+
+    const spy = vi.spyOn(provedorMock, 'passeEstilo');
+    const r = await app.request(`/api/capitulos/${capId5}/estilo/passe`, { method: 'POST' });
+    expect(r.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const req = spy.mock.calls[0][1];
+    expect(req.alvos.map((a) => a.ordem)).toEqual([2]);
+    // Nem a própria ordem 2 (já é alvo), nem as distantes 0 e 4 — só 1 e 3.
+    expect(req.vizinhas.map((v) => v.ordem).sort()).toEqual([1, 3]);
+  });
+
+  it('previa: proposta que ancora vem com o texto já consertado', async () => {
+    const r = await app.request(`/api/capitulos/${capId}/estilo/passe`, { method: 'POST' });
+    const { correcoes } = await r.json();
+    const c = correcoes.find((cor: { trecho_pt_errado: string | null }) => cor.trecho_pt_errado === 'errara');
+    expect(c).toBeTruthy();
+    expect(c.descartar).toBe(false);
+    // "Ele errara o caminho." com "errara" trocado por "[simulado] errara" (o
+    // par que o mock devolve) — é o que a tela mostraria antes de gravar.
+    expect(c.previa).toEqual({ tipo: 'cirurgica', texto: 'Ele [simulado] errara o caminho.' });
+  });
+
+  it('descarte: correção com descartar=true chega com previa=null', async () => {
+    // O scanner atual (server/src/traducao/estiloViolacoes.ts) tem "prepara",
+    // "romãzeira" e "voadora" na lista NAO_VERBOS — conferido também no HEAD
+    // anterior a esta tarefa para "prepara"/"romãzeira" — então nenhum desses
+    // três trechos chega a virar `violacoes` de verdade; o gatilho de descarte
+    // do mock (que reage a ESSAS palavras exatas) nunca dispara pela rota real.
+    // Para testar o que a ROTA faz com `descartar: true` sem depender de mexer
+    // no scanner (arquivo do usuário, fora do escopo desta tarefa), a resposta
+    // do provedor é interceptada só no campo `descartar` — todo o resto (uso,
+    // forma) continua sendo o que o mock de verdade devolveria.
+    const original = provedorMock.passeEstilo.bind(provedorMock);
+    vi.spyOn(provedorMock, 'passeEstilo').mockImplementationOnce(async (chave, req) => {
+      const resposta = await original(chave, req);
+      return {
+        ...resposta,
+        correcoes: resposta.correcoes.map((c) => ({ ...c, descartar: true, trecho_pt_errado: null, trecho_pt_corrigido: null })),
+      };
+    });
+    const r = await app.request(`/api/capitulos/${capId}/estilo/passe`, { method: 'POST' });
+    expect(r.status).toBe(200);
+    const { correcoes } = await r.json();
+    expect(correcoes.length).toBeGreaterThan(0);
+    for (const c of correcoes) {
+      expect(c.descartar).toBe(true);
+      expect(c.previa).toBeNull();
+    }
   });
 });
