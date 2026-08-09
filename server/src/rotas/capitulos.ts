@@ -1,14 +1,37 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { PROVEDORES_IDS, STATUS_CAPITULO, normalizarPreferencias, type EventoTraducao } from '@dao-tale/shared';
+import {
+  PROVEDORES_IDS,
+  STATUS_CAPITULO,
+  aplicarCorrecao,
+  normalizarPreferencias,
+  resolverTemperatura,
+  type EventoTraducao,
+  type ProvedorId,
+} from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConsistencia, reposEstiloIgnorado, reposFrases, reposGlossario, reposObras, reposPrompts, reposQa } from '../db/repos.js';
+import {
+  reposCapitulos,
+  reposConfig,
+  reposConsistencia,
+  reposEstiloIgnorado,
+  reposFrases,
+  reposGlossario,
+  reposObras,
+  reposPrompts,
+  reposQa,
+  reposUso,
+} from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
 import { analisarEstilo } from '../traducao/estiloViolacoes.js';
 import { analisarCapitulo } from '../traducao/qa.js';
+import { obterProvedor } from '../ia/fabrica.js';
+import { ErroProvedor } from '../ia/provedor.js';
+import { obterChave } from '../credenciais/index.js';
+import { registrarEvento } from '../telemetria/registrar.js';
 import {
   cancelarJob,
   emissorDoCapitulo,
@@ -110,6 +133,98 @@ export function rotasCapitulos(db: BancoDados): Hono {
       por_terco[i] += 1;
     }
     return c.json({ ...relatorio, violacoes: visiveis, por_terco, ignoradas: ignoradas.size });
+  });
+
+  // Passe de estilo: propõe o conserto das violações que a varredura já acusa.
+  // Escopo estreito de propósito — só as frases da lista, nunca o capítulo inteiro.
+  app.post('/capitulos/:id/estilo/passe', async (c) => {
+    const id = Number(c.req.param('id'));
+    const capitulo = reposCapitulos.obter(db, id);
+    if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
+
+    const prompt = reposPrompts.composto(db, capitulo.obra_id);
+    if (!prompt) {
+      return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
+    }
+    const prefs = normalizarPreferencias(reposPrompts.ativo(db, capitulo.obra_id)?.preferencias);
+    const frases = reposFrases.listarPorCapitulo(db, id);
+    const idPorOrdem = new Map(frases.map((f) => [f.ordem, f.id]));
+    const ignoradas = reposEstiloIgnorado.doCapitulo(db, id);
+    const visiveis = analisarEstilo(frases, prefs).violacoes.filter((v) => {
+      const fid = idPorOrdem.get(v.ordem);
+      return fid != null && !ignoradas.has(`${fid}|${v.regra}|${v.trecho}`);
+    });
+
+    // Sem violação não há chamada — o passe custa dinheiro e não se paga no vazio.
+    if (visiveis.length === 0) return c.json({ correcoes: [] });
+
+    const porOrdem = new Map<number, { regra: string; trecho: string }[]>();
+    for (const v of visiveis) porOrdem.set(v.ordem, [...(porOrdem.get(v.ordem) ?? []), { regra: v.regra, trecho: v.trecho }]);
+    const textoPorOrdem = new Map(frases.map((f) => [f.ordem, f.texto_pt ?? '']));
+    const alvos = [...porOrdem.entries()].map(([ordem, violacoes]) => ({
+      ordem,
+      texto_pt: textoPorOrdem.get(ordem) ?? '',
+      violacoes,
+    }));
+    const alvosSet = new Set(alvos.map((a) => a.ordem));
+    const vizinhas = frases
+      .filter((f) => !alvosSet.has(f.ordem) && [...alvosSet].some((o) => Math.abs(o - f.ordem) === 1))
+      .map((f) => ({ ordem: f.ordem, texto_pt: f.texto_pt ?? '' }));
+
+    // Mesma cadeia do papel `revisao` (doc 08 §5): o par de revisão vence quando
+    // configurado, senão cai no do capítulo, no da obra e no padrão. Nunca se mistura
+    // modelo de um provedor com outro.
+    const obra = reposObras.obter(db, capitulo.obra_id)!;
+    const config = reposConfig.obterTodas(db);
+    const papelRevisao = !!config.provedor_revisao;
+    const provedorId: ProvedorId = papelRevisao
+      ? (config.provedor_revisao as ProvedorId)
+      : ((capitulo.provedor as ProvedorId | null) ?? obra.provedor_padrao ?? config.provedor_padrao);
+    const provedor = obterProvedor(provedorId);
+    const modelo = papelRevisao
+      ? config.modelo_revisao || provedor.modeloPadrao
+      : (capitulo.modelo ?? obra.modelo_padrao ?? (config.modelo_padrao || provedor.modeloPadrao));
+    const chave = provedor.precisaChave ? await obterChave(provedorId) : null;
+    if (provedor.precisaChave && !chave) {
+      return c.json({ erro: { codigo: 'sem-chave', mensagem: `Nenhuma chave de API configurada para ${provedor.nome}.` } }, 400);
+    }
+
+    try {
+      reposUso.registrar(db, provedorId, modelo);
+      const resposta = await provedor.passeEstilo(chave, {
+        modelo,
+        temperatura: resolverTemperatura(config.temperaturas, 'revisao', obra.temperatura),
+        omega: prompt.texto,
+        alvos,
+        vizinhas,
+      });
+      registrarEvento(db, { obra_id: capitulo.obra_id, capitulo_id: id, papel: 'estilo', provedor: provedorId, modelo, uso: resposta.uso });
+      const correcoes = resposta.correcoes.map((cor) => {
+        const frase_id = idPorOrdem.get(cor.ordem) ?? null;
+        const texto = textoPorOrdem.get(cor.ordem) ?? '';
+        return { ...cor, frase_id, previa: cor.descartar ? null : aplicarCorrecao(texto, cor) };
+      });
+      return c.json({ correcoes });
+    } catch (e) {
+      const mensagem = e instanceof ErroProvedor ? e.message : `Falha no passe de estilo: ${(e as Error).message}`;
+      return c.json({ erro: { codigo: 'passe-estilo', mensagem } }, 502);
+    }
+  });
+
+  // Aplica uma correção do passe. Separada da proposta porque a decisão é humana:
+  // a rota de cima nunca escreve no texto.
+  app.post('/frases/:id/estilo/aplicar', async (c) => {
+    const corpo = z
+      .object({ trecho_pt_errado: z.string().min(1), trecho_pt_corrigido: z.string() })
+      .safeParse(await c.req.json());
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const frase = reposFrases.obter(db, Number(c.req.param('id')));
+    if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
+    const r = aplicarCorrecao(frase.texto_pt ?? '', corpo.data);
+    if (r.tipo === 'impossivel') {
+      return c.json({ erro: { codigo: 'trecho-nao-encontrado', mensagem: `O trecho "${corpo.data.trecho_pt_errado}" não foi encontrado no texto atual da frase.` } }, 400);
+    }
+    return c.json(reposFrases.editarTexto(db, frase.id, r.texto, 'passe-estilo'));
   });
 
   // Ignorar um alerta de estilo: some da lista e da contagem, sem tocar no
