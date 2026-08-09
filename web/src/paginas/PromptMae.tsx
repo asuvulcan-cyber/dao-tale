@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PreferenciasEstilo, PromptComposto, PromptPadrao, TipoPrompt } from '@dao-tale/shared';
 import {
@@ -79,6 +79,10 @@ export function PromptMae() {
   const clienteQuery = useQueryClient();
   const chave = ['prompts', obraId];
   const [erroAdotar, setErroAdotar] = useState('');
+  // `?painel=refinar` chega da tela de edições manuais. Sem isto o botão de lá
+  // largaria o revisor nesta tela com o refinamento ainda fechado atrás de um
+  // segundo clique — e a rota `diretriz` só existe para terminar no refinamento.
+  const [parametros] = useSearchParams();
 
   const adotar = useMutation({
     mutationFn: () => api('POST', `/obras/${obraId}/prompts/adotar-padrao`),
@@ -95,6 +99,7 @@ export function PromptMae() {
       urlCriar={`/obras/${obraId}/prompts`}
       urlAtivar={(id) => `/prompts/${id}/ativar`}
       obraId={obraId}
+      painelInicial={parametros.get('painel') === 'refinar' ? 'refinar' : undefined}
       estadoVazio={
         <Aviso tipo="info">
           <div className="space-y-2">
@@ -135,6 +140,8 @@ export function PaginaPromptPadrao() {
   );
 }
 
+type Painel = 'ver' | 'nova' | 'comparar' | 'converter' | 'refinar' | 'preferencias';
+
 function GerenciadorPrompts({
   titulo,
   descricao,
@@ -144,6 +151,7 @@ function GerenciadorPrompts({
   urlAtivar,
   estadoVazio,
   obraId,
+  painelInicial,
 }: {
   titulo: string;
   descricao: string;
@@ -154,10 +162,14 @@ function GerenciadorPrompts({
   estadoVazio: ReactNode;
   /** Presente na tela da obra: liga prévia composta, conversão e refinamento. */
   obraId?: string;
+  /** Painel já aberto na chegada, quando outra tela mandou o revisor para cá
+   *  com um destino em mente. Só o valor inicial: fechar o painel depois é
+   *  decisão dele, não da URL. */
+  painelInicial?: Painel;
 }) {
   const clienteQuery = useQueryClient();
   const [selecionado, setSelecionado] = useState<number | null>(null);
-  const [painel, setPainel] = useState<'ver' | 'nova' | 'comparar' | 'converter' | 'refinar' | 'preferencias'>('ver');
+  const [painel, setPainel] = useState<Painel>(painelInicial ?? 'ver');
   const [rascunhoInicial, setRascunhoInicial] = useState<string | null>(null);
   const [erro, setErro] = useState('');
   // Avisos da última versão salva (doc 15 §7). Vivem fora do painel de criação

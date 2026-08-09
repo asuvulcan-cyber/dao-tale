@@ -23,6 +23,10 @@ export function ObraLayout() {
     { rota: `/obras/${obraId}/termos`, texto: `Termos sugeridos${sugestoes?.length ? ` (${sugestoes.length})` : ''}` },
     { rota: `/obras/${obraId}/prompt`, texto: 'Prompt mãe' },
     { rota: `/obras/${obraId}/testes`, texto: 'Banco de testes' },
+    // Vizinha do banco de testes de propósito: são os dois canais de aprendizado
+    // da obra, e o de baixo é o que o app ignorou por mais tempo — 146 edições
+    // manuais contra 25 casos no canal oficial.
+    { rota: `/obras/${obraId}/edicoes`, texto: 'Edições manuais' },
     { rota: `/obras/${obraId}/comparar`, texto: 'Comparar modelos' },
     { rota: `/obras/${obraId}/custos`, texto: 'Custos' },
   ];

@@ -356,6 +356,49 @@ export function Etiqueta({ children, cor = 'neutro' }: { children: React.ReactNo
   return <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${cores[cor]}`}>{children}</span>;
 }
 
+/** Realça um trecho dentro de um texto.
+ *
+ *  Saiu do editor para cá quando a segunda tela precisou dele: as telas de
+ *  estilo mostram sempre a mesma coisa — a frase inteira com o pedaço em
+ *  questão marcado — e sem o realce o olho tem de procurar na frase o que a
+ *  linha logo acima já nomeou.
+ *
+ *  Realça a PRIMEIRA ocorrência, nunca todas: a troca cirúrgica do passe só
+ *  acontece quando o trecho é único na frase, e pintar as três ocorrências de
+ *  uma palavra repetida mentiria sobre qual delas vai mudar. */
+export function TextoComDestaque({
+  texto,
+  trecho,
+  cor = 'selo',
+}: {
+  texto: string;
+  trecho: string;
+  cor?: 'selo' | 'jade';
+}) {
+  const inicio = trecho ? texto.indexOf(trecho) : -1;
+  if (inicio < 0) return <>{texto}</>;
+  const cores = { selo: 'bg-selo-tint text-selo-forte', jade: 'bg-jade-tint text-jade-forte' };
+  return (
+    <>
+      {texto.slice(0, inicio)}
+      <mark className={`rounded px-0.5 ${cores[cor]}`}>{trecho}</mark>
+      {texto.slice(inicio + trecho.length)}
+    </>
+  );
+}
+
+// Rótulos das regras da varredura determinística de estilo (server/src/traducao/
+// estiloViolacoes.ts). Vive aqui, e não no editor, porque a varredura e o passe
+// são duas telas mostrando a MESMA regra — com duas cópias, a que ficasse para
+// trás faria a mesma violação ter dois nomes no mesmo app.
+export const REGRA_ESTILO_ROTULO: Record<string, string> = {
+  'mais-que-perfeito': 'Mais-que-perfeito simples',
+  'aspas-nao-retas': 'Aspas não retas',
+  'virgula-dentro-da-aspa': 'Vírgula dentro das aspas',
+  'dialogo-aspas': 'Travessão numa obra de aspas',
+  'dialogo-travessao': 'Aspas numa obra de travessão',
+};
+
 export const STATUS_CAPITULO_ROTULO: Record<string, { texto: string; cor: CorEtiqueta }> = {
   rascunho: { texto: 'Rascunho', cor: 'neutro' },
   traduzindo: { texto: 'Traduzindo', cor: 'indigo' },

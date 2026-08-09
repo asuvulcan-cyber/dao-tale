@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ApontamentoQa,
@@ -13,7 +13,7 @@ import type {
   StatusCapitulo,
 } from '@dao-tale/shared';
 import { api } from '../api';
-import { Aviso, Botao, MenuMais, STATUS_CAPITULO_ROTULO } from '../App';
+import { Aviso, Botao, MenuMais, REGRA_ESTILO_ROTULO, STATUS_CAPITULO_ROTULO } from '../App';
 import { GavetaRevisao } from '../componentes/GavetaRevisao';
 import { IndicadorCota } from '../componentes/IndicadorCota';
 import {
@@ -23,6 +23,7 @@ import {
   type MarcadorGlossario,
 } from '../componentes/TextoRico';
 import { extrairTroca } from '../util/troca';
+import type { ViolacaoEstilo } from '../util/passeEstilo';
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -38,21 +39,6 @@ interface ViolacaoConsistencia {
   texto_zh: string;
   texto_pt: string;
 }
-
-interface ViolacaoEstilo {
-  frase_id: number | null;
-  ordem: number;
-  regra: string;
-  trecho: string;
-}
-
-const REGRA_ESTILO_ROTULO: Record<string, string> = {
-  'mais-que-perfeito': 'Mais-que-perfeito simples',
-  'aspas-nao-retas': 'Aspas não retas',
-  'virgula-dentro-da-aspa': 'Vírgula dentro das aspas',
-  'dialogo-aspas': 'Travessão numa obra de aspas',
-  'dialogo-travessao': 'Aspas numa obra de travessão',
-};
 
 // ── Modos de visualização do capítulo (item 9 do backlog) ───────────────────
 const MODOS_EDITOR = [
@@ -1216,6 +1202,8 @@ function ModalEstilo({
   aoFechar: () => void;
   aoIrParaFrase: (fraseId: number) => void;
 }) {
+  const { obraId } = useParams();
+  const navegar = useNavigate();
   const { data, isLoading } = useQuery({
     queryKey: ['estilo', capituloId],
     queryFn: () =>
@@ -1260,6 +1248,18 @@ function ModalEstilo({
                 Por terço do capítulo: {data.por_terco[0]} · {data.por_terco[1]} · {data.por_terco[2]}
                 {data.por_terco[2] > data.por_terco[0] + data.por_terco[1] && ' — concentrado no fim, típico de bloco grande demais.'}
               </p>
+            )}
+            {/* A saída deste modal para o conserto. Esta lista sempre soube
+                apontar e nunca soube ajudar: dispensar ou ir à frase, e o
+                revisor consertava 57 à mão. O passe pede à IA o par cirúrgico
+                de cada uma — e por isso é tela própria, não mais um botão
+                aqui dentro. */}
+            {data.violacoes.length > 0 && (
+              <div>
+                <Botao onClick={() => navegar(`/obras/${obraId}/capitulos/${capituloId}/estilo`)}>
+                  Propor consertos com a IA…
+                </Botao>
+              </div>
             )}
             <div className="space-y-2">
               {data.violacoes.map((v, i) => (

@@ -8,6 +8,8 @@ import { ListaObras } from './paginas/ListaObras';
 import { ObraLayout } from './paginas/ObraLayout';
 import { Capitulos } from './paginas/Capitulos';
 import { EditorCapitulo } from './paginas/EditorCapitulo';
+import { PasseEstilo } from './paginas/PasseEstilo';
+import { EdicoesManuais } from './paginas/EdicoesManuais';
 import { Glossario } from './paginas/Glossario';
 import { PromptMae, PaginaPromptPadrao } from './paginas/PromptMae';
 import { BancoTestes } from './paginas/BancoTestes';
@@ -61,6 +63,12 @@ const rotasBancada = createBrowserRouter([
         children: [
           { index: true, element: <Capitulos /> },
           { path: 'capitulos/:capituloId', element: <EditorCapitulo /> },
+          // O passe é tela própria, e não mais um modal do editor: a lista de
+          // consertos é longa (57 numa obra real), cada linha tem três decisões
+          // possíveis e o revisor volta a ela — coisas que uma caixa sobre o
+          // texto, sem endereço, não sustenta.
+          { path: 'capitulos/:capituloId/estilo', element: <PasseEstilo /> },
+          { path: 'edicoes', element: <EdicoesManuais /> },
           { path: 'glossario', element: <Glossario /> },
           { path: 'prompt', element: <PromptMae /> },
           { path: 'testes', element: <BancoTestes /> },
