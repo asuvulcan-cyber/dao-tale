@@ -394,6 +394,7 @@ export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'o
     '- NÃO proponha regra sobre aspas/travessão no diálogo, marcação do pensamento, mais-que-perfeito, nota do tradutor, onomatopeia ou público-alvo: isso é configuração da obra (a Seção 5, quando presente), resolvida por uma chave e não por texto de diretriz.',
     'A mensagem do usuário pode trazer casos RECUSADOS pelo revisor. Eles são correção de rumo, não material a generalizar: NÃO proponha regra que reproduza o erro apontado neles.',
     'A mensagem pode trazer CORREÇÕES QUE O REVISOR FEZ À MÃO. São o padrão que ele pratica sem pedir, e portanto o sinal mais forte — mas também o mais bruto: uma correção isolada é gosto, não regra. Só proponha regra quando o mesmo tipo de correção se repetir em casos diferentes.',
+    'As fontes podem vir juntas ou separadas: casos recorrentes do banco de testes, casos recusados pelo revisor, e correções que ele fez à mão. Quando NÃO houver casos recorrentes e só vierem correções à mão, proponha um secao_regra NOVO e descritivo do padrão que você observou — não cite um identificador que não foi enviado.',
     'Para cada proposta devolva: secao_regra (o identificador dos casos que a motivaram), regra_proposta (o texto pronto para entrar nas diretrizes) e justificativa (1 frase ligando aos casos).',
     'Se os casos não sustentarem nenhuma regra nova, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
@@ -408,21 +409,26 @@ export function sistemaRefinarPrompt(req: Pick<RequisicaoRefinarPrompt, 'omega' 
 export function usuarioRefinarPrompt(
   req: Pick<RequisicaoRefinarPrompt, 'casos' | 'recusados' | 'edicoes'>,
 ): string {
-  const porSecao = new Map<string, RequisicaoRefinarPrompt['casos']>();
-  for (const caso of req.casos) {
-    const lista = porSecao.get(caso.secao_regra) ?? [];
-    lista.push(caso);
-    porSecao.set(caso.secao_regra, lista);
-  }
-  const partes: string[] = ['### Casos recorrentes do banco de testes:'];
-  for (const [secao, casos] of porSecao) {
-    partes.push('');
-    partes.push(`#### Seção/regra: ${secao} (${casos.length} casos)`);
-    for (const c of casos) {
-      partes.push(`- ZH: ${c.trecho_zh}`);
-      partes.push(`  Pergunta do revisor: ${c.pergunta}`);
-      partes.push(`  Veredito: ${c.veredito} — ${c.justificativa}`);
-      if (c.correcao_proposta) partes.push(`  Correção aplicada: ${c.correcao_proposta}`);
+  const partes: string[] = [];
+  if (req.casos.length > 0) {
+    // Cabeçalho só quando há casos: o refinamento agora também roda só com
+    // edições manuais, e cabeçalho vazio faz o modelo procurar o que não veio.
+    partes.push('### Casos recorrentes do banco de testes:');
+    const porSecao = new Map<string, RequisicaoRefinarPrompt['casos']>();
+    for (const caso of req.casos) {
+      const lista = porSecao.get(caso.secao_regra) ?? [];
+      lista.push(caso);
+      porSecao.set(caso.secao_regra, lista);
+    }
+    for (const [secao, casos] of porSecao) {
+      partes.push('');
+      partes.push(`#### Seção/regra: ${secao} (${casos.length} casos)`);
+      for (const c of casos) {
+        partes.push(`- ZH: ${c.trecho_zh}`);
+        partes.push(`  Pergunta do revisor: ${c.pergunta}`);
+        partes.push(`  Veredito: ${c.veredito} — ${c.justificativa}`);
+        if (c.correcao_proposta) partes.push(`  Correção aplicada: ${c.correcao_proposta}`);
+      }
     }
   }
   if (req.recusados && req.recusados.length > 0) {

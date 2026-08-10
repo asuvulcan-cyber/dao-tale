@@ -427,4 +427,36 @@ describe('refinamento — edições manuais', () => {
   it('o sistema avisa que edição só vira regra quando se repete', () => {
     expect(sistemaRefinarPrompt(req)).toMatch(/se repete|repetir/i);
   });
+
+  it('sem casos, não emite o cabeçalho de casos', () => {
+    // O refinamento passou a poder rodar só com edições manuais. O cabeçalho
+    // saía mesmo assim, vazio, e a instrução pedia "o identificador dos casos
+    // que a motivaram" — que edição manual não tem.
+    const u = usuarioRefinarPrompt({
+      casos: [],
+      recusados: [],
+      edicoes: [
+        { trecho_zh: '他已经是死人', ia: 'ele já é um morto', voce: 'ele já é um cadáver', mudou: { de: 'morto', para: 'cadáver' } },
+      ],
+    });
+    expect(u).not.toContain('### Casos recorrentes do banco de testes');
+    expect(u).toMatch(/corrigiu à mão|fez à mão/i);
+  });
+
+  it('com casos, o cabeçalho continua saindo', () => {
+    const u = usuarioRefinarPrompt({
+      casos: [
+        { secao_regra: '1-prosa-nao-legenda', trecho_zh: '甲', pergunta: 'p', veredito: 'incorreto', justificativa: 'j', correcao_proposta: null },
+      ],
+      recusados: [],
+      edicoes: [],
+    });
+    expect(u).toContain('### Casos recorrentes do banco de testes');
+  });
+
+  it('o sistema descreve as duas fontes e o que fazer sem casos', () => {
+    const s = sistemaRefinarPrompt({ omega: 'PROMPT', deltaAtual: '' });
+    // Sem isto o modelo tem de inventar um secao_regra sem orientação nenhuma.
+    expect(s).toMatch(/quando (n[ãa]o houver|só houver|houver apenas)/i);
+  });
 });
