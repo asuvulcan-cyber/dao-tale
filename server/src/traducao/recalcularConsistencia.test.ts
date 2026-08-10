@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Hono } from 'hono';
 import { abrirBanco, type BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposGlossario, reposObras } from '../db/repos.js';
+import { reposCapitulos, reposFrases, reposGlossario, reposObras, recalcularConsistenciaDaObra } from '../db/repos.js';
 import { criarApp } from '../app.js';
-import { recalcularConsistenciaDaObra } from './consistencia.js';
+// Namespace do módulo, só para o `vi.spyOn` da segunda `describe` — a função
+// mora em `repos.ts` (correção da revisão: movida de `consistencia.ts` para
+// não arrastar `better-sqlite3` para dentro de um módulo puro, ver repos.ts).
+import * as repos from '../db/repos.js';
 
 // Mesmo padrão de app.test.ts / consistenciaObra.test.ts: modo local (sem
 // DAO_TALE_MODO=hospedado) deixa `exigirSessao` como passa-direto, e o
@@ -69,6 +72,15 @@ describe('gatilho nas rotas de glossário (curadoria.ts)', () => {
     app = criarApp(db);
   });
 
+  // Achado da revisão: um teste de estado final não distingue "recalculou e deu
+  // igual" de "não recalculou" — vi.spyOn NA MESMA função importada por
+  // curadoria.ts (via o namespace `repos`, não uma cópia) prova a INVOCAÇÃO, não
+  // só o resultado. Restaura depois de cada teste para os spies não vazarem
+  // contagem de um `it` para o outro.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('cadastrar termo pela rota já deixa a contagem do capítulo em dia', async () => {
     // É o buraco que esta tarefa fecha: antes, o capítulo seguia com o número
     // calculado quando o termo não existia.
@@ -80,9 +92,10 @@ describe('gatilho nas rotas de glossário (curadoria.ts)', () => {
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
   });
 
-  it('substituir zera a contagem que ele acabou de consertar', async () => {
+  it('substituir zera a contagem que ele acabou de consertar, chamando o recálculo exatamente uma vez', async () => {
     // substituir altera as FRASES, não o glossário — e é justamente a ação que
     // resolve as violações. Sem recalcular, o selo continuaria acusando.
+    const spy = vi.spyOn(repos, 'recalcularConsistenciaDaObra');
     const g = await (
       await app.request(`/api/obras/${obraId}/glossario`, {
         method: 'POST',
@@ -91,16 +104,27 @@ describe('gatilho nas rotas de glossário (curadoria.ts)', () => {
       })
     ).json();
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+    // Zera a contagem do POST acima (já coberto pelo 1º teste) para isolar
+    // só a chamada que `substituir` faz.
+    spy.mockClear();
 
     await app.request(`/api/glossario/${g.id}/substituir`, {
       method: 'POST',
       body: JSON.stringify({ de: 'Fortaleza Jinpeng', previa: false }),
       headers: { 'content-type': 'application/json' },
     });
+    // Com previa=false a guarda deixa passar de qualquer jeito — é o teste de
+    // PRÉVIA abaixo que precisa pegar a mutação de remover a guarda.
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(0);
   });
 
-  it('prévia do substituir não recalcula nem grava', async () => {
+  it('prévia do substituir não recalcula nem grava — zero chamadas, não só "mesmo resultado"', async () => {
+    // Achado da revisão: um teste que só olha `consistencia_violacoes` no final
+    // não distingue "não recalculou" de "recalculou e deu o mesmo número" (a
+    // prévia não grava, então varrer de novo daria o mesmo 1 de qualquer jeito).
+    // Contar invocações do spy é o que de fato prova a guarda.
+    const spy = vi.spyOn(repos, 'recalcularConsistenciaDaObra');
     const g = await (
       await app.request(`/api/obras/${obraId}/glossario`, {
         method: 'POST',
@@ -109,27 +133,37 @@ describe('gatilho nas rotas de glossário (curadoria.ts)', () => {
       })
     ).json();
     const antes = reposFrases.listarPorCapitulo(db, capId)[0].texto_pt;
+    spy.mockClear();
 
     await app.request(`/api/glossario/${g.id}/substituir`, {
       method: 'POST',
       body: JSON.stringify({ de: 'Fortaleza Jinpeng', previa: true }),
       headers: { 'content-type': 'application/json' },
     });
+    expect(spy).toHaveBeenCalledTimes(0);
     // Prévia não grava nada; recalcular ali seria trabalho jogado fora.
     expect(reposFrases.listarPorCapitulo(db, capId)[0].texto_pt).toBe(antes);
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
   });
 
-  it('importar CSV recalcula uma vez, e a contagem fica certa', async () => {
+  it('importar CSV recalcula uma vez, não por termo — 3 termos, 1 chamada', async () => {
     // O laço da importação não pode recalcular por termo — seriam N varreduras
-    // da obra inteira numa ação só.
-    const csv = 'termo_zh,termo_pt,categoria\n金鹏堡,Fortaleza do Peng Dourado,lugar\n飞鹰,Águia Voadora,pessoa\n';
+    // da obra inteira numa ação só. Estado final (violações == 1) não prova isso:
+    // 3 chamadas ao fim de cada iteração dariam o mesmo número. Só contar
+    // invocações do spy separa "uma varredura" de "uma por termo".
+    const spy = vi.spyOn(repos, 'recalcularConsistenciaDaObra');
+    const csv =
+      'termo_zh,termo_pt,categoria\n' +
+      '金鹏堡,Fortaleza do Peng Dourado,lugar\n' +
+      '飞鹰,Águia Voadora,pessoa\n' +
+      '幽泉谷,Vale da Fonte Sombria,lugar\n';
     const r = await app.request(`/api/obras/${obraId}/glossario/importar`, {
       method: 'POST',
       body: JSON.stringify({ csv }),
       headers: { 'content-type': 'application/json' },
     });
     expect(r.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
   });
 });

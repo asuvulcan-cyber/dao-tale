@@ -40,6 +40,7 @@ import {
   temperaturaValida,
 } from '@dao-tale/shared';
 import { comporOmega } from './promptPadraoInicial.js';
+import { varrerConsistencia } from '../traducao/consistencia.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
     letra/número (fronteira Unicode, então acentos contam como letra). Evita trocar
@@ -503,6 +504,41 @@ export const reposCapitulos = {
     return db.prepare('DELETE FROM capitulos WHERE id = ?').run(id).changes > 0;
   },
 };
+
+/**
+ * Recalcula `capitulos.consistencia_violacoes` de todos os capítulos da obra.
+ *
+ * Sem isto, o número exibido responde a uma pergunta feita ANTES de o glossário
+ * mudar: cadastra-se um termo e os capítulos seguem mostrando o "0 violações"
+ * calculado quando o termo não existia. Zero calculado cedo demais é pior que
+ * nenhum número, porque parece resposta.
+ *
+ * Custa 10–38 ms na obra inteira (medido: 561 frases, glossário de 57 a 1500
+ * termos), então recalcular vale mais que inventar um estado "precisa reconferir".
+ * Respeita as dispensas do revisor.
+ *
+ * Mora aqui (e não em `traducao/consistencia.ts`, ao lado de `varrerConsistencia`)
+ * porque a proteção que importa não é "existe ciclo?" — é que `varrerConsistencia`
+ * precisa continuar testável sem carregar `better-sqlite3` (binário nativo).
+ * `consistencia.ts` importar `repos.js` não fechava ciclo nenhum (verificado por
+ * varredura estática do grafo), mas arrastava o binário do banco para dentro de um
+ * módulo que hoje não depende dele — quem quisesse testar `varrerConsistencia`
+ * isolada passaria a precisar do SQLite mesmo assim. Aqui, `repos.ts` (que já
+ * depende do banco) importa a função pura de `traducao/`, não o contrário — é
+ * o módulo que CONHECE o banco chamando o módulo que não conhece, a única
+ * direção que não obriga ninguém a carregar o binário à toa.
+ */
+export function recalcularConsistenciaDaObra(db: BancoDados, obraId: number): void {
+  const frases = reposFrases.listarPorObra(db, obraId);
+  const glossario = reposGlossario.listar(db, obraId);
+  const ignoradas = reposConsistencia.ignoradasDaObra(db, obraId);
+  const porCapitulo = new Map<number, typeof frases>();
+  for (const f of frases) porCapitulo.set(f.capitulo_id, [...(porCapitulo.get(f.capitulo_id) ?? []), f]);
+  for (const [capituloId, doCapitulo] of porCapitulo) {
+    const r = varrerConsistencia(doCapitulo, glossario, ignoradas);
+    reposCapitulos.definirConsistencia(db, capituloId, r.violacoes.length);
+  }
+}
 
 // ── Frases ─────────────────────────────────────────────────────────────────
 

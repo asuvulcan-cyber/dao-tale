@@ -2,8 +2,13 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { camadaDoRotulo } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposFrases, reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
-import { recalcularConsistenciaDaObra } from '../traducao/consistencia.js';
+import {
+  reposFrases,
+  reposGlossario,
+  reposTermosSugeridos,
+  reposTestes,
+  recalcularConsistenciaDaObra,
+} from '../db/repos.js';
 
 // Categoria é texto livre: o usuário cria as suas (migração 016 derrubou o CHECK
 // que contradizia isso). CATEGORIAS_GLOSSARIO são só as sugestões da tela.
