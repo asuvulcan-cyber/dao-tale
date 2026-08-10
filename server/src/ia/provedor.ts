@@ -253,7 +253,23 @@ export interface RequisicaoPasseEstilo {
   modelo: string;
   temperatura?: number;
   omega: string;
-  alvos: { ordem: number; texto_pt: string; violacoes: { regra: string; trecho: string }[] }[];
+  alvos: {
+    ordem: number;
+    /** O ORIGINAL. Entrou por causa do catálogo de erros zh→pt-BR: consertar
+     *  `一直 → sempre` sem ver o chinês é adivinhar qual dos dois sentidos a
+     *  frase tinha. As violações de estilo puro ignoram este campo. */
+    texto_zh: string;
+    texto_pt: string;
+    violacoes: {
+      regra: string;
+      trecho: string;
+      /** O que é certo naquela violação, quando a regra sabe dizer (é o `certo`
+       *  da entrada do catálogo). Entregue aqui, no ponto do uso, em vez de no
+       *  prompt de tradução — texto de marcador no prompt foi medido sem efeito
+       *  em 2026-08-05. */
+      orientacao?: string;
+    }[];
+  }[];
   /** Frases vizinhas, só para o modelo entender o trecho. Nunca corrigidas. */
   vizinhas: { ordem: number; texto_pt: string }[];
 }

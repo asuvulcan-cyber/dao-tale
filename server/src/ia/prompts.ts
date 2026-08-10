@@ -468,6 +468,7 @@ export function sistemaPasseEstiloPartes(req: Pick<RequisicaoPasseEstilo, 'omega
     'Para cada violação devolva o par: trecho_pt_errado (cópia EXATA de um pedaço do texto atual, e ÚNICO na frase — se a palavra se repetir, inclua as vizinhas necessárias) e trecho_pt_corrigido.',
     'A varredura é heurística e erra: se a ocorrência apontada NÃO for uma violação de verdade, devolva descartar: true e deixe o par em null. Isso é resposta legítima e esperada.',
     'As frases marcadas como contexto servem só para você entender o trecho — NÃO as corrija.',
+    'Quando a violação trouxer uma ORIENTAÇÃO, ela descreve o erro exato: o ORIGINAL em chinês é o árbitro — confira nele o sentido antes de propor o conserto ou o descarte.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ].join('\n');
   return { base: req.omega.trim(), operacional };
@@ -486,8 +487,12 @@ export function usuarioPasseEstilo(req: RequisicaoPasseEstilo): string {
   }
   partes.push('### Frases a consertar:');
   for (const a of req.alvos) {
-    partes.push(`[${a.ordem}] ${a.texto_pt}`);
-    for (const v of a.violacoes) partes.push(`    violação: ${v.regra} — trecho acusado: "${v.trecho}"`);
+    partes.push(`[${a.ordem}] ZH: ${a.texto_zh}`);
+    partes.push(`     PT: ${a.texto_pt}`);
+    for (const v of a.violacoes) {
+      partes.push(`     violação: ${v.regra} — trecho acusado: "${v.trecho}"`);
+      if (v.orientacao) partes.push(`     orientação: ${v.orientacao}`);
+    }
   }
   return partes.join('\n');
 }

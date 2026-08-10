@@ -9,7 +9,12 @@ const req = {
   modelo: 'm',
   omega: 'PROMPT DA OBRA',
   alvos: [
-    { ordem: 12, texto_pt: 'concluindo que ele errara.', violacoes: [{ regra: 'mais-que-perfeito', trecho: 'errara' }] },
+    {
+      ordem: 12,
+      texto_zh: '他断定自己错了。',
+      texto_pt: 'concluindo que ele errara.',
+      violacoes: [{ regra: 'mais-que-perfeito', trecho: 'errara' }],
+    },
   ],
   vizinhas: [{ ordem: 11, texto_pt: 'O senhor não lhe deu chance.' }],
 };
@@ -70,10 +75,30 @@ describe('provedorMock.passeEstilo', () => {
     modelo: 'mock-v1',
     omega: 'PROMPT DA OBRA',
     alvos: [
-      { ordem: 1, texto_pt: 'ele errara o alvo.', violacoes: [{ regra: 'mais-que-perfeito', trecho: 'errara' }] },
-      { ordem: 2, texto_pt: 'a romãzeira floresceu no pátio.', violacoes: [{ regra: 'mais-que-perfeito', trecho: 'romãzeira' }] },
-      { ordem: 3, texto_pt: 'ele prepara o chá com cuidado.', violacoes: [{ regra: 'mais-que-perfeito', trecho: 'prepara' }] },
-      { ordem: 4, texto_pt: 'a Águia Voadora chegou ao topo.', violacoes: [{ regra: 'mais-que-perfeito', trecho: 'Voadora' }] },
+      {
+        ordem: 1,
+        texto_zh: '他打偏了目标。',
+        texto_pt: 'ele errara o alvo.',
+        violacoes: [{ regra: 'mais-que-perfeito', trecho: 'errara' }],
+      },
+      {
+        ordem: 2,
+        texto_zh: '石榴树在院子里开花了。',
+        texto_pt: 'a romãzeira floresceu no pátio.',
+        violacoes: [{ regra: 'mais-que-perfeito', trecho: 'romãzeira' }],
+      },
+      {
+        ordem: 3,
+        texto_zh: '他小心地准备茶。',
+        texto_pt: 'ele prepara o chá com cuidado.',
+        violacoes: [{ regra: 'mais-que-perfeito', trecho: 'prepara' }],
+      },
+      {
+        ordem: 4,
+        texto_zh: '飞鹰到达了山顶。',
+        texto_pt: 'a Águia Voadora chegou ao topo.',
+        violacoes: [{ regra: 'mais-que-perfeito', trecho: 'Voadora' }],
+      },
     ],
     vizinhas: [],
   };
@@ -97,5 +122,46 @@ describe('provedorMock.passeEstilo', () => {
       trecho_pt_errado: null,
       trecho_pt_corrigido: null,
     });
+  });
+});
+
+describe('o passe recebe o original', () => {
+  const req = {
+    modelo: 'm',
+    omega: 'ÔMEGA',
+    alvos: [
+      {
+        ordem: 3,
+        texto_zh: '他一直在等。',
+        texto_pt: 'Ele sempre esteve esperando.',
+        violacoes: [
+          { regra: 'particula-yizhi', trecho: 'sempre esteve', orientacao: '一直 é continuidade até então.' },
+        ],
+      },
+    ],
+    vizinhas: [],
+  };
+
+  it('o chinês do alvo vai na mensagem', () => {
+    expect(usuarioPasseEstilo(req)).toContain('他一直在等。');
+  });
+
+  it('a orientação da violação vai junto da violação', () => {
+    const texto = usuarioPasseEstilo(req);
+    expect(texto).toContain('一直 é continuidade até então.');
+    // Junto, não solta no fim: a orientação é daquela violação.
+    expect(texto.indexOf('一直 é continuidade')).toBeGreaterThan(texto.indexOf('particula-yizhi'));
+  });
+
+  it('violação sem orientação não emite linha vazia', () => {
+    const semOrientacao = {
+      ...req,
+      alvos: [{ ...req.alvos[0], violacoes: [{ regra: 'mais-que-perfeito', trecho: 'tinha ido' }] }],
+    };
+    expect(usuarioPasseEstilo(semOrientacao)).not.toContain('orientação:');
+  });
+
+  it('o bloco operacional manda o chinês arbitrar', () => {
+    expect(sistemaPasseEstilo({ omega: 'ÔMEGA' })).toMatch(/original em chin[êe]s/i);
   });
 });
