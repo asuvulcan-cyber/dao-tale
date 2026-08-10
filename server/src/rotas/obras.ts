@@ -239,7 +239,18 @@ export function rotasObras(db: BancoDados): Hono {
     const resultado = varrerConsistencia(frases, glossario, reposConsistencia.ignoradasDaObra(db, obraId));
 
     const porFrase = new Map(frases.map((f) => [f.id, f]));
-    const porTermo = new Map<string, { glossario_id: number; termo_zh: string; termo_pt: string; violacoes: unknown[] }>();
+    interface ViolacaoNaObra {
+      frase_id: number;
+      capitulo_id: number | null;
+      capitulo_numero: number | null;
+      ordem: number;
+      texto_zh: string;
+      texto_pt: string;
+    }
+    const porTermo = new Map<
+      string,
+      { glossario_id: number; termo_zh: string; termo_pt: string; violacoes: ViolacaoNaObra[] }
+    >();
     for (const v of resultado.violacoes) {
       const entrada = glossario.find((g) => g.termo_zh === v.termo_zh);
       const grupo = porTermo.get(v.termo_zh) ?? {

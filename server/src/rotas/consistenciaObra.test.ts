@@ -175,4 +175,69 @@ describe('GET /obras/:id/consistencia', () => {
     expect(termos_curtos_ignorados).toBe(1);
     expect(por_termo.some((t: { termo_zh: string }) => t.termo_zh === '堡')).toBe(false);
   });
+
+  // Achado da revisão (rodada 1, item 1): o único teste de ordenação usava
+  // 2 violações vs. 1, que nunca empatam — remover o desempate do comparador
+  // não quebrava nada. Este cenário força o empate: as duas frases violam
+  // exatamente 1 vez cada, e a frase de "Zebra Torre" (alfabeticamente por
+  // ÚLTIMO) vem ANTES da de "Abelha Vila" no capítulo — se o comparador só
+  // olhasse a contagem, o sort (estável) manteria essa ordem de descoberta,
+  // que é a errada.
+  it('empate na contagem: desempata pelo termo em pt-BR, para a lista não dançar entre chamadas iguais', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Empate',
+        glossario_inicial: [
+          { termo_zh: '龙渊阁', termo_pt: 'Zebra Torre', categoria: 'local' },
+          { termo_zh: '玄水城', termo_pt: 'Abelha Vila', categoria: 'local' },
+        ],
+      }),
+    );
+    const cap = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, {
+        numero: 1,
+        texto_origem: '龙渊阁的门开了。玄水城的墙塌了。',
+      }),
+    );
+    await traduzirEEsperar(cap.capitulo.id);
+    // Nenhuma das duas frases é corrigida: as duas violam, 1 x 1 — empate.
+
+    const { por_termo } = await (await app.request(`/api/obras/${obra.id}/consistencia`)).json();
+    expect(por_termo).toHaveLength(2);
+    expect(por_termo[0].violacoes).toHaveLength(1);
+    expect(por_termo[1].violacoes).toHaveLength(1);
+    expect(por_termo.map((t: { termo_pt: string }) => t.termo_pt)).toEqual(['Abelha Vila', 'Zebra Torre']);
+  });
+
+  // Achado da revisão (rodada 1, item 2): o agrupamento é por TERMO, então uma
+  // frase que viola dois termos precisa aparecer nos DOIS grupos — se alguém
+  // trocasse o agrupamento por um Map chaveado por frase, a segunda violação
+  // sumiria sem erro nenhum. Este teste existe só para pegar essa regressão.
+  it('uma frase que viola dois termos aparece nos dois grupos', async () => {
+    const obra = await json(
+      await chamar('POST', '/api/obras', {
+        titulo: 'Dois termos numa frase',
+        glossario_inicial: [
+          { termo_zh: '龙渊阁', termo_pt: 'Pavilhão do Abismo do Dragão', categoria: 'local' },
+          { termo_zh: '玄水城', termo_pt: 'Cidade das Águas Sombrias', categoria: 'local' },
+        ],
+      }),
+    );
+    const cap = await json(
+      await chamar('POST', `/api/obras/${obra.id}/capitulos`, {
+        numero: 1,
+        texto_origem: '龙渊阁的人来到了玄水城。',
+      }),
+    );
+    await traduzirEEsperar(cap.capitulo.id);
+    const fraseUnica = (await json(await chamar('GET', `/api/capitulos/${cap.capitulo.id}`))).frases[0];
+    // Nenhum dos dois termos foi corrigido: a mesma frase viola os dois.
+
+    const { por_termo } = await (await app.request(`/api/obras/${obra.id}/consistencia`)).json();
+    expect(por_termo).toHaveLength(2);
+    for (const grupo of por_termo) {
+      expect(grupo.violacoes).toHaveLength(1);
+      expect(grupo.violacoes[0].frase_id).toBe(fraseUnica.id);
+    }
+  });
 });
