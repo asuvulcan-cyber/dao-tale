@@ -13,6 +13,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, mensagemDeErro } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, TextoComDestaque } from '../App';
+import { previaValida, type PreviaSubstituicao } from '../util/consistenciaObra';
 
 /** Uma frase fora do padrão. `capitulo_id` é nulo quando a frase perdeu o
  *  capítulo (não acontece hoje, mas a rota tipa assim) — sem ele não há link. */
@@ -194,7 +195,7 @@ function EstadoVazio({ relatorio }: { relatorio: RelatorioConsistencia }) {
 function BlocoTermo({ grupo, obraId }: { grupo: GrupoTermo; obraId: string }) {
   const clienteQuery = useQueryClient();
   const [de, setDe] = useState('');
-  const [previa, setPrevia] = useState<{ de: string; frases: number } | null>(null);
+  const [previa, setPrevia] = useState<PreviaSubstituicao | null>(null);
   const [trocado, setTrocado] = useState<number | null>(null);
 
   // O texto que de fato vai para a rota. A prévia e a troca mandam exatamente o
@@ -246,16 +247,10 @@ function BlocoTermo({ grupo, obraId }: { grupo: GrupoTermo; obraId: string }) {
     onSuccess: invalidar,
   });
 
-  /**
-   * Trocar só habilita depois da prévia PARA O TEXTO ATUAL do campo.
-   *
-   * A troca varre a obra inteira e marca cada frase como editada à mão; é o
-   * tipo de ação que se faz uma vez e se lamenta. Comparar com o texto exato
-   * previsto (e não um booleano "já previu") é o que impede o caso ruim de
-   * verdade: prever "Abismo", corrigir o campo para "abismos" e trocar em cima
-   * de uma contagem que era de outra palavra.
-   */
-  const previaAtual = previa != null && previa.de === alvo ? previa : null;
+  // Trocar só habilita depois da prévia PARA O TEXTO ATUAL do campo. A regra
+  // mora em `util/consistenciaObra.ts`, com teste: errá-la é silencioso, e o
+  // preço é uma obra inteira reescrita a partir da contagem de outra palavra.
+  const previaAtual = previaValida(previa, de);
   const ocupado = prever.isPending || trocar.isPending || dispensar.isPending;
   const erro = prever.error ?? trocar.error ?? dispensar.error;
 

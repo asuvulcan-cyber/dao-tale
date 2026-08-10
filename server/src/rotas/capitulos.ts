@@ -22,6 +22,7 @@ import {
   reposPrompts,
   reposQa,
   reposUso,
+  recalcularConsistenciaDaObra,
 } from '../db/repos.js';
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
@@ -253,6 +254,13 @@ export function rotasCapitulos(db: BancoDados): Hono {
     if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
     if (corpo.data.desfazer) reposConsistencia.restaurar(db, fraseId, corpo.data.termo_zh);
     else reposConsistencia.dispensar(db, fraseId, corpo.data.termo_zh);
+    // Dispensar MUDA A CONTAGEM tanto quanto mexer no glossário muda: a
+    // varredura exclui os pares dispensados. Sem recalcular aqui, o selo da
+    // lista de capítulos seguia acusando o alerta que o revisor acabou de
+    // dispensar — até outra ação recalcular a obra por outro motivo. Vale nos
+    // dois caminhos porque desfazer devolve o par à contagem.
+    // A frase não carrega `obra_id`; ele vem do capítulo, como em frases.ts.
+    recalcularConsistenciaDaObra(db, reposCapitulos.obter(db, frase.capitulo_id)!.obra_id);
     return c.json({ ok: true });
   });
 

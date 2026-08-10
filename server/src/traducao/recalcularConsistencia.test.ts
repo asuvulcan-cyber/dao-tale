@@ -167,3 +167,46 @@ describe('gatilho nas rotas de glossário (curadoria.ts)', () => {
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
   });
 });
+
+// Achado da revisão da Task 4: o gatilho cobria as sete rotas do GLOSSÁRIO e
+// esquecia a dispensa — que também muda a contagem, porque a varredura exclui
+// os pares dispensados. A tela nova nunca mentia (a rota da obra calcula ao
+// vivo), mas o selo da lista de capítulos seguia acusando o alerta que o revisor
+// tinha acabado de dispensar.
+describe('gatilho na dispensa de consistência (capitulos.ts)', () => {
+  let app: Hono;
+  let fraseId: number;
+
+  beforeEach(async () => {
+    app = criarApp(db);
+    fraseId = reposFrases.listarPorCapitulo(db, capId)[0].id;
+    // O termo que a frase viola: sem ele não há contagem que a dispensa mude.
+    await app.request(`/api/obras/${obraId}/glossario`, {
+      method: 'POST',
+      body: JSON.stringify({ termo_zh: '金鹏堡', termo_pt: 'Fortaleza do Peng Dourado', categoria: 'lugar' }),
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+
+  const dispensar = (corpo: Record<string, unknown>) =>
+    app.request(`/api/frases/${fraseId}/consistencia/dispensar`, {
+      method: 'POST',
+      body: JSON.stringify(corpo),
+      headers: { 'content-type': 'application/json' },
+    });
+
+  it('dispensar derruba o selo do capítulo', async () => {
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+    const r = await dispensar({ termo_zh: '金鹏堡' });
+    expect(r.status).toBe(200);
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(0);
+  });
+
+  it('desfazer devolve o selo — o caminho de volta muda a contagem tanto quanto o de ida', async () => {
+    await dispensar({ termo_zh: '金鹏堡' });
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(0);
+    const r = await dispensar({ termo_zh: '金鹏堡', desfazer: true });
+    expect(r.status).toBe(200);
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+  });
+});
