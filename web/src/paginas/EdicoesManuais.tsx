@@ -153,15 +153,29 @@ export function EdicoesManuais() {
 
                   <p className="mt-2 max-w-[62ch] text-sm text-tinta-2">{g.oQueFazer}</p>
 
-                  {/* Só a `diretriz` ganha botão: é a única rota cujo destino é o
-                      prompt da obra. Nas outras, um botão daqui mandaria material
-                      que o refinamento é PROIBIDO de usar. */}
+                  {/* Só a `diretriz` ganha o botão do refinamento: é a única rota
+                      cujo destino é o prompt da obra. Nas outras, um botão daqui
+                      mandaria material que o refinamento é PROIBIDO de usar. */}
                   {g.rota === 'diretriz' && (
                     <div className="mt-2">
                       <Botao onClick={() => navegar(`/obras/${obraId}/prompt?painel=refinar`)}>
                         Incluir no próximo refinamento
                       </Botao>
                     </div>
+                  )}
+
+                  {/* A frase acima mandava o revisor para "a varredura de
+                      consistência" — que até agora não tinha endereço nenhum
+                      nesta tela. Aqui ela vira o caminho, e não uma menção. */}
+                  {g.rota === 'glossario' && (
+                    <p className="mt-2">
+                      <Link
+                        to={`/obras/${obraId}/consistencia`}
+                        className="text-sm text-jade-forte hover:underline"
+                      >
+                        Abrir a varredura de consistência da obra ›
+                      </Link>
+                    </p>
                   )}
 
                   <div className="mt-3 border-t border-linha/50">

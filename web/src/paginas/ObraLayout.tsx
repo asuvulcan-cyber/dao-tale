@@ -20,6 +20,10 @@ export function ObraLayout() {
   const abas = [
     { rota: `/obras/${obraId}`, texto: 'Capítulos', exato: true },
     { rota: `/obras/${obraId}/glossario`, texto: 'Glossário' },
+    // Colada no glossário: é a prestação de contas dele — o que o texto já
+    // traduzido faz com os termos cadastrados. Longe daqui, viraria mais uma
+    // tela que ninguém abre depois de cadastrar um termo tarde demais.
+    { rota: `/obras/${obraId}/consistencia`, texto: 'Consistência' },
     { rota: `/obras/${obraId}/termos`, texto: `Termos sugeridos${sugestoes?.length ? ` (${sugestoes.length})` : ''}` },
     { rota: `/obras/${obraId}/prompt`, texto: 'Prompt mãe' },
     { rota: `/obras/${obraId}/testes`, texto: 'Banco de testes' },

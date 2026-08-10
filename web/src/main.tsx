@@ -11,6 +11,7 @@ import { EditorCapitulo } from './paginas/EditorCapitulo';
 import { PasseEstilo } from './paginas/PasseEstilo';
 import { EdicoesManuais } from './paginas/EdicoesManuais';
 import { Glossario } from './paginas/Glossario';
+import { ConsistenciaObra } from './paginas/ConsistenciaObra';
 import { PromptMae, PaginaPromptPadrao } from './paginas/PromptMae';
 import { BancoTestes } from './paginas/BancoTestes';
 import { TermosSugeridos } from './paginas/TermosSugeridos';
@@ -70,6 +71,10 @@ const rotasBancada = createBrowserRouter([
           { path: 'capitulos/:capituloId/estilo', element: <PasseEstilo /> },
           { path: 'edicoes', element: <EdicoesManuais /> },
           { path: 'glossario', element: <Glossario /> },
+          // Endereço próprio, e não um painel do glossário: o revisor sai daqui
+          // para a frase e volta, e a varredura da obra inteira é uma sessão de
+          // trabalho — não um relance.
+          { path: 'consistencia', element: <ConsistenciaObra /> },
           { path: 'prompt', element: <PromptMae /> },
           { path: 'testes', element: <BancoTestes /> },
           { path: 'termos', element: <TermosSugeridos /> },
