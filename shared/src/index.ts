@@ -22,6 +22,9 @@ export * from './publico.js';
 // Registro de temas (doc 15 §7): qual camada é dona de cada tema, e como reconhecê-lo
 // em texto. É o que torna verificável a partição entre Alfa, Beta e Delta.
 export * from './temasDoPrompt.js';
+// Catálogo de erros comuns zh→pt-BR (doc 2026-08-10): entradas com aferição
+// medida no corpus real, e não intuição de prompt.
+export * from './catalogoErros.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
