@@ -64,13 +64,23 @@ describe('varrerCatalogo', () => {
     expect(varrerCatalogo(frases).violacoes[0].trecho_pt).toBe(varrerCatalogo(frases).violacoes[0].trecho_pt);
   });
 
-  it('o trecho não atravessa quebra de linha nem passa de 60 caracteres', () => {
-    const r = varrerCatalogo([
-      frase({ texto_zh: '他一直在等。', texto_pt: `Ele sempre ${'x'.repeat(200)}\noutra linha` }),
-    ]);
-    const t = r.violacoes[0].trecho_pt;
-    expect(t.length).toBeLessThanOrEqual(60);
-    expect(t).not.toContain('\n');
+  it('o trecho corta na quebra de linha quando ela está dentro da janela de contexto', () => {
+    // A quebra vem logo depois do match — dentro da janela de 40 de contexto —
+    // para o teste de fato exercitar o corte por `\n` e não passar por
+    // construção (a janela do teste anterior deixava a quebra fora do alcance).
+    const r = varrerCatalogo([frase({ texto_zh: '他一直在等。', texto_pt: 'Ele sempre\nesteve esperando.' })]);
+    expect(r.violacoes[0].trecho_pt).toBe('sempre');
+  });
+
+  it('o trecho respeita o teto de 60 caracteres mesmo com um match longo', () => {
+    // Entrada sintética com `evitar_pt` que casa um trecho comprido — o piso de
+    // 60 só decorre de CONTEXTO=40 mais um match curto; sem TRECHO_MAX explícito
+    // esta entrada furaria o teto sem nada acusar.
+    const dou = REPROVADAS.find((e) => e.id === 'particula-dou') as EntradaCatalogo;
+    const matchLongo = { ...dou, id: 'sintetica-match-longo', gatilho_zh: '一直', evitar_pt: /sempre[^.]*/i };
+    const pt = `Ele sempre ${'x'.repeat(100)}.`;
+    const r = varrerCatalogo([frase({ texto_zh: '他一直在等。', texto_pt: pt })], new Set(), [matchLongo]);
+    expect(r.violacoes[0].trecho_pt.length).toBe(60);
   });
 
   it('uma frase que dispara duas entradas gera duas violações', () => {

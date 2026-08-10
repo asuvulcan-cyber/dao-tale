@@ -22,10 +22,20 @@ export interface ViolacaoCatalogo {
  *  varreduras, porque é chave de dispensa gravada no banco. */
 const CONTEXTO = 40;
 
+/** Teto do trecho. Não é estética: o trecho é metade da chave de dispensa
+ *  gravada em `estilo_ignorado`, e um trecho que cresce com o match torna a
+ *  chave dependente da entrada do catálogo. Fixo aqui, e não implícito em
+ *  CONTEXTO, para uma entrada futura com match longo não mudar a forma da
+ *  chave sem ninguém perceber. */
+const TRECHO_MAX = 60;
+
 function trechoComContexto(texto: string, inicio: number, comprimento: number): string {
   const bruto = texto.slice(inicio, inicio + comprimento + CONTEXTO);
+  // Corte por quebra de linha primeiro, por comprimento depois: nessa ordem o
+  // corte de comprimento nunca reintroduz uma quebra que já estava na janela.
   const quebra = bruto.indexOf('\n');
-  return quebra === -1 ? bruto : bruto.slice(0, quebra);
+  const semQuebra = quebra === -1 ? bruto : bruto.slice(0, quebra);
+  return semQuebra.slice(0, TRECHO_MAX);
 }
 
 export function varrerCatalogo(
