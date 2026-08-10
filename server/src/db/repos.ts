@@ -531,6 +531,20 @@ export const reposFrases = {
     return l ? paraFrase(l) : undefined;
   },
 
+  /** Todas as frases da obra com o número do capítulo junto. `varrerConsistencia`
+      é pura e não sabe o que é capítulo — o de-para fica aqui, como já acontece
+      na rota por capítulo. */
+  listarPorObra(db: BancoDados, obraId: number): (Frase & { capitulo_numero: number })[] {
+    return db
+      .prepare(
+        `SELECT f.*, c.numero capitulo_numero
+         FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
+         WHERE c.obra_id = ? ORDER BY c.numero, f.ordem`,
+      )
+      .all(obraId)
+      .map((l) => paraFrase(l as never)) as (Frase & { capitulo_numero: number })[];
+  },
+
   /** Frases da obra com o que a mineração de edições manuais precisa, já com o
       número do capítulo — a classificação é pura e não consulta o banco. */
   paraMineracao(db: BancoDados, obraId: number): (LinhaMineracao & { editado_manualmente: boolean })[] {

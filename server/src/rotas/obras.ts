@@ -15,8 +15,9 @@ import {
   type ProvedorId,
 } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposFrases, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
+import { reposCapitulos, reposConsistencia, reposFrases, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
 import { amostrarEspalhado, classificarEdicoes } from '../traducao/edicoesManuais.js';
+import { varrerConsistencia } from '../traducao/consistencia.js';
 import { jobEmExecucao } from '../traducao/job.js';
 import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote } from '../traducao/lote.js';
 import { checkpointDaObra } from '../traducao/checkpoint.js';
@@ -218,6 +219,59 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     }
     return c.json(telemetriaDaObra(db, id));
+  });
+
+  // ── Varredura de consistência do glossário na OBRA inteira (doc 05 §4.2) ──
+  // GET /capitulos/:id/consistencia (capitulos.ts) já existe por capítulo; esta
+  // é a mesma varredura pura (traducao/consistencia.ts) rodada sobre a obra
+  // toda. Agrupar por TERMO e não por frase é a decisão central: o conserto é
+  // por termo (`POST /glossario/:id/substituir` troca na obra inteira), então
+  // o relatório precisa estar organizado do jeito que o conserto funciona —
+  // uma lista por frase obrigaria o revisor a reconstruir mentalmente qual
+  // termo é qual antes de poder agir.
+  app.get('/obras/:id/consistencia', (c) => {
+    const obraId = Number(c.req.param('id'));
+    if (!reposObras.obter(db, obraId)) {
+      return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    }
+    const frases = reposFrases.listarPorObra(db, obraId);
+    const glossario = reposGlossario.listar(db, obraId);
+    const resultado = varrerConsistencia(frases, glossario, reposConsistencia.ignoradasDaObra(db, obraId));
+
+    const porFrase = new Map(frases.map((f) => [f.id, f]));
+    const porTermo = new Map<string, { glossario_id: number; termo_zh: string; termo_pt: string; violacoes: unknown[] }>();
+    for (const v of resultado.violacoes) {
+      const entrada = glossario.find((g) => g.termo_zh === v.termo_zh);
+      const grupo = porTermo.get(v.termo_zh) ?? {
+        glossario_id: entrada?.id ?? 0,
+        termo_zh: v.termo_zh,
+        termo_pt: v.termo_pt,
+        violacoes: [],
+      };
+      const f = porFrase.get(v.frase_id);
+      grupo.violacoes.push({
+        frase_id: v.frase_id,
+        capitulo_id: f?.capitulo_id ?? null,
+        capitulo_numero: f?.capitulo_numero ?? null,
+        ordem: v.ordem,
+        texto_zh: v.texto_zh,
+        texto_pt: v.texto_pt,
+      });
+      porTermo.set(v.termo_zh, grupo);
+    }
+
+    // Mais violações primeiro; empate pelo termo em PT, para a lista não dançar
+    // entre duas chamadas iguais.
+    const por_termo = [...porTermo.values()].sort(
+      (a, b) => b.violacoes.length - a.violacoes.length || a.termo_pt.localeCompare(b.termo_pt, 'pt-BR'),
+    );
+
+    return c.json({
+      ocorrencias: resultado.ocorrencias,
+      termos_curtos_ignorados: resultado.termos_curtos_ignorados,
+      frases_examinadas: frases.filter((f) => f.status_traducao === 'traduzida').length,
+      por_termo,
+    });
   });
 
   app.put('/obras/:id/fase', async (c) => {
