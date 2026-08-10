@@ -87,6 +87,13 @@ const exportSchema = z.object({
           texto_pt_original_ia: z.string().nullable(),
           editado_manualmente: z.boolean(),
           status_traducao: z.enum(['pendente', 'traduzida', 'erro']),
+          // default(null): compatibilidade com exports anteriores à migração 023, e é
+          // o valor honesto para eles — nenhum tinha de onde vir origem_edicao. Sem
+          // esta coluna no schema, um round-trip (backup, ou sincronizar VPS ↔ máquina
+          // local) devolvia toda frase com origem NULL, e cada correção de botão e
+          // cada substituição em lote reaparecia na mineração de edições manuais como
+          // se o revisor tivesse digitado cada uma.
+          origem_edicao: z.string().nullable().default(null),
         }),
       ),
     }),
@@ -207,6 +214,7 @@ export function exportarObra(db: BancoDados, obraId: number): ExportObra | undef
           texto_pt_original_ia: f.texto_pt_original_ia,
           editado_manualmente: !!f.editado_manualmente,
           status_traducao: f.status_traducao,
+          origem_edicao: f.origem_edicao,
         }),
       ),
     })),
@@ -333,8 +341,8 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
       for (const f of cap.frases) {
         const infoFrase = db
           .prepare(
-            `INSERT INTO frases (capitulo_id, ordem, paragrafo, texto_zh, texto_pt, texto_pt_original_ia, editado_manualmente, status_traducao)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO frases (capitulo_id, ordem, paragrafo, texto_zh, texto_pt, texto_pt_original_ia, editado_manualmente, status_traducao, origem_edicao)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             capId,
@@ -345,6 +353,7 @@ export function importarObra(db: BancoDados, dadosBrutos: unknown): Obra | { err
             f.texto_pt_original_ia,
             f.editado_manualmente ? 1 : 0,
             f.status_traducao,
+            f.origem_edicao,
           );
         fraseIdPorChave.set(`${cap.numero}:${f.ordem}`, Number(infoFrase.lastInsertRowid));
       }

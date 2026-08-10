@@ -342,7 +342,10 @@ export interface Frase {
   editado_manualmente: boolean;
   status_traducao: StatusTraducaoFrase;
   /** De onde veio a última edição: null = digitada pelo revisor; 'revisao',
-   *  'passe-estilo' ou 'qa' = aprovada num botão. */
+   *  'passe-estilo', 'qa' ou 'substituicao' (troca de termo em lote) = aprovada
+   *  num botão; 'retraducao' = o texto era uma edição manual, mas foi
+   *  sobrescrito por uma nova tradução da IA (retradução com "sobrescrever
+   *  também as editadas") — não é mais o que o revisor digitou. */
   origem_edicao: string | null;
 }
 

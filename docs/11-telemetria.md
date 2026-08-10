@@ -80,7 +80,7 @@ CREATE TABLE eventos_ia (
   obra_id              INTEGER REFERENCES obras(id)     ON DELETE SET NULL,
   capitulo_id          INTEGER REFERENCES capitulos(id) ON DELETE SET NULL,
   papel                TEXT NOT NULL CHECK (papel IN
-                         ('traducao','revisao','qa','extracao','refinamento','titulo','comparador')),
+                         ('traducao','revisao','qa','extracao','refinamento','titulo','comparador','estilo')),
   provedor             TEXT NOT NULL,
   modelo               TEXT NOT NULL,
   tokens_entrada       INTEGER,

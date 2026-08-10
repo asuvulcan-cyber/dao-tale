@@ -23,6 +23,54 @@ describe('reposFrases.reabrirParaTraducao', () => {
     expect(depois.map((f) => f.status_traducao)).toEqual(['traduzida', 'pendente', 'pendente']);
     expect(depois[0].texto_pt).toBe('A.');
   });
+
+  it('sobrescreverEditadas marca origem_edicao = retraducao na frase digitada à mão, sem apagar editado_manualmente (achado da revisão final)', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra' });
+    const cap = reposCapitulos.criar(db, obra.id, { numero: 1, texto_origem: '甲。' }, [
+      { texto_zh: '甲。', paragrafo: 0 },
+    ]);
+    const [frase] = reposFrases.listarPorCapitulo(db, cap.id);
+
+    reposFrases.aplicarTraducaoIa(db, frase.id, 'Ele já morreu.');
+    reposFrases.editarTexto(db, frase.id, 'Ele já está morto.'); // digitada à mão: origem_edicao NULL
+
+    reposFrases.reabrirParaTraducao(db, cap.id, { sobrescrever: true, sobrescreverEditadas: true });
+
+    const reaberta = reposFrases.obter(db, frase.id)!;
+    expect(reaberta.status_traducao).toBe('pendente');
+    // editado_manualmente sobrevive intocado — a métrica de edição do checkpoint
+    // (doc 09 §4) lê esse fato histórico; só a origem muda, para excluir a frase
+    // da mineração assim que a retradução sobrescrever o texto.
+    expect(reaberta.editado_manualmente).toBe(true);
+    expect(reaberta.origem_edicao).toBe('retraducao');
+
+    // A retradução conclui: aplicarTraducaoIa preserva texto_pt_original_ia (1ª
+    // passada) por COALESCE — sem o conserto, o par lido pela mineração seria
+    // IA-1ª-passada -> IA-2ª-passada, sinonímia arbitrária da própria IA.
+    reposFrases.aplicarTraducaoIa(db, frase.id, 'Ele já se foi.');
+
+    const paraMineracao = reposFrases.paraMineracao(db, obra.id);
+    const classificadas = classificarEdicoes(paraMineracao, [], PREFERENCIAS_PADRAO);
+    expect(classificadas).toEqual([]);
+  });
+
+  it('sobrescreverEditadas NÃO troca a origem de uma frase já aprovada por botão (revisão/QA/substituição)', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra' });
+    const cap = reposCapitulos.criar(db, obra.id, { numero: 1, texto_origem: '甲。' }, [
+      { texto_zh: '甲。', paragrafo: 0 },
+    ]);
+    const [frase] = reposFrases.listarPorCapitulo(db, cap.id);
+    reposFrases.aplicarTraducaoIa(db, frase.id, 'Ele já morreu.');
+    reposFrases.editarTexto(db, frase.id, 'Ele já está morto.', 'revisao'); // aprovada por botão
+
+    reposFrases.reabrirParaTraducao(db, cap.id, { sobrescrever: true, sobrescreverEditadas: true });
+
+    // Já era excluída da mineração por outro motivo (origem não-nula); o conserto
+    // não precisa — e não deve — reescrever essa proveniência mais informativa.
+    expect(reposFrases.obter(db, frase.id)!.origem_edicao).toBe('revisao');
+  });
 });
 
 describe('reposFrases.substituirTermo (A3 — fronteira de palavra)', () => {
@@ -50,6 +98,29 @@ describe('reposFrases.substituirTermo (A3 — fronteira de palavra)', () => {
     expect(depois.map((f) => f.texto_pt)).toEqual(['Rios corre.', 'Riordan chegou.', 'Rios de Janeiro.']);
     // As trocadas ficam marcadas como edição manual; a intacta, não.
     expect(depois.map((f) => f.editado_manualmente)).toEqual([true, false, true]);
+  });
+});
+
+describe('reposFrases.reverterParaIa zera origem_edicao junto (achado da revisão final)', () => {
+  it('reverter uma frase aprovada por botão limpa editado_manualmente E origem_edicao', () => {
+    const db = abrirBanco(':memory:');
+    const obra = reposObras.criar(db, { titulo: 'Obra' });
+    const cap = reposCapitulos.criar(db, obra.id, { numero: 1, texto_origem: '甲。' }, [
+      { texto_zh: '甲。', paragrafo: 0 },
+    ]);
+    const [frase] = reposFrases.listarPorCapitulo(db, cap.id);
+    reposFrases.aplicarTraducaoIa(db, frase.id, 'Texto da IA.');
+    reposFrases.editarTexto(db, frase.id, 'Texto aprovado num botão.', 'revisao');
+    expect(reposFrases.obter(db, frase.id)!.origem_edicao).toBe('revisao');
+
+    const revertida = reposFrases.reverterParaIa(db, frase.id)!;
+    expect(revertida.texto_pt).toBe('Texto da IA.');
+    expect(revertida.editado_manualmente).toBe(false);
+    // Sem isto, a frase ficava sem edição nenhuma mas ainda carregando a origem
+    // antiga — um estado que não corresponde a nada real, e que (se um botão
+    // futuro reaplicasse editado_manualmente sem passar origem) poderia deixar
+    // a origem velha grudada numa edição nova e diferente.
+    expect(revertida.origem_edicao).toBeNull();
   });
 });
 

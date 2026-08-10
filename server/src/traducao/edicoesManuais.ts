@@ -25,11 +25,21 @@ export interface EdicaoClassificada {
   detalhe: string | null;
 }
 
-/** Tira do texto o que é decisão de tipografia, não de tradução. */
+/** Tira do texto o que é decisão de tipografia, não de tradução.
+ *
+ * Cobre também as aspas CJK (achado da revisão final): `analisarEstilo` trata
+ * `「」『』` e as aspas curvas `“”‘’` como a MESMA regra (`aspas-nao-retas` — ver o
+ * comentário de `violacaoAspasNaoRetas` em estiloViolacoes.ts, "tanto as
+ * asiáticas quanto as curvas"). Sem `「」『』` aqui, uma edição que troca só o
+ * CARACTERE da aspas ("「vamos embora」" -> "\"vamos embora\"") caía em `diretriz`
+ * e ocupava uma vaga da chamada paga de refinamento — que é proibido de propor
+ * regra sobre aspas. `「」` e `《》` são as marcas EXTERNAS (par de `“”`); `『』` e
+ * `〈〉` são as INTERNAS/aninhadas (par de `‘’`), mesma convenção tipográfica
+ * chinesa de marca dupla/simples. */
 const normalizarTipografia = (t: string) =>
   t
-    .replace(/[‘’‛]/g, "'")
-    .replace(/[“”‟]/g, '"')
+    .replace(/[‘’‛『』〈〉]/g, "'")
+    .replace(/[“”‟「」《》]/g, '"')
     .replace(/…/g, '...')
     .replace(/[–—]/g, '-')
     .replace(/ /g, ' ')

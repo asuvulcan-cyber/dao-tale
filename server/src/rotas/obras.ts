@@ -418,9 +418,39 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
+    // Achado da revisão final: os dois portões abaixo dependiam SÓ do banco de
+    // testes, mas a chamada usa DOIS canais de sinal — `casos` (recorrências do
+    // banco de testes) e `edicoes` (edições manuais classificadas como
+    // `diretriz`, ver edicoesManuais.ts). Na obra real da 死人经 eram 146 edições
+    // manuais contra 25 casos no banco de testes: o canal escasso era o único
+    // que abria o portão, e um clique em "Incluir no próximo refinamento" caía
+    // numa parede que só falava do banco de testes, sem mencionar as edições —
+    // que nunca tinham sido sequer olhadas. `edicoes` precisa estar calculado
+    // ANTES dos dois `return 409`, para que a presença de candidatas por esse
+    // canal baste para a chamada seguir mesmo sem recorrência nenhuma.
+    const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
+    const edicoesDiretriz = classificarEdicoes(
+      reposFrases.paraMineracao(db, obraId),
+      reposGlossario.listar(db, obraId),
+      prefs,
+    ).filter((e) => e.rota === 'diretriz');
+    // Teto de 15, ESPALHADAS pela obra — não "as mais recentes": `paraMineracao`
+    // ordena por posição no livro (capítulo, ordem), e a tabela `frases` não tem
+    // carimbo de tempo de edição, então "recente" não é uma amostra que o schema
+    // consiga dar. Um `slice` do fim privilegiaria só o último capítulo revisado;
+    // espalhar mostra repetição ao longo da obra inteira, que é o próprio
+    // critério que separa gosto isolado de regra (ver instrução em
+    // `sistemaRefinarPromptPartes`).
+    const edicoes = amostrarEspalhado(edicoesDiretriz, 15).map((e) => ({
+      trecho_zh: e.texto_zh,
+      ia: e.ia,
+      voce: e.voce,
+      mudou: { de: e.de, para: e.para },
+    }));
+
     const todasRecorrencias = reposTestes.recorrencias(db, obraId);
-    if (todasRecorrencias.length === 0) {
-      return c.json({ erro: { codigo: 'sem-recorrencias', mensagem: 'Nenhuma seção/regra com 2+ casos recorrentes no banco de testes — nada indica lacuna sistemática do prompt.' } }, 409);
+    if (todasRecorrencias.length === 0 && edicoes.length === 0) {
+      return c.json({ erro: { codigo: 'sem-recorrencias', mensagem: 'Nenhuma seção/regra com 2+ casos recorrentes no banco de testes, e nenhuma edição manual candidata a diretriz — nada indica lacuna sistemática do prompt.' } }, 409);
     }
 
     // Roteamento por camada dona (doc 15 §7). A partição por tema diz que cada
@@ -433,7 +463,7 @@ export function rotasObras(db: BancoDados): Hono {
     const deChave = classificadas.filter((r) => r.camada === 'beta');
     const deNucleo = classificadas.filter((r) => r.camada === 'alfa');
 
-    if (daObra.length === 0) {
+    if (daObra.length === 0 && edicoes.length === 0) {
       const lista = (l: typeof classificadas) => l.map((r) => `${r.secao_regra} (${r.casos})`).join(', ');
       const partes: string[] = [];
       if (deChave.length > 0) {
@@ -450,7 +480,7 @@ export function rotasObras(db: BancoDados): Hono {
         {
           erro: {
             codigo: 'so-camadas-donas',
-            mensagem: `${partes.join(' ')} Nenhuma recorrência é candidata a diretriz de obra — por isso nem gastei a chamada.`,
+            mensagem: `${partes.join(' ')} Nenhuma recorrência é candidata a diretriz de obra, e nenhuma edição manual candidata também — por isso nem gastei a chamada.`,
           },
         },
         409,
@@ -499,28 +529,9 @@ export function rotasObras(db: BancoDados): Hono {
         motivo_rejeicao: caso.motivo_rejeicao,
       }));
 
-    // Só a rota `diretriz`: o resto tem dono em outra camada e o refinador é
-    // proibido de propor sobre eles. Teto de 15, ESPALHADAS pela obra — não "as
-    // mais recentes": `paraMineracao` ordena por posição no livro (capítulo,
-    // ordem), e a tabela `frases` não tem carimbo de tempo de edição, então
-    // "recente" não é uma amostra que o schema consiga dar. Um `slice` do fim
-    // privilegiaria só o último capítulo revisado; espalhar mostra repetição ao
-    // longo da obra inteira, que é o próprio critério que separa gosto isolado
-    // de regra (ver instrução em `sistemaRefinarPromptPartes`). Mesmo espírito
-    // do teto de 5 casos por seção recorrente, adaptado para este sinal.
-    const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
-    const edicoesDiretriz = classificarEdicoes(
-      reposFrases.paraMineracao(db, obraId),
-      reposGlossario.listar(db, obraId),
-      prefs,
-    ).filter((e) => e.rota === 'diretriz');
-    const edicoes = amostrarEspalhado(edicoesDiretriz, 15).map((e) => ({
-      trecho_zh: e.texto_zh,
-      ia: e.ia,
-      voce: e.voce,
-      mudou: { de: e.de, para: e.para },
-    }));
-
+    // `edicoes` (só a rota `diretriz`: o resto tem dono em outra camada e o
+    // refinador é proibido de propor sobre eles) já foi calculada mais acima,
+    // antes dos dois portões — precisa estar pronta ANTES deles, não aqui.
     try {
       reposUso.registrar(db, provedorId, modelo);
       const resposta = await provedor.refinarPrompt(chave, {

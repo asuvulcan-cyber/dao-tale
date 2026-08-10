@@ -437,7 +437,7 @@ export function usuarioRefinarPrompt(
   }
   if (req.edicoes && req.edicoes.length > 0) {
     partes.push('');
-    partes.push('### Correções que o revisor corrigiu à mão (a IA nunca soube)');
+    partes.push('### Correções que o revisor fez à mão (a IA nunca soube)');
     for (const e of req.edicoes) {
       partes.push(`- ZH: ${e.trecho_zh}`);
       partes.push(`  A IA escreveu: ${e.ia}`);

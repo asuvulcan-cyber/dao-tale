@@ -412,7 +412,7 @@ describe('refinamento — edições manuais', () => {
 
   it('traz a seção com o par e a frase inteira', () => {
     const u = usuarioRefinarPrompt(req);
-    expect(u).toMatch(/corrigiu à mão/i);
+    expect(u).toMatch(/fez à mão/i);
     expect(u).toContain('morto');
     expect(u).toContain('cadáver');
     // A frase inteira precisa ir: "morto -> cadáver" isolado não diz por quê.
@@ -420,8 +420,8 @@ describe('refinamento — edições manuais', () => {
   });
 
   it('sem edições a seção não aparece', () => {
-    expect(usuarioRefinarPrompt({ ...req, edicoes: [] })).not.toMatch(/corrigiu à mão/i);
-    expect(usuarioRefinarPrompt({ ...req, edicoes: undefined })).not.toMatch(/corrigiu à mão/i);
+    expect(usuarioRefinarPrompt({ ...req, edicoes: [] })).not.toMatch(/fez à mão/i);
+    expect(usuarioRefinarPrompt({ ...req, edicoes: undefined })).not.toMatch(/fez à mão/i);
   });
 
   it('o sistema avisa que edição só vira regra quando se repete', () => {

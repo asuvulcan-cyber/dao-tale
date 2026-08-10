@@ -86,6 +86,7 @@ CREATE TABLE frases (
   editado_manualmente   INTEGER NOT NULL DEFAULT 0,
   status_traducao       TEXT NOT NULL DEFAULT 'pendente'
                         CHECK (status_traducao IN ('pendente','traduzida','erro')),
+  origem_edicao         TEXT,                      -- (+) migração 023: de onde veio a última edição
   UNIQUE (capitulo_id, ordem)
 );
 CREATE INDEX idx_frases_capitulo ON frases(capitulo_id, ordem);
@@ -93,6 +94,10 @@ CREATE INDEX idx_frases_capitulo ON frases(capitulo_id, ordem);
 --     originais (exportação, cópia do capítulo traduzido, exibição agrupada no editor).
 -- (+) status_traducao: estado durável do job em lote — permite "retomar" após erro ou
 --     queda do processo sem retraduzir frases prontas (ver 05-fluxos-ia.md §2).
+-- (+) origem_edicao: NULL = a edição foi DIGITADA pelo revisor; não-nulo = veio de um
+--     botão (revisao/qa/passe-estilo/substituicao/retraducao) e já é decisão registrada
+--     em outro canal — a mineração de edições manuais (edicoesManuais.ts) só lê NULL,
+--     senão a mesma lição seria contada duas vezes na chamada paga de refinamento.
 
 CREATE TABLE glossario (
   id         INTEGER PRIMARY KEY,
@@ -168,7 +173,7 @@ CREATE TABLE eventos_ia (
   data                 TEXT NOT NULL,                             -- dia LOCAL, como uso_ia
   obra_id              INTEGER REFERENCES obras(id)     ON DELETE SET NULL,
   capitulo_id          INTEGER REFERENCES capitulos(id) ON DELETE SET NULL,
-  papel                TEXT NOT NULL,   -- traducao|revisao|qa|extracao|refinamento|titulo|comparador
+  papel                TEXT NOT NULL,   -- traducao|revisao|qa|extracao|refinamento|titulo|comparador|estilo
   provedor             TEXT NOT NULL,
   modelo               TEXT NOT NULL,
   tokens_entrada       INTEGER,         -- NULL = a API não expõe o campo (≠ 0)

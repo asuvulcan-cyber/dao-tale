@@ -136,3 +136,61 @@ describe('o que chega ao provedor (trava de rota do refinamento)', () => {
     }
   });
 });
+
+// Achado da revisão final: os dois `return 409` liam SÓ o banco de testes,
+// mesmo a chamada usando dois canais (`casos` do banco de testes e `edicoes`
+// da mineração manual). Na 死人经 real eram 146 edições manuais contra 25 casos
+// — o canal escasso era o único capaz de abrir o portão, e "Incluir no próximo
+// refinamento" caía numa parede que nem mencionava as 37 candidatas.
+describe('edições manuais liberam a chamada mesmo sem recorrência no banco de testes', () => {
+  it('nenhuma recorrência, mas uma edição diretriz: a chamada segue (casos vazio, edicoes preenchido)', async () => {
+    reposFrases.aplicarTraducaoIa(db, fraseId, 'ele já é um morto');
+    reposFrases.editarTexto(db, fraseId, 'ele já é um cadáver');
+
+    const spy = vi.spyOn(provedorMock, 'refinarPrompt');
+    try {
+      const r = await app.request(`/api/obras/${obraId}/prompts/sugerir-refinamento`, { method: 'POST' });
+      expect(r.status).toBe(200);
+      const reqEnviado = spy.mock.calls[0][1] as RequisicaoRefinarPrompt;
+      expect(reqEnviado.casos).toEqual([]);
+      expect(reqEnviado.edicoes).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('recorrência só de camada dona (núcleo) + edição diretriz: a chamada segue mesmo assim', async () => {
+    // Sozinha, esta recorrência dispararia o 409 so-camadas-donas de antes —
+    // 4-sem-decalque é tema de Alfa, nenhuma delas "é da obra".
+    caso('4-sem-decalque', null);
+    caso('4-sem-decalque', null);
+
+    const cap = reposCapitulos.criar(db, obraId, { numero: 2, texto_origem: '乙说。' }, [
+      { texto_zh: '乙说。', paragrafo: 0 },
+    ]);
+    const [f2] = reposFrases.listarPorCapitulo(db, cap.id);
+    reposFrases.aplicarTraducaoIa(db, f2.id, 'ele já é um morto');
+    reposFrases.editarTexto(db, f2.id, 'ele já é um cadáver');
+
+    const r = await app.request(`/api/obras/${obraId}/prompts/sugerir-refinamento`, { method: 'POST' });
+    expect(r.status).toBe(200);
+  });
+
+  it('nem recorrência nem edição manual: o 409 sem-recorrencias diz que os DOIS canais estão vazios', async () => {
+    const r = await app.request(`/api/obras/${obraId}/prompts/sugerir-refinamento`, { method: 'POST' });
+    expect(r.status).toBe(409);
+    const corpo = await r.json();
+    expect(corpo.erro.codigo).toBe('sem-recorrencias');
+    expect(corpo.erro.mensagem).toMatch(/edi[çc][ãa]o manual/i);
+  });
+
+  it('recorrência só de camada dona (núcleo), SEM edição manual: o 409 so-camadas-donas diz que as edições também não bastam', async () => {
+    caso('4-sem-decalque', null);
+    caso('4-sem-decalque', null);
+    const r = await app.request(`/api/obras/${obraId}/prompts/sugerir-refinamento`, { method: 'POST' });
+    expect(r.status).toBe(409);
+    const corpo = await r.json();
+    expect(corpo.erro.codigo).toBe('so-camadas-donas');
+    expect(corpo.erro.mensagem).toMatch(/edi[çc][ãa]o manual/i);
+  });
+});

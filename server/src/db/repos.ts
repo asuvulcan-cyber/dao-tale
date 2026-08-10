@@ -637,8 +637,12 @@ export const reposFrases = {
   },
 
   reverterParaIa(db: BancoDados, id: number): Frase | undefined {
+    // Zera origem_edicao junto (achado da revisão final): sem isso, uma frase que
+    // tinha vindo de um botão (revisao/qa/passe-estilo/substituicao) e foi revertida
+    // para o texto da IA ficava sem edição nenhuma, mas ainda carregando a origem
+    // antiga — um estado que não corresponde a nada real.
     db.prepare(
-      `UPDATE frases SET texto_pt = COALESCE(texto_pt_original_ia, ''), editado_manualmente = 0
+      `UPDATE frases SET texto_pt = COALESCE(texto_pt_original_ia, ''), editado_manualmente = 0, origem_edicao = NULL
        WHERE id = ? AND texto_pt_original_ia IS NOT NULL`,
     ).run(id);
     return this.obter(db, id);
@@ -778,6 +782,27 @@ export const reposFrases = {
     if (!opcoes.sobrescrever) return; // padrão: só pendente/erro são retraduzidas
     if (opcoes.sobrescreverEditadas) {
       db.prepare("UPDATE frases SET status_traducao = 'pendente' WHERE capitulo_id = ?").run(capituloId);
+      // Achado da revisão final: `aplicarTraducaoIa` preserva `texto_pt_original_ia`
+      // por COALESCE (é a 1ª passada da IA, nunca sobrescrita). Quando a frase tinha
+      // sido editada À MÃO (origem_edicao NULL) e esta retradução vai substituir
+      // esse texto por uma 2ª passada da IA, o par que sobra para a mineração é
+      // IA-1ª-passada -> IA-2ª-passada — sinonímia arbitrária entre duas traduções
+      // da própria IA, não uma correção do revisor. Marcar a origem aqui impede
+      // `classificarEdicoes` de ler isso como "o revisor digitou".
+      //
+      // Zerar `editado_manualmente` em vez disso foi CONSIDERADO e descartado: a
+      // métrica "edição humana %" do checkpoint (doc 09 §4) soma
+      // `frases.editado_manualmente` sobre os capítulos da janela — apagar o fato
+      // de que a frase já recebeu edição humana em algum momento reescreveria
+      // histórico que outra parte do app lê. `origem_edicao` resolve a mineração
+      // sem tocar nisso. Só toca frase que ainda estava com origem NULL (edição
+      // genuinamente digitada) — uma já aprovada por outro botão (revisão/QA/
+      // substituição) mantém a origem mais informativa que já tinha, e já era
+      // excluída da mineração de qualquer forma.
+      db.prepare(
+        `UPDATE frases SET origem_edicao = 'retraducao'
+         WHERE capitulo_id = ? AND editado_manualmente = 1 AND origem_edicao IS NULL`,
+      ).run(capituloId);
     } else {
       db.prepare(
         "UPDATE frases SET status_traducao = 'pendente' WHERE capitulo_id = ? AND editado_manualmente = 0",

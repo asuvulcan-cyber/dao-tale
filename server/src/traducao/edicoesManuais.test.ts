@@ -15,6 +15,25 @@ describe('classificarEdicoes', () => {
     expect(uma('ele disse ‘vá’ agora', "ele disse 'vá' agora")[0].rota).toBe('tipografia');
   });
 
+  it('aspas CJK externas (「」) viram tipografia, não diretriz', () => {
+    // Achado da revisão final: a função nasceu sem cobrir 「」『』, e `analisarEstilo`
+    // trata as duas famílias (CJK e curvas) como a MESMA regra `aspas-nao-retas` —
+    // deixar essa edição cair em `diretriz` violaria a proibição do refinador de
+    // propor regra sobre aspas.
+    expect(uma('「vamos embora」, disse ela', '"vamos embora", disse ela')[0].rota).toBe('tipografia');
+  });
+
+  it('aspas CJK internas/aninhadas (『』) viram tipografia', () => {
+    expect(uma('ele citou 『o caminho』 outra vez', "ele citou 'o caminho' outra vez")[0].rota).toBe(
+      'tipografia',
+    );
+  });
+
+  it('marcas de título CJK (《》 e 〈〉) viram tipografia', () => {
+    expect(uma('leu 《o clássico》 de novo', 'leu "o clássico" de novo')[0].rota).toBe('tipografia');
+    expect(uma('citou 〈o capítulo〉 de novo', "citou 'o capítulo' de novo")[0].rota).toBe('tipografia');
+  });
+
   it('termo do glossário fora da forma canônica vai para glossário', () => {
     const r = uma('a Fortaleza Jinpeng caiu', 'a Fortaleza do Peng Dourado caiu');
     expect(r[0].rota).toBe('glossario');

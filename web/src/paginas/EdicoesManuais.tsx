@@ -122,8 +122,8 @@ export function EdicoesManuais() {
       {edicoes && total === 0 && (
         <Aviso tipo="info">
           Nenhuma edição manual nesta obra ainda. Só conta o que você <strong>digitou</strong> por cima da
-          tradução: o que veio de botão (correção da revisão, passe de estilo, QA) já é decisão registrada em
-          outro canal e ensinaria a mesma lição duas vezes.
+          tradução: o que veio de botão (correção da revisão, passe de estilo, QA, substituição de termo em
+          lote) já é decisão registrada em outro canal e ensinaria a mesma lição duas vezes.
         </Aviso>
       )}
 

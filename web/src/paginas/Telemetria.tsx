@@ -20,6 +20,7 @@ const PAPEL_ROTULO: Record<string, string> = {
   refinamento: 'Refinamento do prompt',
   titulo: 'Título e sinopse',
   comparador: 'Comparador',
+  estilo: 'Passe de estilo',
 };
 
 const COR_ESTADO: Record<EstadoMetrica, CorEtiqueta> = {

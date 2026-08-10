@@ -71,6 +71,9 @@ function fixture(): ExportObra {
             texto_pt_original_ia: 'Texto um (IA).',
             editado_manualmente: true,
             status_traducao: 'traduzida',
+            // Veio de um botão (passe de estilo) — precisa sobreviver ao round-trip
+            // para a mineração de edições manuais não recontar esta frase do zero.
+            origem_edicao: 'passe-estilo',
           },
           {
             ordem: 1,
@@ -80,6 +83,7 @@ function fixture(): ExportObra {
             texto_pt_original_ia: null,
             editado_manualmente: false,
             status_traducao: 'erro',
+            origem_edicao: null,
           },
         ],
       },
@@ -171,6 +175,39 @@ describe('portabilidade — round-trip com schema novo', () => {
     expect('erro' in r).toBe(false);
     if ('erro' in r) return;
     expect(exportarObra(db, r.id)!.obra.fase_traducao).toBe('calibracao');
+  });
+
+  // Achado da revisão final: schema, SELECT do export e INSERT do import não
+  // conheciam origem_edicao. Um round-trip (backup, ou sincronizar VPS ↔ máquina
+  // local) devolvia toda frase com origem NULL, e cada correção de botão e cada
+  // substituição em lote reaparecia na mineração de edições manuais como se o
+  // revisor tivesse digitado cada uma.
+  it('preserva origem_edicao no round-trip', () => {
+    const r = importarObra(db, fixture());
+    expect('erro' in r).toBe(false);
+    if ('erro' in r) return;
+    const frases = reposFrases.listarPorCapitulo(
+      db,
+      reposCapitulos.listar(db, r.id)[0].id,
+    );
+    expect(frases.map((f) => f.origem_edicao)).toEqual(['passe-estilo', null]);
+
+    const exp = exportarObra(db, r.id)!;
+    expect(exp.capitulos[0].frases.map((f) => f.origem_edicao)).toEqual(['passe-estilo', null]);
+  });
+
+  it('export antigo sem origem_edicao assume NULL (retrocompat)', () => {
+    const antigo: any = fixture();
+    delete antigo.capitulos[0].frases[0].origem_edicao;
+    delete antigo.capitulos[0].frases[1].origem_edicao;
+    const r = importarObra(db, antigo);
+    expect('erro' in r).toBe(false);
+    if ('erro' in r) return;
+    const frases = reposFrases.listarPorCapitulo(
+      db,
+      reposCapitulos.listar(db, r.id)[0].id,
+    );
+    expect(frases.every((f) => f.origem_edicao === null)).toBe(true);
   });
 
   // TAREFA EXTRA (achado da revisão da Task 6): exportSchema valida secao_regra
