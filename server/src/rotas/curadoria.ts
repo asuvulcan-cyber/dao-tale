@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { camadaDoRotulo } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposFrases, reposGlossario, reposTermosSugeridos, reposTestes } from '../db/repos.js';
+import { recalcularConsistenciaDaObra } from '../traducao/consistencia.js';
 
 // Categoria é texto livre: o usuário cria as suas (migração 016 derrubou o CHECK
 // que contradizia isso). CATEGORIAS_GLOSSARIO são só as sugestões da tela.
@@ -83,10 +84,14 @@ export function rotasCuradoria(db: BancoDados): Hono {
   app.post('/obras/:obraId/glossario', async (c) => {
     const corpo = criarEntradaSchema.safeParse(await c.req.json());
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
-    const resultado = reposGlossario.criar(db, Number(c.req.param('obraId')), corpo.data);
+    const obraId = Number(c.req.param('obraId'));
+    const resultado = reposGlossario.criar(db, obraId, corpo.data);
     if (resultado === 'duplicado') {
       return c.json({ erro: { codigo: 'termo-duplicado', mensagem: 'Esse termo chinês já existe no glossário desta obra.' } }, 409);
     }
+    // Termo novo pode revelar violações em capítulos já traduzidos que o citam
+    // sem a forma canônica — sem recalcular aqui, o selo continuaria em "0".
+    recalcularConsistenciaDaObra(db, obraId);
     return c.json(resultado, 201);
   });
 
@@ -95,12 +100,18 @@ export function rotasCuradoria(db: BancoDados): Hono {
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const entrada = reposGlossario.atualizar(db, Number(c.req.param('id')), corpo.data);
     if (!entrada) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
+    // Editar termo_zh/termo_pt muda o que a varredura procura — recalcula na obra dona da entrada.
+    recalcularConsistenciaDaObra(db, entrada.obra_id);
     return c.json(entrada);
   });
 
   app.delete('/glossario/:id', (c) => {
+    // Lê a entrada ANTES de apagar: depois de excluída, não há mais como saber
+    // de qual obra ela era para recalcular a obra certa.
+    const entrada = reposGlossario.obter(db, Number(c.req.param('id')));
     const ok = reposGlossario.excluir(db, Number(c.req.param('id')));
-    if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
+    if (!ok || !entrada) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
+    recalcularConsistenciaDaObra(db, entrada.obra_id);
     return c.json({ ok: true });
   });
 
@@ -124,6 +135,10 @@ export function rotasCuradoria(db: BancoDados): Hono {
       para: entrada.termo_pt,
       previa: corpo.data.previa,
     });
+    // Substituir altera as FRASES, não o glossário — e é justamente a ação que
+    // resolve as violações que o revisor acabou de consertar. Só quando algo foi
+    // de fato gravado: com previa=true nada muda no banco, recalcular seria à toa.
+    if (!corpo.data.previa) recalcularConsistenciaDaObra(db, entrada.obra_id);
     return c.json(r);
   });
 
@@ -147,6 +162,10 @@ export function rotasCuradoria(db: BancoDados): Hono {
         400,
       );
     }
+    // Vínculo é mutação do glossário como qualquer outra — recalcula por
+    // consistência com as demais rotas, mesmo que hoje não mude a contagem.
+    // `r`, aqui, já é a entrada atualizada (as ramificações de erro voltaram acima).
+    recalcularConsistenciaDaObra(db, r.obra_id);
     return c.json(r);
   });
 
@@ -176,6 +195,9 @@ export function rotasCuradoria(db: BancoDados): Hono {
       if (resultado === 'duplicado') duplicados++;
       else inseridos++;
     }
+    // Uma varredura da obra inteira ao FIM do laço, não por termo — um CSV com
+    // centenas de linhas não pode custar centenas de varreduras da obra inteira.
+    if (inseridos > 0) recalcularConsistenciaDaObra(db, obraId);
     return c.json({ inseridos, duplicados, invalidos });
   });
 
@@ -203,11 +225,17 @@ export function rotasCuradoria(db: BancoDados): Hono {
       .object({ termo_pt: z.string().min(1).optional(), categoria: categoriaSchema.optional(), nota: z.string().optional() })
       .safeParse(await c.req.json().catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
-    const resultado = reposTermosSugeridos.aceitar(db, Number(c.req.param('id')), corpo.data);
+    const sugestaoId = Number(c.req.param('id'));
+    // A sugestão já traz o obra_id — lida antes de aceitar, porque o registro
+    // pode mudar de status mas continua existindo (não precisa antecipar por
+    // causa de exclusão, como na rota DELETE, mas o valor vem daqui mesmo).
+    const sugestao = reposTermosSugeridos.obter(db, sugestaoId);
+    const resultado = reposTermosSugeridos.aceitar(db, sugestaoId, corpo.data);
     if (resultado === undefined) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Sugestão não encontrada.' } }, 404);
     if (resultado === 'duplicado') {
       return c.json({ erro: { codigo: 'termo-duplicado', mensagem: 'Esse termo já entrou no glossário — sugestão marcada como aceita.' } }, 409);
     }
+    if (sugestao) recalcularConsistenciaDaObra(db, sugestao.obra_id);
     return c.json(resultado);
   });
 
