@@ -60,6 +60,26 @@ describe('recalcularConsistenciaDaObra', () => {
     recalcularConsistenciaDaObra(db, obraId);
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(0);
   });
+
+  // Achado da revisão final (item 3): capítulo 100% pendente não tem UMA linha
+  // de português para a varredura conferir. Gravar 0 diria "varrido e limpo";
+  // NULL é o valor que já significava "nunca varrido", e docs/11 e a Telemetria
+  // mostram "—" só para NULL — um 0 forjado apagaria essa distinção.
+  it('capítulo nunca traduzido continua NULL depois do recálculo, não vira 0', () => {
+    const capPendente = reposCapitulos.criar(db, obraId, { numero: 2, texto_origem: '金鹏堡很美。' }, [
+      { texto_zh: '金鹏堡很美。', paragrafo: 0 },
+    ]);
+    // Nenhuma frase deste capítulo foi traduzida — status_traducao continua 'pendente'.
+    expect(reposCapitulos.obter(db, capPendente.id)!.consistencia_violacoes).toBeNull();
+
+    reposGlossario.criar(db, obraId, { termo_zh: '金鹏堡', termo_pt: 'Fortaleza do Peng Dourado', categoria: 'lugar' });
+    recalcularConsistenciaDaObra(db, obraId);
+
+    // O capítulo TRADUZIDO (capId, do beforeEach) recebe a contagem de verdade...
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+    // ...e o capítulo pendente segue NULL — "nunca varrido", não "varrido e limpo".
+    expect(reposCapitulos.obter(db, capPendente.id)!.consistencia_violacoes).toBeNull();
+  });
 });
 
 // Prova pela HTTP (não só pela função direta) que as sete rotas do glossário
@@ -208,5 +228,64 @@ describe('gatilho na dispensa de consistência (capitulos.ts)', () => {
     const r = await dispensar({ termo_zh: '金鹏堡', desfazer: true });
     expect(r.status).toBe(200);
     expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+  });
+});
+
+// Achado da revisão final (item 1): POST /obras/:obraId/substituir é a rota
+// IRMÃ de POST /glossario/:id/substituir (é a correção rápida disparada do
+// EditorCapitulo, não da tela de curadoria) — faz o mesmo UPDATE em lote em
+// `frases.texto_pt`, mas tinha ficado fora do gatilho. Sem isto, o texto ficava
+// certo e GET /obras/:id/consistencia já devolvia `por_termo: []`, enquanto o
+// selo em `capitulos.consistencia_violacoes` continuava acusando — duas telas
+// do mesmo app discordando sobre o mesmo número.
+describe('gatilho na rota irmã (frases.ts: POST /obras/:obraId/substituir)', () => {
+  let app: Hono;
+
+  beforeEach(async () => {
+    app = criarApp(db);
+    // O termo entra DEPOIS da frase já traduzida (mesmo cenário do topo do
+    // arquivo): a frase usa "Fortaleza Jinpeng", que não é a forma canônica.
+    await app.request(`/api/obras/${obraId}/glossario`, {
+      method: 'POST',
+      body: JSON.stringify({ termo_zh: '金鹏堡', termo_pt: 'Fortaleza do Peng Dourado', categoria: 'lugar' }),
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('previa=true não recalcula — zero chamadas', async () => {
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+    const spy = vi.spyOn(repos, 'recalcularConsistenciaDaObra');
+
+    await app.request(`/api/obras/${obraId}/substituir`, {
+      method: 'POST',
+      body: JSON.stringify({ de: 'Fortaleza Jinpeng', para: 'Fortaleza do Peng Dourado', previa: true }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(spy).toHaveBeenCalledTimes(0);
+    // Prévia não grava: o selo segue acusando a violação que ainda existe.
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+  });
+
+  it('previa=false recalcula exatamente uma vez, e o selo do capítulo zera junto com a tela da obra', async () => {
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(1);
+    const spy = vi.spyOn(repos, 'recalcularConsistenciaDaObra');
+
+    const r = await app.request(`/api/obras/${obraId}/substituir`, {
+      method: 'POST',
+      body: JSON.stringify({ de: 'Fortaleza Jinpeng', para: 'Fortaleza do Peng Dourado', previa: false }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(r.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+    // É o defeito verificado pelo revisor: as duas telas precisam concordar.
+    expect(reposCapitulos.obter(db, capId)!.consistencia_violacoes).toBe(0);
+    const { por_termo } = await (await app.request(`/api/obras/${obraId}/consistencia`)).json();
+    expect(por_termo).toEqual([]);
   });
 });

@@ -82,11 +82,12 @@ explícita, vence o intervalo). Escopo sem capítulo nenhum → `400 escopo-vazi
 | Método e rota | Descrição |
 |---|---|
 | `GET /obras/:id/glossario` | Filtro por categoria e busca por termo |
-| `POST /obras/:id/glossario` · `PATCH /glossario/:id` · `DELETE /glossario/:id` | CRUD; conflito de `termo_zh` duplicado → 409 com a entrada existente |
-| `POST /obras/:id/glossario/importar` | CSV ou pares `zh,pt` colados; retorna relatório (inseridos, duplicados) |
+| `POST /obras/:id/glossario` · `PATCH /glossario/:id` · `DELETE /glossario/:id` | CRUD; conflito de `termo_zh` duplicado → 409 com a entrada existente. Qualquer mutação recalcula `consistencia_violacoes` de todos os capítulos da obra (doc 05 §4.2) |
+| `POST /obras/:id/glossario/importar` | CSV ou pares `zh,pt` colados; retorna relatório (inseridos, duplicados). Recalcula a consistência uma vez ao fim do lote, não por linha |
 | `GET /obras/:id/glossario/exportar?formato=csv` | |
+| `GET /obras/:id/consistencia` | Irmã de `GET /capitulos/:id/consistencia`, rodada na obra inteira e agrupada por TERMO (não por frase), porque o conserto é por termo: `{ ocorrencias, termos_curtos_ignorados, frases_examinadas, por_termo: [{ glossario_id, termo_zh, termo_pt, violacoes[] }] }`. Calculada ao vivo a cada chamada (~10 ms numa obra real) — nada fica guardado entre chamadas |
 | `GET /obras/:id/termos-sugeridos?status=pendente` | Fila de sugestões capturadas nas traduções |
-| `POST /termos-sugeridos/:id/aceitar` | Insere no glossário (`origem='sugerido-ia'`), permite ajustar termo/categoria no corpo |
+| `POST /termos-sugeridos/:id/aceitar` | Insere no glossário (`origem='sugerido-ia'`), permite ajustar termo/categoria no corpo. Também recalcula a consistência da obra |
 | `POST /termos-sugeridos/:id/rejeitar` | |
 
 ### Telemetria de custo (doc 11)

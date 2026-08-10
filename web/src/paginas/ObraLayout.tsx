@@ -3,6 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import type { Obra, TermoSugerido } from '@dao-tale/shared';
 import { api } from '../api';
 
+/** Só os campos que a contagem da aba precisa — o corpo inteiro de
+ *  `GET /obras/:id/consistencia` está tipado em `ConsistenciaObra.tsx`. */
+interface RelatorioConsistenciaResumo {
+  por_termo: { violacoes: unknown[] }[];
+}
+
 export function ObraLayout() {
   const { obraId } = useParams();
 
@@ -17,13 +23,27 @@ export function ObraLayout() {
     refetchInterval: 30_000,
   });
 
+  // Mesmo motivo da aba vizinha: sem contagem, a aba não distingue "12 frases
+  // contradizem o termo que você acabou de cadastrar" de "nada aqui" — e é
+  // exatamente essa distinção que o app precisa avisar da próxima vez (spec).
+  // A rota calcula ao vivo (~6 ms medido), então não há custo em consultar
+  // aqui só para o número da aba. Mesma `queryKey` de `ConsistenciaObra.tsx`
+  // de propósito: com a aba aberta, os dois componentes dividem a mesma
+  // entrada de cache em vez de disparar duas chamadas para o mesmo relatório.
+  const { data: consistencia } = useQuery({
+    queryKey: ['consistencia-obra', obraId],
+    queryFn: () => api<RelatorioConsistenciaResumo>('GET', `/obras/${obraId}/consistencia`),
+    refetchInterval: 30_000,
+  });
+  const totalViolacoes = consistencia?.por_termo.reduce((n, g) => n + g.violacoes.length, 0) ?? 0;
+
   const abas = [
     { rota: `/obras/${obraId}`, texto: 'Capítulos', exato: true },
     { rota: `/obras/${obraId}/glossario`, texto: 'Glossário' },
     // Colada no glossário: é a prestação de contas dele — o que o texto já
     // traduzido faz com os termos cadastrados. Longe daqui, viraria mais uma
     // tela que ninguém abre depois de cadastrar um termo tarde demais.
-    { rota: `/obras/${obraId}/consistencia`, texto: 'Consistência' },
+    { rota: `/obras/${obraId}/consistencia`, texto: `Consistência${totalViolacoes > 0 ? ` (${totalViolacoes})` : ''}` },
     { rota: `/obras/${obraId}/termos`, texto: `Termos sugeridos${sugestoes?.length ? ` (${sugestoes.length})` : ''}` },
     { rota: `/obras/${obraId}/prompt`, texto: 'Prompt mãe' },
     { rota: `/obras/${obraId}/testes`, texto: 'Banco de testes' },

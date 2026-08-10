@@ -2,7 +2,18 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { PROVEDORES_IDS, resolverTemperatura, type CasoTeste, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
-import { reposCapitulos, reposConfig, reposFrases, reposGlossario, reposObras, reposPrompts, reposTermosSugeridos, reposTestes, reposUso } from '../db/repos.js';
+import {
+  reposCapitulos,
+  reposConfig,
+  reposFrases,
+  reposGlossario,
+  reposObras,
+  reposPrompts,
+  reposTermosSugeridos,
+  reposTestes,
+  reposUso,
+  recalcularConsistenciaDaObra,
+} from '../db/repos.js';
 import { obterProvedor } from '../ia/fabrica.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor } from '../ia/provedor.js';
@@ -104,6 +115,12 @@ export function rotasFrases(db: BancoDados): Hono {
       para: corpo.data.para,
       previa: corpo.data.previa,
     });
+    // Mesmo motivo de POST /glossario/:id/substituir (curadoria.ts): esta rota
+    // também troca `texto_pt` em lote e é o próprio conserto de uma violação —
+    // sem recalcular aqui, o selo do capítulo continuava acusando o que a
+    // tela de consistência da obra já mostrava como resolvido. previa=true não
+    // grava nada, então recalcular seria trabalho jogado fora.
+    if (!corpo.data.previa) recalcularConsistenciaDaObra(db, obraId);
     return c.json(afetadas);
   });
 

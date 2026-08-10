@@ -532,12 +532,27 @@ export function recalcularConsistenciaDaObra(db: BancoDados, obraId: number): vo
   const frases = reposFrases.listarPorObra(db, obraId);
   const glossario = reposGlossario.listar(db, obraId);
   const ignoradas = reposConsistencia.ignoradasDaObra(db, obraId);
+  // `push` no array já guardado no Map — o spread `[...(porCapitulo.get(id) ?? []), f]`
+  // copiava o acumulado inteiro a cada frase (O(k²) na obra).
   const porCapitulo = new Map<number, typeof frases>();
-  for (const f of frases) porCapitulo.set(f.capitulo_id, [...(porCapitulo.get(f.capitulo_id) ?? []), f]);
-  for (const [capituloId, doCapitulo] of porCapitulo) {
-    const r = varrerConsistencia(doCapitulo, glossario, ignoradas);
-    reposCapitulos.definirConsistencia(db, capituloId, r.violacoes.length);
+  for (const f of frases) {
+    const doCapitulo = porCapitulo.get(f.capitulo_id);
+    if (doCapitulo) doCapitulo.push(f);
+    else porCapitulo.set(f.capitulo_id, [f]);
   }
+  db.transaction(() => {
+    for (const [capituloId, doCapitulo] of porCapitulo) {
+      // Capítulo 100% pendente não tem nenhuma frase para a varredura conferir —
+      // gravar 0 diria "varrido e limpo" sobre um capítulo nunca varrido, que é
+      // exatamente o estado que NULL existe para distinguir (docs/11 e a tela de
+      // Telemetria mostram "—" só para NULL; um 0 forjado apagaria essa distinção,
+      // o próprio argumento do spec, "zero calculado cedo demais parece resposta",
+      // no sentido inverso).
+      if (!doCapitulo.some((f) => f.status_traducao === 'traduzida')) continue;
+      const r = varrerConsistencia(doCapitulo, glossario, ignoradas);
+      reposCapitulos.definirConsistencia(db, capituloId, r.violacoes.length);
+    }
+  })();
 }
 
 // ── Frases ─────────────────────────────────────────────────────────────────
