@@ -55,6 +55,14 @@ export const AMOSTRA_MINIMA = 3;
 export const precisaoAferida = (a: AfericaoCatalogo): number =>
   a.acusadas === 0 ? 0 : a.corrigidas / a.acusadas;
 
+/** O portão que uma entrada tem de passar para existir em CATALOGO. Função, e
+ *  não expressão solta no teste, porque o teste do catálogo real é
+ *  auto-referente por natureza — ele só sabe comparar contra as constantes
+ *  correntes. Com dados sintéticos aqui, baixar um piso vira teste vermelho. */
+export function entradaAprovada(a: AfericaoCatalogo): boolean {
+  return a.acusadas >= AMOSTRA_MINIMA && precisaoAferida(a) >= PRECISAO_MINIMA;
+}
+
 export const CATALOGO: readonly EntradaCatalogo[] = [
   {
     id: 'particula-yizhi',
