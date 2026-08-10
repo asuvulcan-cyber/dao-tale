@@ -126,6 +126,10 @@ describe('provedorMock.passeEstilo', () => {
 });
 
 describe('o passe recebe o original', () => {
+  // Duas violações no mesmo alvo, só a segunda com orientação: com uma única
+  // violação (ou com a orientação sempre na última) índice de substring e
+  // "linha seguinte" coincidem mesmo se a implementação emitisse todas as
+  // orientações batidas no fim do alvo — não provam a adjacência de verdade.
   const req = {
     modelo: 'm',
     omega: 'ÔMEGA',
@@ -133,8 +137,9 @@ describe('o passe recebe o original', () => {
       {
         ordem: 3,
         texto_zh: '他一直在等。',
-        texto_pt: 'Ele sempre esteve esperando.',
+        texto_pt: 'Ele tinha esperado, pois sempre esteve à espera.',
         violacoes: [
+          { regra: 'mais-que-perfeito', trecho: 'tinha esperado' },
           { regra: 'particula-yizhi', trecho: 'sempre esteve', orientacao: '一直 é continuidade até então.' },
         ],
       },
@@ -147,10 +152,13 @@ describe('o passe recebe o original', () => {
   });
 
   it('a orientação da violação vai junto da violação', () => {
-    const texto = usuarioPasseEstilo(req);
-    expect(texto).toContain('一直 é continuidade até então.');
-    // Junto, não solta no fim: a orientação é daquela violação.
-    expect(texto.indexOf('一直 é continuidade')).toBeGreaterThan(texto.indexOf('particula-yizhi'));
+    // Asserção pela LINHA seguinte, não por índice de substring: índice de
+    // substring não distingue "logo abaixo da sua violação" de "depois de
+    // todas as violações do alvo" quando a orientação calha de ser a última.
+    const linhas = usuarioPasseEstilo(req).split('\n');
+    const idx = linhas.findIndex((l) => l.includes('particula-yizhi'));
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(linhas[idx + 1]).toContain('一直 é continuidade até então.');
   });
 
   it('violação sem orientação não emite linha vazia', () => {
@@ -159,6 +167,31 @@ describe('o passe recebe o original', () => {
       alvos: [{ ...req.alvos[0], violacoes: [{ regra: 'mais-que-perfeito', trecho: 'tinha ido' }] }],
     };
     expect(usuarioPasseEstilo(semOrientacao)).not.toContain('orientação:');
+  });
+
+  it('cada orientação fica logo após a sua própria violação — é aqui que a troca importa de verdade', () => {
+    // Duas violações, AMBAS com orientação: se a implementação batesse as
+    // orientações depois do laço, a orientação da primeira violação pularia
+    // para depois da segunda — o modelo aplicaria o conserto errado.
+    const duasOrientacoes = {
+      ...req,
+      alvos: [
+        {
+          ...req.alvos[0],
+          violacoes: [
+            { regra: 'mais-que-perfeito', trecho: 'tinha esperado', orientacao: 'não é anterioridade dupla aqui.' },
+            { regra: 'particula-yizhi', trecho: 'sempre esteve', orientacao: '一直 é continuidade até então.' },
+          ],
+        },
+      ],
+    };
+    const linhas = usuarioPasseEstilo(duasOrientacoes).split('\n');
+    const idxMqp = linhas.findIndex((l) => l.includes('mais-que-perfeito'));
+    const idxYizhi = linhas.findIndex((l) => l.includes('particula-yizhi'));
+    expect(idxMqp).toBeGreaterThanOrEqual(0);
+    expect(idxYizhi).toBeGreaterThanOrEqual(0);
+    expect(linhas[idxMqp + 1]).toContain('não é anterioridade dupla aqui.');
+    expect(linhas[idxYizhi + 1]).toContain('一直 é continuidade até então.');
   });
 
   it('o bloco operacional manda o chinês arbitrar', () => {
