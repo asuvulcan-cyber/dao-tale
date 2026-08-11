@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import {
+  CATALOGO,
   PROVEDORES_IDS,
   STATUS_CAPITULO,
   aplicarCorrecao,
@@ -27,6 +28,7 @@ import {
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
+import { varrerCatalogo } from '../traducao/catalogoZhPt.js';
 import { analisarEstilo } from '../traducao/estiloViolacoes.js';
 import { analisarCapitulo } from '../traducao/qa.js';
 import { obterProvedor } from '../ia/fabrica.js';
@@ -126,14 +128,28 @@ export function rotasCapitulos(db: BancoDados): Hono {
       .map((v) => ({ ...v, frase_id: idPorOrdem.get(v.ordem) ?? null }))
       .filter((v) => v.frase_id == null || !ignoradas.has(`${v.frase_id}|${v.regra}|${v.trecho}`));
 
+    // O catálogo de erros zh→pt-BR entra na MESMA lista, marcado pela regra:
+    // é o que faz a dispensa por trinca e a tela existirem sem alteração. A
+    // varredura é bilíngue, então ela roda sobre as frases, não sobre o
+    // relatório de estilo.
+    const doCatalogo = varrerCatalogo(frases, ignoradas).violacoes.map((v) => ({
+      ordem: v.ordem,
+      regra: v.entrada_id,
+      trecho: v.trecho_pt,
+      frase_id: v.frase_id,
+    }));
+    // Ordenado por frase: grampear o catálogo no fim faria a lista pular da
+    // frase 90 para a 3, e o revisor lê na ordem do capítulo.
+    const todas = [...visiveis, ...doCatalogo].sort((a, b) => a.ordem - b.ordem);
+
     // `por_terco` é recontado sobre o que sobrou: se contasse o dispensado, o
     // gráfico diria uma coisa e a lista outra.
     const por_terco: [number, number, number] = [0, 0, 0];
-    for (const v of visiveis) {
+    for (const v of todas) {
       const i = frases.length === 0 ? 0 : Math.min(2, Math.floor((v.ordem / frases.length) * 3));
       por_terco[i] += 1;
     }
-    return c.json({ ...relatorio, violacoes: visiveis, por_terco, ignoradas: ignoradas.size });
+    return c.json({ ...relatorio, violacoes: todas, por_terco, ignoradas: ignoradas.size });
   });
 
   // Passe de estilo: propõe o conserto das violações que a varredura já acusa.
@@ -156,17 +172,30 @@ export function rotasCapitulos(db: BancoDados): Hono {
       return fid != null && !ignoradas.has(`${fid}|${v.regra}|${v.trecho}`);
     });
 
+    const doCatalogo = varrerCatalogo(frases, ignoradas).violacoes;
     // Sem violação não há chamada — o passe custa dinheiro e não se paga no vazio.
-    if (visiveis.length === 0) return c.json({ correcoes: [] });
+    if (visiveis.length === 0 && doCatalogo.length === 0) return c.json({ correcoes: [] });
 
-    const porOrdem = new Map<number, { regra: string; trecho: string }[]>();
+    const porOrdem = new Map<number, { regra: string; trecho: string; orientacao?: string }[]>();
     for (const v of visiveis) porOrdem.set(v.ordem, [...(porOrdem.get(v.ordem) ?? []), { regra: v.regra, trecho: v.trecho }]);
+    for (const v of doCatalogo) {
+      // A orientação é o `certo` da entrada: é aqui, no ponto do uso, que o
+      // texto do catálogo é entregue — e não em toda chamada de tradução.
+      const orientacao = CATALOGO.find((e) => e.id === v.entrada_id)?.certo;
+      porOrdem.set(v.ordem, [...(porOrdem.get(v.ordem) ?? []), { regra: v.entrada_id, trecho: v.trecho_pt, orientacao }]);
+    }
     const textoPorOrdem = new Map(frases.map((f) => [f.ordem, f.texto_pt ?? '']));
-    const alvos = [...porOrdem.entries()].map(([ordem, violacoes]) => ({
-      ordem,
-      texto_pt: textoPorOrdem.get(ordem) ?? '',
-      violacoes,
-    }));
+    const zhPorOrdem = new Map(frases.map((f) => [f.ordem, f.texto_zh]));
+    // Ordenado por frase pelo mesmo motivo da lista: o modelo recebe o trecho na
+    // ordem em que ele foi escrito, e as vizinhas fazem sentido ao lado dele.
+    const alvos = [...porOrdem.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([ordem, violacoes]) => ({
+        ordem,
+        texto_zh: zhPorOrdem.get(ordem) ?? '',
+        texto_pt: textoPorOrdem.get(ordem) ?? '',
+        violacoes,
+      }));
     const alvosSet = new Set(alvos.map((a) => a.ordem));
     const vizinhas = frases
       .filter((f) => !alvosSet.has(f.ordem) && [...alvosSet].some((o) => Math.abs(o - f.ordem) === 1))
