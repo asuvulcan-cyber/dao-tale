@@ -388,16 +388,12 @@ export function TextoComDestaque({
 }
 
 // Rótulos das regras da varredura determinística de estilo (server/src/traducao/
-// estiloViolacoes.ts). Vive aqui, e não no editor, porque a varredura e o passe
-// são duas telas mostrando a MESMA regra — com duas cópias, a que ficasse para
-// trás faria a mesma violação ter dois nomes no mesmo app.
-export const REGRA_ESTILO_ROTULO: Record<string, string> = {
-  'mais-que-perfeito': 'Mais-que-perfeito simples',
-  'aspas-nao-retas': 'Aspas não retas',
-  'virgula-dentro-da-aspa': 'Vírgula dentro das aspas',
-  'dialogo-aspas': 'Travessão numa obra de aspas',
-  'dialogo-travessao': 'Aspas numa obra de travessão',
-};
+// estiloViolacoes.ts) e do catálogo de erros zh→pt-BR (shared/src/catalogoErros.ts).
+// Vive em util/rotuloRegra, e não aqui nem no editor, porque a varredura e o
+// passe são duas telas mostrando a MESMA regra — com duas cópias, a que
+// ficasse para trás faria a mesma violação ter dois nomes no mesmo app.
+// Reexportado daqui para não quebrar os dois importadores já existentes.
+export { REGRA_ESTILO_ROTULO } from './util/rotuloRegra';
 
 export const STATUS_CAPITULO_ROTULO: Record<string, { texto: string; cor: CorEtiqueta }> = {
   rascunho: { texto: 'Rascunho', cor: 'neutro' },

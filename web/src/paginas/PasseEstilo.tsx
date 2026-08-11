@@ -19,6 +19,7 @@ import {
   type CorEtiqueta,
 } from '../App';
 import { violacaoDaCorrecao, type CorrecaoPasse, type ViolacaoEstilo } from '../util/passeEstilo';
+import { orientacaoDaRegra } from '../util/rotuloRegra';
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -487,21 +488,29 @@ function CabecalhoLinha({
   // O modelo ecoa a regra e o schema aceita string vazia; sem violação casada
   // para suprir o nome, uma etiqueta colorida em branco é só uma mancha na tela.
   const rotulo = REGRA_ESTILO_ROTULO[regra] ?? regra;
+  // Só as regras do catálogo (Task 1) sabem dizer o que é certo — regra de
+  // estilo puro devolve null e a linha de orientação nem aparece.
+  const orientacao = orientacaoDaRegra(regra);
   return (
-    <div className="mb-1.5 flex flex-wrap items-center gap-2">
-      {rotulo && <Etiqueta cor={resolucao ? 'neutro' : cor}>{rotulo}</Etiqueta>}
-      <span className="text-xs text-tinta-2">frase {ordem + 1}</span>
-      {fraseId != null && (
-        <Link
-          to={`/obras/${obraId}/capitulos/${capituloId}?frase=${fraseId}`}
-          className="text-xs text-jade-forte hover:underline"
-        >
-          ir à frase
-        </Link>
-      )}
-      {resolucao === 'aplicada' && <Etiqueta cor="indigo">aplicada</Etiqueta>}
-      {resolucao === 'dispensada' && <Etiqueta cor="neutro">dispensada</Etiqueta>}
-    </div>
+    <>
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        {rotulo && <Etiqueta cor={resolucao ? 'neutro' : cor}>{rotulo}</Etiqueta>}
+        <span className="text-xs text-tinta-2">frase {ordem + 1}</span>
+        {fraseId != null && (
+          <Link
+            to={`/obras/${obraId}/capitulos/${capituloId}?frase=${fraseId}`}
+            className="text-xs text-jade-forte hover:underline"
+          >
+            ir à frase
+          </Link>
+        )}
+        {resolucao === 'aplicada' && <Etiqueta cor="indigo">aplicada</Etiqueta>}
+        {resolucao === 'dispensada' && <Etiqueta cor="neutro">dispensada</Etiqueta>}
+      </div>
+      {/* Texto auxiliar, subordinado ao rótulo acima — não um bloco que
+          compete com ele. */}
+      {orientacao && <p className="mt-1 text-xs text-tinta-2">{orientacao}</p>}
+    </>
   );
 }
 
