@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CATALOGO } from '@dao-tale/shared';
-import { orientacaoDaRegra, REGRA_ESTILO_ROTULO } from './rotuloRegra';
+import { CATALOGO, type EntradaCatalogo } from '@dao-tale/shared';
+import { comporRotulos, orientacaoDaRegra, REGRA_ESTILO_ROTULO } from './rotuloRegra';
 
 // orientacaoDaRegra já é testada a fundo em server/src/db/catalogoErros.test.ts
 // (casamento por id, null fora do catálogo, os pisos). Aqui o alvo é só este
@@ -19,5 +19,16 @@ describe('rótulos de regra', () => {
   it('a orientação sai só para regra do catálogo', () => {
     expect(orientacaoDaRegra(CATALOGO[0].id)).toBe(CATALOGO[0].certo);
     expect(orientacaoDaRegra('mais-que-perfeito')).toBeNull();
+  });
+
+  it('numa colisão de id, o catálogo vence — senão o rótulo diverge da orientação', () => {
+    // Com os ids reais não há colisão, então a precedência do spread passa
+    // verde nos dois sentidos. A entrada sintética é o que a torna verificável:
+    // a orientação logo abaixo do rótulo casa por id direto no catálogo, e um
+    // rótulo de estilo por cima dela seria a divergência silenciosa que este
+    // módulo existe para impedir.
+    const colidente = { ...CATALOGO[0], id: 'mais-que-perfeito', titulo: 'Do catálogo' } as EntradaCatalogo;
+    const mapa = comporRotulos({ 'mais-que-perfeito': 'De estilo' }, [colidente]);
+    expect(mapa['mais-que-perfeito']).toBe('Do catálogo');
   });
 });

@@ -8,7 +8,7 @@
 // orientacaoDaRegra já mora em shared e já é testada lá (casamento por id,
 // null fora do catálogo, os pisos) — reexportada aqui só para os dois
 // importadores desta tela (rótulo e orientação) virem do mesmo lugar.
-import { CATALOGO } from '@dao-tale/shared';
+import { CATALOGO, type EntradaCatalogo } from '@dao-tale/shared';
 
 export { orientacaoDaRegra } from '@dao-tale/shared';
 
@@ -20,7 +20,18 @@ const DE_ESTILO: Record<string, string> = {
   'dialogo-travessao': 'Aspas numa obra de travessão',
 };
 
-export const REGRA_ESTILO_ROTULO: Record<string, string> = {
-  ...DE_ESTILO,
-  ...Object.fromEntries(CATALOGO.map((e) => [e.id, e.titulo])),
-};
+/** Compõe o de-para. Função, e não só o spread na constante, porque a
+ *  PRECEDÊNCIA precisa de teste e com os ids reais não há colisão para
+ *  exercitá-la: hoje as regras de estilo e as do catálogo não se cruzam, e a
+ *  inversão passa verde. O catálogo tem de vencer, porque a orientação exibida
+ *  logo abaixo do rótulo casa por id direto no catálogo — rótulo de um lado e
+ *  orientação de outro é justamente a divergência silenciosa que este módulo
+ *  existe para impedir. */
+export function comporRotulos(
+  deEstilo: Record<string, string>,
+  entradas: readonly EntradaCatalogo[],
+): Record<string, string> {
+  return { ...deEstilo, ...Object.fromEntries(entradas.map((e) => [e.id, e.titulo])) };
+}
+
+export const REGRA_ESTILO_ROTULO: Record<string, string> = comporRotulos(DE_ESTILO, CATALOGO);
