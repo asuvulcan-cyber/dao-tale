@@ -77,6 +77,17 @@ export const CATALOGO: readonly EntradaCatalogo[] = [
   },
 ];
 
+/** A orientação daquela regra, quando o catálogo sabe dizer — `null` para as
+ *  regras de estilo, que não são do catálogo e não têm o que orientar.
+ *
+ *  Função com `entradas` injetável porque com uma entrada só no CATALOGO real a
+ *  busca por id é indistinguível de pegar a primeira — e é justamente na segunda
+ *  entrada que mandar a orientação da regra errada vira conserto errado numa
+ *  chamada paga. Com duas entradas sintéticas no teste, essa troca fica vermelha. */
+export function orientacaoDaRegra(regra: string, entradas: readonly EntradaCatalogo[] = CATALOGO): string | null {
+  return entradas.find((e) => e.id === regra)?.certo ?? null;
+}
+
 /** Medidas e reprovadas. Ficam aqui para ninguém repropor de boa-fé. */
 export const REPROVADAS: readonly (EntradaCatalogo & { motivo: string })[] = [
   {

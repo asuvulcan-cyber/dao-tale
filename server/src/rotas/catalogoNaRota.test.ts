@@ -53,6 +53,10 @@ async function capituloCom(
 const ALVO_CATALOGO = { zh: '他一直在等。', pt: 'Ele sempre esteve esperando.' };
 // Aspas curvas: violação de `analisarEstilo`, que nunca vê o chinês.
 const ALVO_ESTILO = { zh: '她笑了。', pt: '“Vamos”, disse ela.' };
+// As DUAS varreduras na mesma frase: 一直 + "sempre" (catálogo) e aspas curvas
+// (estilo). É o único cenário em que a ordem DENTRO da frase existe, e sem ele
+// o `sort` por `ordem` esconde qualquer divergência entre as duas rotas.
+const ALVO_DOS_DOIS = { zh: '他一直在等。', pt: 'Ele sempre esperou, “assim mesmo”.' };
 const LIMPA = { zh: '天黑了。', pt: 'A noite caiu.' };
 
 const CERTO_YIZHI = CATALOGO.find((e) => e.id === 'particula-yizhi')!.certo;
@@ -165,6 +169,70 @@ describe('catálogo na rota de estilo', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     const { correcoes } = await json(r);
     expect(correcoes.map((c: any) => c.regra)).toEqual(['particula-yizhi']);
+  });
+
+  // ── A ordem DENTRO da frase ───────────────────────────────────────────────
+  // O front casa a enésima correção do passe com a enésima violação da lista
+  // quando a `regra` não desempata (web/src/util/passeEstilo.ts), e esse caminho
+  // é obrigatório no descarte, que vem sem `trecho_pt_errado`. Lista e passe
+  // divergirem na ordem faz o botão Dispensar tirar o alerta ERRADO, sem sinal
+  // nenhum — daí estes dois testes serem sobre sequência, e não sobre conteúdo.
+
+  it('a lista e o passe entregam a mesma sequência dentro da frase acusada pelas duas varreduras', async () => {
+    const { capId: cap } = await capituloCom(obraId, 5, [ALVO_DOS_DOIS, LIMPA]);
+
+    const lista = await json(await chamar('GET', `/api/capitulos/${cap}/estilo`));
+    const daLista = lista.violacoes.filter((v: any) => v.ordem === 0).map((v: any) => [v.regra, v.trecho]);
+    // Com uma violação só a igualdade seria trivial: o valor deste teste está
+    // em a frase acusar pelas DUAS varreduras.
+    expect(daLista).toHaveLength(2);
+
+    const spy = vi.spyOn(provedorMock, 'passeEstilo');
+    expect((await chamar('POST', `/api/capitulos/${cap}/estilo/passe`)).status).toBe(200);
+    const alvo = spy.mock.calls[0][1].alvos.find((a) => a.ordem === 0)!;
+    const doPasse = alvo.violacoes.map((v) => [v.regra, v.trecho]);
+
+    // Item a item, regra E trecho: é o par que o de-para do front usa.
+    expect(doPasse).toEqual(daLista);
+  });
+
+  it('dentro da mesma frase, as de estilo vêm antes das do catálogo', async () => {
+    // O desempate é arbitrário; o que não é arbitrário é ele estar fixado num
+    // lugar só e pinado aqui — é isso que impede as duas rotas de derivarem.
+    const { capId: cap } = await capituloCom(obraId, 6, [ALVO_DOS_DOIS, LIMPA]);
+    const lista = await json(await chamar('GET', `/api/capitulos/${cap}/estilo`));
+    expect(lista.violacoes.map((v: any) => v.regra)).toEqual(['aspas-nao-retas', 'particula-yizhi']);
+  });
+
+  // ── As vizinhas que acompanham o pedido ───────────────────────────────────
+  // `vizinhas` sai de `alvos`, não da varredura de estilo. Montá-la só das de
+  // estilo é invisível na resposta (o mock nem lê o campo) e custa nos dois
+  // sentidos: alvo do catálogo sem contexto nenhum, ou a própria frase do
+  // catálogo indo junto marcada como "não corrija".
+
+  it('a frase acusada só pelo catálogo leva as suas vizinhas', async () => {
+    const { capId: cap } = await capituloCom(obraId, 7, [ALVO_CATALOGO, LIMPA]);
+    const spy = vi.spyOn(provedorMock, 'passeEstilo');
+    expect((await chamar('POST', `/api/capitulos/${cap}/estilo/passe`)).status).toBe(200);
+    const req = spy.mock.calls[0][1];
+    expect(req.alvos.map((a) => a.ordem)).toEqual([0]);
+    // Sem isto o modelo recebe a frase do catálogo sem nada em volta.
+    expect(req.vizinhas.map((v) => v.ordem)).toEqual([1]);
+  });
+
+  it('a frase do catálogo nunca vai junto como vizinha do alvo ao lado', async () => {
+    // Frase 0 catálogo, frase 1 estilo: as duas são alvo. Se `alvos` não
+    // contasse a do catálogo, ela voltaria na lista de vizinhas — mandada duas
+    // vezes na mesma chamada paga, com a instrução "NÃO corrija" ao lado da
+    // instrução para corrigi-la.
+    const { capId: cap } = await capituloCom(obraId, 8, [ALVO_CATALOGO, ALVO_ESTILO, LIMPA]);
+    const spy = vi.spyOn(provedorMock, 'passeEstilo');
+    expect((await chamar('POST', `/api/capitulos/${cap}/estilo/passe`)).status).toBe(200);
+    const req = spy.mock.calls[0][1];
+    expect(req.alvos.map((a) => a.ordem)).toEqual([0, 1]);
+    expect(req.vizinhas.map((v) => v.ordem)).toEqual([2]);
+    const ordensDeAlvo = new Set(req.alvos.map((a) => a.ordem));
+    expect(req.vizinhas.filter((v) => ordensDeAlvo.has(v.ordem))).toEqual([]);
   });
 
   it('o passe não repropõe a violação do catálogo já dispensada', async () => {

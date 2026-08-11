@@ -5,7 +5,9 @@ import {
   PRECISAO_MINIMA,
   REPROVADAS,
   entradaAprovada,
+  orientacaoDaRegra,
   precisaoAferida,
+  type EntradaCatalogo,
 } from '@dao-tale/shared';
 
 // Este arquivo é a razão de o catálogo existir como dado e não como texto de
@@ -76,6 +78,40 @@ describe('catálogo de erros zh→pt-BR', () => {
 
     it('nenhuma ocorrência acusada não passa', () => {
       expect(entradaAprovada({ ...base, acusadas: 0, corrigidas: 0 })).toBe(false);
+    });
+  });
+
+  // Mesma razão dos pisos: com uma entrada só no CATALOGO real, "achou pelo id"
+  // e "pegou a primeira" dão o mesmo resultado, e o passe de estilo mandaria a
+  // orientação da regra ERRADA sem nenhum teste ficar vermelho. O erro custa
+  // caro: a orientação vai dentro de uma chamada paga, mandando o modelo
+  // consertar uma coisa com a explicação de outra.
+  describe('orientacaoDaRegra — casada por id, com duas entradas sintéticas', () => {
+    const aferido = { obra_id: 1, acusadas: 3, corrigidas: 2, em: '2026-08-10' };
+    const primeira: EntradaCatalogo = {
+      id: 'sintetica-primeira',
+      titulo: 'primeira',
+      gatilho_zh: '甲',
+      evitar_pt: /\bum\b/i,
+      certo: 'o certo da PRIMEIRA',
+      aferido,
+    };
+    const segunda: EntradaCatalogo = { ...primeira, id: 'sintetica-segunda', certo: 'o certo da SEGUNDA' };
+    const entradas = [primeira, segunda];
+
+    it('cada id devolve o seu próprio `certo`', () => {
+      expect(orientacaoDaRegra('sintetica-primeira', entradas)).toBe('o certo da PRIMEIRA');
+      // A que pega quem devolve sempre a primeira entrada.
+      expect(orientacaoDaRegra('sintetica-segunda', entradas)).toBe('o certo da SEGUNDA');
+    });
+
+    it('regra fora do catálogo devolve null — estilo puro não tem orientação', () => {
+      expect(orientacaoDaRegra('aspas-nao-retas', entradas)).toBeNull();
+      expect(orientacaoDaRegra('mais-que-perfeito')).toBeNull();
+    });
+
+    it('sem entradas explícitas, consulta o CATALOGO real', () => {
+      for (const e of CATALOGO) expect(orientacaoDaRegra(e.id)).toBe(e.certo);
     });
   });
 });
