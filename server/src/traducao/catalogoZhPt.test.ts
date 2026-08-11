@@ -98,11 +98,17 @@ describe('varrerCatalogo', () => {
 });
 
 describe('aferirCatalogo', () => {
+  // Sintética e DIFERENTE da única entrada real de CATALOGO (id, gatilho_zh e
+  // evitar_pt não coincidem com 'particula-yizhi'). Se `aferirCatalogo` alguma
+  // hora passar a ignorar o parâmetro `entradas` e usar CATALOGO por dentro,
+  // nada aqui bate com '甲甲'/'xyzzy' e a contagem muda — com uma entrada
+  // sintética igual à real (mesmo id, mesmo gatilho, mesmo padrão) essa troca
+  // fica indistinguível e nenhum teste acusa.
   const entrada = {
-    id: 'particula-yizhi',
+    id: 'teste-sintetico',
     titulo: 't',
-    gatilho_zh: '一直',
-    evitar_pt: /\bsempre\b/i,
+    gatilho_zh: '甲甲',
+    evitar_pt: /\bxyzzy\b/i,
     certo: 'c',
     aferido: { obra_id: 0, acusadas: 0, corrigidas: 0, em: '2026-01-01' },
   };
@@ -110,9 +116,9 @@ describe('aferirCatalogo', () => {
   it('mede a precisão por frase, não por subtração de agregados', () => {
     const frases = [
       // 3 acusadas na IA e consertadas pelo revisor
-      ...[1, 2, 3].map(() => ({ texto_zh: '一直', texto_pt_original_ia: 'sempre', texto_pt: 'até então' })),
+      ...[1, 2, 3].map(() => ({ texto_zh: '甲甲', texto_pt_original_ia: 'xyzzy', texto_pt: 'outra coisa' })),
       // 1 acusada na IA e mantida
-      { texto_zh: '一直', texto_pt_original_ia: 'sempre', texto_pt: 'sempre' },
+      { texto_zh: '甲甲', texto_pt_original_ia: 'xyzzy', texto_pt: 'xyzzy' },
     ];
     const [linha] = aferirCatalogo(frases, [entrada]);
     expect(linha).toMatchObject({ acusadas: 4, corrigidas: 3, restantes: 1, novas: 0 });
@@ -123,8 +129,8 @@ describe('aferirCatalogo', () => {
     // A subtração de agregados esconderia este caso: uma some, outra nasce, e o
     // total não muda. É por isso que a conta é por frase.
     const frases = [
-      { texto_zh: '一直', texto_pt_original_ia: 'sempre', texto_pt: 'até então' },
-      { texto_zh: '一直', texto_pt_original_ia: 'até então', texto_pt: 'sempre' },
+      { texto_zh: '甲甲', texto_pt_original_ia: 'xyzzy', texto_pt: 'outra coisa' },
+      { texto_zh: '甲甲', texto_pt_original_ia: 'outra coisa', texto_pt: 'xyzzy' },
     ];
     const [linha] = aferirCatalogo(frases, [entrada]);
     expect(linha).toMatchObject({ acusadas: 1, corrigidas: 1, novas: 1 });
@@ -135,9 +141,19 @@ describe('aferirCatalogo', () => {
   });
 
   it('ignora frase sem texto original da IA — não há o que comparar', () => {
-    const frases = [{ texto_zh: '一直', texto_pt_original_ia: null, texto_pt: 'sempre' }];
+    const frases = [{ texto_zh: '甲甲', texto_pt_original_ia: null, texto_pt: 'xyzzy' }];
     const [linha] = aferirCatalogo(frases, [entrada]);
     expect(linha).toMatchObject({ acusadas: 0, corrigidas: 0, novas: 0, precisao: 0 });
+  });
+
+  it('não acusa quando o reflexo está no pt mas o gatilho não está no zh', () => {
+    // A checagem bilíngue: `texto_pt_original_ia` tem o reflexo, mas o zh não
+    // tem o gatilho. Sem o `includes(gatilho_zh)` dentro de `aferirCatalogo`,
+    // esta frase entraria como acusada — e a aferição deixaria de ser bilíngue,
+    // a mesma propriedade que distingue `varrerCatalogo` de `analisarEstilo`.
+    const frases = [{ texto_zh: 'nada a ver aqui', texto_pt_original_ia: 'xyzzy', texto_pt: 'xyzzy' }];
+    const [linha] = aferirCatalogo(frases, [entrada]);
+    expect(linha).toMatchObject({ acusadas: 0, restantes: 0, corrigidas: 0, novas: 0, precisao: 0 });
   });
 
   it('a aferição confirma os números gravados no catálogo em produção', () => {
