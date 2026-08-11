@@ -661,3 +661,67 @@ prólogo só apareceram lendo o capítulo à mão.
 E nenhum teste automático pega **tradução fluente e errada**: o caso mais grave da
 obra foi 刀 (sabre) e 剑 (espada) colapsando na mesma palavra, tornando a frase
 autocontraditória. Só a leitura ZH↔PT pega.
+
+---
+
+## 15. Catálogo de erros zh→pt-BR e a aferição (2026-08-10)
+
+O catálogo (`shared/src/catalogoErros.ts`) é uma lista separada do núcleo: cada entrada
+associa um gatilho no chinês (`gatilho_zh`) a um reflexo errado no português (`evitar_pt`)
+— "一直 virou sempre" é o caso fundador. O detector (`server/src/traducao/catalogoZhPt.ts`,
+`varrerCatalogo`) é bilíngue por isso: só acusa quando o chinês tem o gatilho **e** o
+português tem o padrão a evitar, ao contrário de `analisarEstilo` (§14), que nunca vê o
+zh. As violações entram na mesma lista de estilo que o capítulo já mostra (`regra` =
+`entrada_id`) e são consertáveis pelo mesmo passe — nenhuma tela nova. Desenho completo em
+`docs/superpowers/specs/2026-08-10-catalogo-erros-zh-pt-design.md`.
+
+### Por que não volta para o núcleo Alfa
+
+A tentação óbvia é enfiar de volta no prompt a tabela de partículas polissêmicas que o
+prompt *completo* legado trazia (nove linhas, uma por partícula) e que o núcleo enxuto
+(§12) cortou por tokens. Duas medições reais fecham essa porta:
+
+- **A investigação de 2026-08-05** (56 alvos, 22 modelos, 死人经 cap. 3) testou **nomear os
+  marcadores chineses no prompt** (曾经, 已经, 从来, 向来) e mediu **sem efeito** sobre a
+  contagem de violações — base 16/60, média 17,0 depois de nomear os marcadores. O que
+  funcionou naquela rodada foi um **fato**: acrescentar "1时辰 = 2 horas" ao núcleo derrubou
+  半个时辰 traduzido errado de **18/20 para 8/20**.
+- A distinção que aquela investigação isolou: **lacuna de conhecimento responde a fato no
+  prompt; preferência de tradução (qual glosa usar para uma partícula ambígua) não
+  responde.** Nomear 一直/总/还/都 no prompt pede que o modelo *lembre* a regra em toda
+  chamada; um detector determinístico *confere* depois, sem depender de memória nenhuma.
+
+Por isso o catálogo entrega o `certo` de cada entrada **no ponto do uso** — na violação,
+para o passe de correção — em vez de em todo prompt de tradução. Nenhum texto de prompt de
+tradução muda com este mecanismo.
+
+### O critério das duas medidas
+
+Uma entrada só existe em `CATALOGO` com número medido — nunca por intuição. Dois pisos,
+em `shared/src/catalogoErros.ts`:
+
+- `PRECISAO_MINIMA = 0.5` — das frases que a regra acusaria no texto que a IA produziu,
+  pelo menos metade tem de ter sido corrigida pelo revisor **por conta própria**, sem
+  ninguém avisar. Abaixo disso o revisor aprende a ignorar a lista — o mesmo modo de falha
+  de uma varredura de consistência com falso positivo.
+- `AMOSTRA_MINIMA = 3` — sem piso de amostra, uma única correção entraria com 100% de
+  "precisão" e o critério deixaria de ser critério.
+
+`entradaAprovada(aferido)` aplica os dois. A tabela de nove partículas, rodada contra a
+obra 1 (561 frases traduzidas), reprovou inteira menos uma linha: `一直 → "sempre"` passou
+com 3/4 (75%); `总`, `还`, `都`, `才` e `又` reprovaram e ficam registradas em `REPROVADAS`,
+com a medição ao lado, para ninguém repropor `都 → todos` de boa-fé em três meses.
+
+### Como rodar a aferição
+
+```
+cd server
+npx tsx scripts/aferir-catalogo.ts <obra_id> [caminho-do-banco]
+```
+
+Lê as frases `traduzida` da obra (`texto_zh`, `texto_pt`, `texto_pt_original_ia`) do banco
+**somente leitura** — nada é gravado — e imprime, para cada entrada de `CATALOGO` e de
+`REPROVADAS`, quantas ela acusaria e quantas o revisor já tinha corrigido por conta
+própria, com o veredito PASSA/REPROVA contra os dois pisos acima. É a mesma conta que
+gerou os números hoje gravados em `aferido`, e é assim que uma entrada é reavaliada quando
+o corpus crescer: nova obra, roda o script, e o `aferido` é regravado se o número mudar.

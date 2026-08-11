@@ -67,3 +67,54 @@ export function varrerCatalogo(
 
   return { violacoes, frases_examinadas };
 }
+
+export interface LinhaAfericao {
+  entrada_id: string;
+  gatilho_zh: string;
+  /** Frases acusadas no texto que a IA produziu. */
+  acusadas: number;
+  /** Dessas, quantas continuam acusadas no texto final. */
+  restantes: number;
+  /** Dessas, quantas o revisor consertou por conta própria. É o numerador. */
+  corrigidas: number;
+  /** Não acusadas na IA e acusadas no final — a revisão INTRODUZIU. Não entra
+   *  na precisão; existe para a conta não ser feita por subtração de agregados,
+   *  que esconderia uma sumindo e outra nascendo. */
+  novas: number;
+  precisao: number;
+}
+
+/** Responde "esta regra merece existir?" sem opinião. Função pura: o script lê
+ *  o banco, isto aqui só conta. */
+export function aferirCatalogo(
+  frases: { texto_zh: string; texto_pt: string; texto_pt_original_ia: string | null }[],
+  entradas: readonly EntradaCatalogo[],
+): LinhaAfericao[] {
+  return entradas.map((e) => {
+    let acusadas = 0;
+    let restantes = 0;
+    let corrigidas = 0;
+    let novas = 0;
+    for (const f of frases) {
+      if (!f.texto_zh.includes(e.gatilho_zh)) continue;
+      // Sem o original da IA não há comparação possível — a frase não entra em
+      // conta nenhuma, em vez de entrar como acerto.
+      if (f.texto_pt_original_ia == null) continue;
+      const naIa = e.evitar_pt.test(f.texto_pt_original_ia);
+      const noFim = e.evitar_pt.test(f.texto_pt ?? '');
+      if (naIa) acusadas++;
+      if (naIa && noFim) restantes++;
+      if (naIa && !noFim) corrigidas++;
+      if (!naIa && noFim) novas++;
+    }
+    return {
+      entrada_id: e.id,
+      gatilho_zh: e.gatilho_zh,
+      acusadas,
+      restantes,
+      corrigidas,
+      novas,
+      precisao: acusadas === 0 ? 0 : corrigidas / acusadas,
+    };
+  });
+}

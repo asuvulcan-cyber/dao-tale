@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { REPROVADAS, type EntradaCatalogo } from '@dao-tale/shared';
-import { varrerCatalogo } from './catalogoZhPt.js';
+import { CATALOGO, REPROVADAS, precisaoAferida, type EntradaCatalogo } from '@dao-tale/shared';
+import { aferirCatalogo, varrerCatalogo } from './catalogoZhPt.js';
 
 const frase = (over: Partial<Parameters<typeof varrerCatalogo>[0][number]>) => ({
   id: 1,
@@ -94,5 +94,65 @@ describe('varrerCatalogo', () => {
     expect(r.violacoes.map((v) => v.entrada_id).sort()).toEqual(['particula-dou', 'particula-yizhi']);
     // Uma frase, duas violações — mas `frases_examinadas` conta frases.
     expect(r.frases_examinadas).toBe(1);
+  });
+});
+
+describe('aferirCatalogo', () => {
+  const entrada = {
+    id: 'particula-yizhi',
+    titulo: 't',
+    gatilho_zh: '一直',
+    evitar_pt: /\bsempre\b/i,
+    certo: 'c',
+    aferido: { obra_id: 0, acusadas: 0, corrigidas: 0, em: '2026-01-01' },
+  };
+
+  it('mede a precisão por frase, não por subtração de agregados', () => {
+    const frases = [
+      // 3 acusadas na IA e consertadas pelo revisor
+      ...[1, 2, 3].map(() => ({ texto_zh: '一直', texto_pt_original_ia: 'sempre', texto_pt: 'até então' })),
+      // 1 acusada na IA e mantida
+      { texto_zh: '一直', texto_pt_original_ia: 'sempre', texto_pt: 'sempre' },
+    ];
+    const [linha] = aferirCatalogo(frases, [entrada]);
+    expect(linha).toMatchObject({ acusadas: 4, corrigidas: 3, restantes: 1, novas: 0 });
+    expect(linha.precisao).toBeCloseTo(0.75);
+  });
+
+  it('conta separadamente a violação que APARECEU na revisão', () => {
+    // A subtração de agregados esconderia este caso: uma some, outra nasce, e o
+    // total não muda. É por isso que a conta é por frase.
+    const frases = [
+      { texto_zh: '一直', texto_pt_original_ia: 'sempre', texto_pt: 'até então' },
+      { texto_zh: '一直', texto_pt_original_ia: 'até então', texto_pt: 'sempre' },
+    ];
+    const [linha] = aferirCatalogo(frases, [entrada]);
+    expect(linha).toMatchObject({ acusadas: 1, corrigidas: 1, novas: 1 });
+    // `novas` não entra no denominador — a precisão é sobre `acusadas` (1), não
+    // sobre o total de frases (2). Sem esta linha, um denominador errado
+    // (frases.length em vez de acusadas) passa por construção neste caso.
+    expect(linha.precisao).toBeCloseTo(1);
+  });
+
+  it('ignora frase sem texto original da IA — não há o que comparar', () => {
+    const frases = [{ texto_zh: '一直', texto_pt_original_ia: null, texto_pt: 'sempre' }];
+    const [linha] = aferirCatalogo(frases, [entrada]);
+    expect(linha).toMatchObject({ acusadas: 0, corrigidas: 0, novas: 0, precisao: 0 });
+  });
+
+  it('a aferição confirma os números gravados no catálogo em produção', () => {
+    // Guarda contra o `aferido` virar folclore: reproduz a conta com um corpus
+    // sintético do tamanho declarado.
+    const alvo = CATALOGO[0];
+    const frases = [
+      ...Array.from({ length: alvo.aferido.corrigidas }, () => ({
+        texto_zh: alvo.gatilho_zh, texto_pt_original_ia: 'sempre', texto_pt: 'até então',
+      })),
+      ...Array.from({ length: alvo.aferido.acusadas - alvo.aferido.corrigidas }, () => ({
+        texto_zh: alvo.gatilho_zh, texto_pt_original_ia: 'sempre', texto_pt: 'sempre',
+      })),
+    ];
+    const [linha] = aferirCatalogo(frases, [alvo]);
+    expect(linha.precisao).toBeCloseTo(precisaoAferida(alvo.aferido));
   });
 });
