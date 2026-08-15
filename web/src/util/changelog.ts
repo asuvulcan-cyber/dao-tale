@@ -23,6 +23,18 @@ export interface EntradaChangelog {
 export const CHANGELOG: readonly EntradaChangelog[] = [
   {
     em: '2026-08-15',
+    titulo: 'Página de mudanças, e edições manuais que param de voltar',
+    itens: [
+      'Esta página: o que mudou no app, por entrega, com o carimbo do que está publicado nesta máquina.',
+      'A edição manual que vira regra sai da lista de candidatas quando você SALVA a versão nova do prompt — recusar a proposta deixa o sinal vivo.',
+      'Botão para marcar de uma vez as candidatas acumuladas, para quem já usava o app antes disso existir.',
+      'Reescrever uma frase já tratada a devolve à lista: é lição nova sobre a mesma frase.',
+    ],
+    nota:
+      'O banco de testes já consumia sozinho (caso confirmado ou rejeitado sai das recorrências); as edições manuais nasceram sem esse mecanismo e as mesmas 87 candidatas voltavam sempre. Com amostra de 15 por chamada, isso fazia você pagar para a IA repropor regra que você já tinha escrito.',
+  },
+  {
+    em: '2026-08-15',
     titulo: 'Catálogo de erros comuns zh→pt-BR',
     itens: [
       'Uma varredura bilíngue nova acusa erro de tradução comparando o ORIGINAL com o português — as regras de estilo só olhavam o português.',
