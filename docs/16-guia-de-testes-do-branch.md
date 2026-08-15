@@ -221,13 +221,19 @@ cd server && npx tsx scripts/aferir-catalogo.ts 1 /tmp/dao-tale-teste.db
 Não custa nada e não escreve nada (o banco é aberto somente leitura). O esperado:
 
 ```
-particula-yizhi  一直  acusadas  4 · restantes  1 · corrigidas 3 · novas 0 · assistidas 0 · precisão 75%  → PASSA
-particula-hai    还   acusadas 34 · restantes 33 · corrigidas 1 · novas 0 · assistidas 0 · precisão  3%  → REPROVA
-particula-dou    都   acusadas 31 · restantes 31 · corrigidas 0 · novas 0 · assistidas 0 · precisão  0%  → REPROVA
-particula-zong   总   acusadas 12 · restantes 11 · corrigidas 1 · novas 0 · assistidas 0 · precisão  8%  → REPROVA
+particula-yizhi  一直  acusadas  3 · restantes  1 · corrigidas 2 · novas 0 · assistidas 1 · precisão 67%  → PASSA
+particula-hai    还   acusadas 33 · restantes 32 · corrigidas 1 · novas 0 · assistidas 1 · precisão  3%  → REPROVA
+particula-dou    都   acusadas 30 · restantes 30 · corrigidas 0 · novas 0 · assistidas 1 · precisão  0%  → REPROVA
+particula-zong   总   acusadas 11 · restantes 10 · corrigidas 1 · novas 0 · assistidas 1 · precisão  9%  → REPROVA
 particula-cai    才   acusadas  2 · restantes  2 · corrigidas 0 · novas 0 · assistidas 0 · precisão  0%  → REPROVA
-particula-you    又   acusadas  2 · restantes  2 · corrigidas 0 · novas 0 · assistidas 0 · precisão  0%  → REPROVA
+particula-you    又   acusadas  2 · restantes  2 · corrigidas 0 · novas 0 · assistidas 1 · precisão  0%  → REPROVA
 ```
+
+> Se você rodar contra uma cópia do banco feita **antes** do deploy de 15/08, os números
+> saem diferentes (`一直` como 4/3, `assistidas` zerado em tudo): naquele banco a coluna
+> `origem_edicao` não existia, e o script avisa disso na primeira linha. Não é divergência
+> — é a mesma conta lendo um banco que ainda não sabia separar o que você digitou do que
+> você aprovou num botão.
 
 **É este comando que decide o futuro do catálogo.** Quando a segunda obra tiver corpus,
 rode de novo com o id dela: se `一直` cair abaixo de 50%, a entrada sai; se alguma

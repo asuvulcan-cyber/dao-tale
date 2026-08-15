@@ -9,11 +9,17 @@
 // aquilo. É conservador na direção certa: subestima (o revisor pode ter deixado
 // passar), nunca superestima.
 //
-// A tabela de nove partículas do prompt completo foi medida assim em 2026-08-10
-// contra a obra 1 (561 frases traduzidas) e reprovou inteira menos uma linha:
-// das 85 frases que ela acusaria, o revisor tinha mudado 5. As reprovadas ficam
+// A tabela de nove partículas do prompt completo foi medida assim contra a obra 1
+// (561 frases traduzidas) e reprovou inteira menos uma linha: das 81 frases que
+// ela acusaria, o revisor tinha mudado 4 por conta própria. As reprovadas ficam
 // em REPROVADAS, com a medição ao lado — apagá-las faria alguém repropor
 // `都 → todos` de boa-fé em três meses e refazer a medição do zero.
+//
+// Os números abaixo são de 2026-08-15, relidos depois de `origem_edicao` existir
+// (migrações 023/024). A leitura de 2026-08-10 contava 85 e 5 porque ainda não
+// sabia separar o que o revisor digitou do que ele aprovou num botão — quatro
+// frases, uma por entrada, eram conserto do app. Rode
+// `server/scripts/aferir-catalogo.ts <obra>` para reproduzir qualquer um deles.
 
 /** O que sustenta uma entrada. Sem isto ela não pode estar em CATALOGO. */
 export interface AfericaoCatalogo {
@@ -73,7 +79,12 @@ export const CATALOGO: readonly EntradaCatalogo[] = [
       '一直 é continuidade ininterrupta até aquele momento — "até então", "vinha …ndo", ' +
       '"esse tempo todo". "Sempre" é a glosa de 总, que é impressão abstrata e atemporal; ' +
       'confundir os dois foi o que produziu vereditos opostos para a mesma frase (casos #23/#24).',
-    aferido: { obra_id: 1, acusadas: 4, corrigidas: 3, em: '2026-08-10' },
+    // Relido em 2026-08-15 com `origem_edicao` já tipada no banco (migrações 023
+    // e 024): das 4 frases que a leitura anterior contava, 1 tinha sido
+    // consertada pelo botão de revisão, não digitada. O número honesto é 2 de 3.
+    // Passa raspando o piso de amostra — mais um conserto por botão nesta obra e
+    // a entrada deixa de poder se justificar por dado desta obra.
+    aferido: { obra_id: 1, acusadas: 3, corrigidas: 2, em: '2026-08-15' },
   },
 ];
 
@@ -96,7 +107,7 @@ export const REPROVADAS: readonly (EntradaCatalogo & { motivo: string })[] = [
     gatilho_zh: '还',
     evitar_pt: /\bainda\b/i,
     certo: '还 pode ser indignação ("ainda por cima") ou comparativo, não só continuidade.',
-    aferido: { obra_id: 1, acusadas: 34, corrigidas: 1, em: '2026-08-10' },
+    aferido: { obra_id: 1, acusadas: 33, corrigidas: 1, em: '2026-08-15' },
     motivo: 'O maior emissor de alarme da tabela e o menos útil: "ainda" é a tradução certa quase sempre.',
   },
   {
@@ -105,8 +116,8 @@ export const REPROVADAS: readonly (EntradaCatalogo & { motivo: string })[] = [
     gatilho_zh: '都',
     evitar_pt: /\btodos\b|\btudo\b/i,
     certo: '都 pode ser intensificador de surpresa ("até", "nem mesmo"), não só totalidade.',
-    aferido: { obra_id: 1, acusadas: 31, corrigidas: 0, em: '2026-08-10' },
-    motivo: '31 alarmes, zero correções. O revisor não tocou em nenhum.',
+    aferido: { obra_id: 1, acusadas: 30, corrigidas: 0, em: '2026-08-15' },
+    motivo: '30 alarmes, zero correções. O revisor não tocou em nenhum.',
   },
   {
     id: 'particula-zong',
@@ -114,7 +125,7 @@ export const REPROVADAS: readonly (EntradaCatalogo & { motivo: string })[] = [
     gatilho_zh: '总',
     evitar_pt: /\bsempre\b/i,
     certo: '总 é sensação persistente ou inevitabilidade; "sempre" só quando a recorrência é real.',
-    aferido: { obra_id: 1, acusadas: 12, corrigidas: 1, em: '2026-08-10' },
+    aferido: { obra_id: 1, acusadas: 11, corrigidas: 1, em: '2026-08-15' },
     motivo: 'Justamente o par de 一直 — e aqui "sempre" é o acerto, não o erro.',
   },
   {
@@ -123,7 +134,7 @@ export const REPROVADAS: readonly (EntradaCatalogo & { motivo: string })[] = [
     gatilho_zh: '才',
     evitar_pt: /\bs[óo] ent[ãa]o\b/i,
     certo: '才 marca demora, alívio ou condição necessária; "só então" neutro é reflexo.',
-    aferido: { obra_id: 1, acusadas: 2, corrigidas: 0, em: '2026-08-10' },
+    aferido: { obra_id: 1, acusadas: 2, corrigidas: 0, em: '2026-08-15' },
     motivo: 'Zero correções, e amostra abaixo do piso — nem daria para decidir.',
   },
   {
@@ -132,7 +143,7 @@ export const REPROVADAS: readonly (EntradaCatalogo & { motivo: string })[] = [
     gatilho_zh: '又',
     evitar_pt: /\bde novo\b/i,
     certo: '又 pode ser contradição ou concessão (又…又…), não só repetição.',
-    aferido: { obra_id: 1, acusadas: 2, corrigidas: 0, em: '2026-08-10' },
+    aferido: { obra_id: 1, acusadas: 2, corrigidas: 0, em: '2026-08-15' },
     motivo: 'Zero correções, e amostra abaixo do piso.',
   },
 ];
