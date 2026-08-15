@@ -14,6 +14,7 @@ import type {
 } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, MenuMais, REGRA_ESTILO_ROTULO, STATUS_CAPITULO_ROTULO } from '../App';
+import { orientacaoDaRegra } from '../util/rotuloRegra';
 import { GavetaRevisao } from '../componentes/GavetaRevisao';
 import { IndicadorCota } from '../componentes/IndicadorCota';
 import {
@@ -1262,12 +1263,17 @@ function ModalEstilo({
               </div>
             )}
             <div className="space-y-2">
-              {data.violacoes.map((v, i) => (
+              {data.violacoes.map((v, i) => {
+                // A orientação só existe nas regras do catálogo, e é a única
+                // coisa aqui que diz o que é CERTO em vez de só apontar.
+                const orientacao = orientacaoDaRegra(v.regra);
+                return (
                 <div key={i} className="rounded border border-selo/40 bg-selo-tint p-3 text-sm">
                   <p className="mb-2">
                     <span className="font-medium">“{v.trecho}”</span> — {REGRA_ESTILO_ROTULO[v.regra] ?? v.regra} (frase{' '}
                     {v.ordem + 1})
                   </p>
+                  {orientacao && <p className="mb-2 text-xs text-tinta-2">{orientacao}</p>}
                   <div className="flex flex-wrap gap-2">
                     {v.frase_id != null && (
                       <>
@@ -1285,14 +1291,17 @@ function ModalEstilo({
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             <p className="text-xs text-tinta-2">
-              Heurística por sufixo: sinaliza, não julga. <strong>Ignorar alerta</strong> tira daqui e da contagem
-              sem tocar no texto. Palavras que caem aqui sempre (nome de árvore, advérbio) são caso para a lista de
-              exceções da varredura, que conserta para todas as obras de uma vez — não para ignorar uma a uma. E a
-              varredura não vê tudo: <em>fora</em>, <em>era</em>, <em>vira</em> e <em>dera</em> são ambíguas demais
-              para acusar, então continuam por sua conta.
+              A varredura sinaliza, não julga. <strong>Ignorar alerta</strong> tira daqui e da contagem sem tocar no
+              texto. As regras de estilo são heurística por sufixo: palavras que caem aqui sempre (nome de árvore,
+              advérbio) são caso para a lista de exceções da varredura, que conserta para todas as obras de uma vez —
+              não para ignorar uma a uma. E ela não vê tudo: <em>fora</em>, <em>era</em>, <em>vira</em> e{' '}
+              <em>dera</em> são ambíguas demais para acusar, então continuam por sua conta. Os alertas com uma linha
+              de orientação vêm do catálogo de erros zh→pt-BR: esses comparam o original com a tradução, e o passe de
+              estilo conserta cada um com o chinês à vista.
             </p>
           </>
         )}

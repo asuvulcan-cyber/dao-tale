@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CATALOGO, type EntradaCatalogo } from '@dao-tale/shared';
-import { comporRotulos, orientacaoDaRegra, REGRA_ESTILO_ROTULO } from './rotuloRegra';
+import { comporRotulos, DE_ESTILO, orientacaoDaRegra, REGRA_ESTILO_ROTULO } from './rotuloRegra';
 
 // orientacaoDaRegra já é testada a fundo em server/src/db/catalogoErros.test.ts
 // (casamento por id, null fora do catálogo, os pisos). Aqui o alvo é só este
@@ -21,14 +21,38 @@ describe('rótulos de regra', () => {
     expect(orientacaoDaRegra('mais-que-perfeito')).toBeNull();
   });
 
-  it('numa colisão de id, o catálogo vence — senão o rótulo diverge da orientação', () => {
+  it('numa colisão de id, o catálogo vence — em qualquer das regras de estilo', () => {
     // Com os ids reais não há colisão, então a precedência do spread passa
     // verde nos dois sentidos. A entrada sintética é o que a torna verificável:
     // a orientação logo abaixo do rótulo casa por id direto no catálogo, e um
     // rótulo de estilo por cima dela seria a divergência silenciosa que este
     // módulo existe para impedir.
-    const colidente = { ...CATALOGO[0], id: 'mais-que-perfeito', titulo: 'Do catálogo' } as EntradaCatalogo;
-    const mapa = comporRotulos({ 'mais-que-perfeito': 'De estilo' }, [colidente]);
-    expect(mapa['mais-que-perfeito']).toBe('Do catálogo');
+    //
+    // Percorre as CINCO: pinar só uma deixaria a inversão passar verde para as
+    // outras quatro, que é o mesmo buraco em tamanho menor.
+    const idsDeEstilo = [
+      'mais-que-perfeito',
+      'aspas-nao-retas',
+      'virgula-dentro-da-aspa',
+      'dialogo-aspas',
+      'dialogo-travessao',
+    ];
+    for (const id of idsDeEstilo) {
+      const colidente = { ...CATALOGO[0], id, titulo: 'Do catálogo' } as EntradaCatalogo;
+      const mapa = comporRotulos({ [id]: 'De estilo' }, [colidente]);
+      expect(mapa[id], `colisão em ${id}`).toBe('Do catálogo');
+    }
+  });
+
+  it('as cinco regras de estilo do mapa são exatamente as que a varredura emite', () => {
+    // A lista acima é cópia manual; se `DE_ESTILO` ganhar ou perder uma regra,
+    // a cobertura da colisão silenciosamente deixa de valer para ela.
+    expect(Object.keys(DE_ESTILO).sort()).toEqual([
+      'aspas-nao-retas',
+      'dialogo-aspas',
+      'dialogo-travessao',
+      'mais-que-perfeito',
+      'virgula-dentro-da-aspa',
+    ]);
   });
 });

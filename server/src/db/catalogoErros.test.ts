@@ -41,6 +41,30 @@ describe('catálogo de erros zh→pt-BR', () => {
     for (const id of todos) expect(id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
+  it('nenhum campo de texto vem vazio — os dois modos de degenerar', () => {
+    // `gatilho_zh: ''` é o pior: `''.includes('')` é sempre true, então a
+    // entrada vira uma regra MONOLÍNGUE que acusa toda frase com o reflexo — e
+    // ser bilíngue é a única coisa que separa este detector de `analisarEstilo`.
+    // `titulo: ''` é silencioso de outro jeito: o `?? regra` da tela é nullish,
+    // então string vazia não cai para o id e a linha aparece sem nome nenhum.
+    for (const e of [...CATALOGO, ...REPROVADAS]) {
+      expect(e.gatilho_zh, `${e.id} sem gatilho_zh`).not.toBe('');
+      expect(e.titulo.trim(), `${e.id} sem titulo`).not.toBe('');
+      expect(e.certo.trim(), `${e.id} sem o que é certo`).not.toBe('');
+    }
+  });
+
+  it('duas entradas não disputam o mesmo reflexo no português', () => {
+    // Entradas com a mesma `evitar_pt` acusariam o MESMO trecho duas vezes, com
+    // orientações concorrentes na mesma chamada paga — e o front casa a enésima
+    // correção com a enésima violação, então o modelo receberia duas instruções
+    // para o mesmo pedaço de texto. As reprovadas ficam de fora da checagem:
+    // `zong` e `yizhi` compartilham /\bsempre\b/ de propósito (é o par que a
+    // medição separou), e só uma das duas está no catálogo.
+    const fontes = CATALOGO.map((e) => e.evitar_pt.source);
+    expect(new Set(fontes).size, 'duas entradas do catálogo com a mesma evitar_pt').toBe(fontes.length);
+  });
+
   it('evitar_pt nunca é global — lastIndex sobreviveria entre frases', () => {
     for (const e of [...CATALOGO, ...REPROVADAS]) {
       expect(e.evitar_pt.global, `${e.id} usa a flag g`).toBe(false);

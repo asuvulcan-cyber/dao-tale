@@ -12,7 +12,10 @@ import { CATALOGO, type EntradaCatalogo } from '@dao-tale/shared';
 
 export { orientacaoDaRegra } from '@dao-tale/shared';
 
-const DE_ESTILO: Record<string, string> = {
+/** As regras que a varredura de estilo emite. Exportada para o teste poder
+ *  conferir que a cobertura da colisão cobre todas elas — uma regra nova aqui
+ *  sem a linha correspondente no teste deixaria a precedência sem rede para ela. */
+export const DE_ESTILO: Record<string, string> = {
   'mais-que-perfeito': 'Mais-que-perfeito simples',
   'aspas-nao-retas': 'Aspas não retas',
   'virgula-dentro-da-aspa': 'Vírgula dentro das aspas',
