@@ -119,6 +119,63 @@ describe('classificarEdicoes', () => {
     expect(r[0].detalhe).toBe('Registro Celestial');
   });
 
+  // Achado da revisão final, provado por execução: uma frase com `一直` em que o
+  // revisor trocou "sempre" por "até então" saía como `diretriz` — e `diretriz` é
+  // exatamente o que `obras.ts` manda para a chamada PAGA de refinamento, que
+  // propõe regra de texto para o prompt. O app detectava `一直→sempre` de graça
+  // pelo catálogo e, pelo outro canal, pagava para pedir uma diretriz sobre 一直:
+  // a porta que o spec §9 fecha e que a medição de 2026-08-05 mostrou sem efeito.
+  describe('o que o catálogo já detecta não vira texto de prompt', () => {
+    const comZh = (zh: string, ia: string, voce: string) =>
+      classificarEdicoes(
+        [{ ...base, texto_zh: zh, texto_pt_original_ia: ia, texto_pt: voce }],
+        glossario,
+        PREFERENCIAS_PADRAO,
+      );
+
+    it('o conserto de 一直 → sempre vira catalogo, não diretriz', () => {
+      const r = comZh('他一直在等。', 'Ele sempre esteve esperando.', 'Ele vinha esperando até então.');
+      expect(r[0].rota).toBe('catalogo');
+      expect(r[0].detalhe).toBe('particula-yizhi');
+    });
+
+    it('é bilíngue: sem o gatilho no chinês, não é rota do catálogo', () => {
+      // Mesmo par em português, outro original. Sem consultar o zh, esta frase
+      // seria classificada igual à de cima — e o catálogo não teria como acusá-la.
+      expect(comZh('他总在等。', 'Ele sempre esteve esperando.', 'Ele vinha esperando até então.')[0].rota).not.toBe(
+        'catalogo',
+      );
+    });
+
+    it('não é rota do catálogo se o reflexo continua lá depois da edição', () => {
+      // O revisor mexeu na frase mas não desfez o "sempre": não há lição de
+      // catálogo aqui, e roubar esta edição do canal certo seria pior que nada.
+      expect(comZh('他一直在等。', 'Ele sempre esteve esperando.', 'Ele sempre ficou esperando.')[0].rota).not.toBe(
+        'catalogo',
+      );
+    });
+
+    it('o catálogo vence o scanner de estilo quando a mesma edição faz as duas coisas', () => {
+      // Consertar 一直 e desfazer um mais-que-perfeito na mesma frase. Sem esta
+      // ordem a edição cairia numa rota de camada, e a tela de edições manuais
+      // mandaria o revisor mexer no prompt por causa de uma partícula — que é a
+      // recomendação que o spec §9 proíbe.
+      const r = comZh(
+        '他一直在等，早已知道。',
+        'Ele sempre esteve esperando, pois já soubera.',
+        'Ele vinha esperando até então, pois já sabia.',
+      );
+      expect(r[0].rota).toBe('catalogo');
+    });
+
+    it('a rota do catálogo fica fora do refinamento pago', () => {
+      // `obras.ts` filtra por `rota === 'diretriz'`; este teste é o que garante
+      // que a rota nova não passa a ser incluída por engano numa mudança futura.
+      const r = comZh('他一直在等。', 'Ele sempre esteve esperando.', 'Ele vinha esperando até então.');
+      expect(r.filter((e) => e.rota === 'diretriz')).toHaveLength(0);
+    });
+  });
+
   it('edição vinda de botão não entra', () => {
     expect(uma('ele errara', 'ele errou', { origem_edicao: 'revisao' })).toHaveLength(0);
     expect(uma('ele errara', 'ele errou', { origem_edicao: 'passe-estilo' })).toHaveLength(0);

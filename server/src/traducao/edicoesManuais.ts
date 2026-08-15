@@ -1,4 +1,4 @@
-import { TEMAS, temasNoTexto, trechoQueMudou, type Camada, type EntradaGlossario, type PreferenciasEstilo } from '@dao-tale/shared';
+import { CATALOGO, TEMAS, temasNoTexto, trechoQueMudou, type Camada, type EntradaGlossario, type PreferenciasEstilo } from '@dao-tale/shared';
 import { contemTermoFlexionado } from './flexao.js';
 import { analisarEstilo } from './estiloViolacoes.js';
 import { metricasEstilo } from '../ia/metricasEstilo.js';
@@ -9,7 +9,7 @@ import { metricasEstilo } from '../ia/metricasEstilo.js';
 // termo de glossário que derivou, ou tipografia. Classificar antes de propor é o
 // que impede o refinamento de receber material que ele é proibido de usar.
 
-export type RotaEdicao = 'tipografia' | 'glossario' | 'chave-estilo' | 'nucleo' | 'diretriz';
+export type RotaEdicao = 'tipografia' | 'glossario' | 'catalogo' | 'chave-estilo' | 'nucleo' | 'diretriz';
 
 export interface EdicaoClassificada {
   frase_id: number;
@@ -155,6 +155,23 @@ function rotaPorScanner(
   return null;
 }
 
+/** A entrada do catálogo que esta edição consertou, se houver.
+ *
+ * Bilíngue como o detector: pergunta pelo gatilho no ORIGINAL, e não só pelo
+ * reflexo no português. Sem isso, "sempre → até então" numa frase de 总 (onde
+ * "sempre" é o acerto) seria lida como lição de 一直.
+ *
+ * A condição é a mesma da aferição — acusada no texto da IA, não acusada no
+ * texto final —, e é de propósito: o que a aferição conta como prova de que a
+ * regra vale é exatamente o que aqui deixa de virar pedido de prompt. */
+function entradaConsertada(zh: string, ia: string, voce: string): string | null {
+  for (const e of CATALOGO) {
+    if (!zh.includes(e.gatilho_zh)) continue;
+    if (e.evitar_pt.test(ia) && !e.evitar_pt.test(voce)) return e.id;
+  }
+  return null;
+}
+
 export function classificarEdicoes(
   frases: {
     id: number;
@@ -208,6 +225,19 @@ export function classificarEdicoes(
     const tema = temasNoTexto(`${de}\n${para}`)[0]?.tema;
     if (tema) {
       saida.push({ ...comum, rota: rotaDaCamada(tema.dono), detalhe: tema.id });
+      continue;
+    }
+
+    // O catálogo ANTES dos scanners de camada: o que ele já detecta de graça não
+    // pode virar pedido de texto de prompt. Uma edição que conserta `一直 → sempre`
+    // e de quebra desfaz um mais-que-perfeito cairia numa rota de camada, e a
+    // tela mandaria o revisor mexer no prompt por causa de uma partícula — o que
+    // o spec §9 proíbe e a medição de 2026-08-05 mostrou sem efeito. Depois de
+    // tipografia, glossário e tema porque esses três são AÇÕES mais específicas
+    // (trocar uma aspa, ajustar um termo), não conselhos sobre o prompt.
+    const doCatalogo = entradaConsertada(f.texto_zh, ia, f.texto_pt);
+    if (doCatalogo) {
+      saida.push({ ...comum, rota: 'catalogo', detalhe: doCatalogo });
       continue;
     }
 

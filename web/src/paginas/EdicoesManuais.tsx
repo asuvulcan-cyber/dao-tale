@@ -10,7 +10,7 @@ import type { CapituloResumo } from '@dao-tale/shared';
 import { api, mensagemDeErro } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, TextoComDestaque, type CorEtiqueta } from '../App';
 
-type RotaEdicao = 'tipografia' | 'glossario' | 'chave-estilo' | 'nucleo' | 'diretriz';
+type RotaEdicao = 'tipografia' | 'glossario' | 'catalogo' | 'chave-estilo' | 'nucleo' | 'diretriz';
 
 /** O que `GET /obras/:id/edicoes-manuais` devolve (classificarEdicoes, no
  *  servidor). `de`/`para` são o menor trecho que mudou entre a tradução da IA e
@@ -63,6 +63,13 @@ const GRUPOS: { rota: RotaEdicao; titulo: string; cor: CorEtiqueta; oQueFazer: s
     titulo: 'Termo do glossário',
     cor: 'ocre',
     oQueFazer: 'Termo do glossário que derivou. Resolve-se na varredura de consistência, não no prompt.',
+  },
+  {
+    rota: 'catalogo',
+    titulo: 'O catálogo já detecta',
+    cor: 'indigo',
+    oQueFazer:
+      'Erro comum de zh→pt-BR que a varredura acusa de graça — o passe de estilo conserta sem você digitar. Não vira regra de prompt: nomear a partícula no prompt foi medido sem efeito.',
   },
   {
     rota: 'tipografia',
