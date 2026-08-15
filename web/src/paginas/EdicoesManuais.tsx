@@ -5,7 +5,7 @@
 // dona do problema, e uma frase curta dizendo onde aquilo se resolve.
 import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CapituloResumo } from '@dao-tale/shared';
 import { api, mensagemDeErro } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, TextoComDestaque, type CorEtiqueta } from '../App';
@@ -90,6 +90,7 @@ const plural = (n: number, um: string, muitos: string) => (n === 1 ? um : muitos
 export function EdicoesManuais() {
   const { obraId } = useParams();
   const navegar = useNavigate();
+  const clienteQuery = useQueryClient();
 
   const { data: edicoes, isLoading, error } = useQuery({
     queryKey: ['edicoes-manuais', obraId],
@@ -106,6 +107,14 @@ export function EdicoesManuais() {
     () => new Map((capitulos ?? []).map((c) => [c.numero, c.id])),
     [capitulos],
   );
+
+  // Zerar o acúmulo herdado. Invalida a própria lista: a prova de que pegou é a
+  // contagem cair na tela, e sem isso o revisor clicaria de novo achando que
+  // falhou.
+  const tratarCandidatas = useMutation({
+    mutationFn: () => api<{ tratadas: number }>('POST', `/obras/${obraId}/edicoes-manuais/tratar-candidatas`),
+    onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['edicoes-manuais', obraId] }),
+  });
 
   const porRota = useMemo(() => {
     const mapa = new Map<RotaEdicao, EdicaoClassificada[]>();
@@ -143,6 +152,36 @@ export function EdicoesManuais() {
             </span>{' '}
             — o resto tem dono em outro lugar.
           </p>
+
+          {/* Zerar o acúmulo. Sem consumo, as mesmas candidatas voltavam para
+              sempre e cada refinamento sorteava 15 do mesmo poço permanente —
+              regras já escritas eram repropostas, e reproposição custa dinheiro.
+              O consumo normal é na aceitação de um refinamento; este botão existe
+              para a pilha herdada de quem usava o app antes disso. */}
+          {candidatas > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <Botao
+                variante="secundario"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Marcar as ${candidatas} candidatas como já tratadas?\n\n` +
+                        'Elas param de alimentar os próximos refinamentos. Nenhum texto muda, e se você ' +
+                        'reescrever alguma dessas frases depois, ela volta a ser candidata.',
+                    )
+                  )
+                    tratarCandidatas.mutate();
+                }}
+                disabled={tratarCandidatas.isPending}
+              >
+                {tratarCandidatas.isPending ? 'Marcando…' : `Marcar as ${candidatas} como já tratadas`}
+              </Botao>
+              <span className="text-xs text-tinta-2">
+                Use quando já refinou o prompt com esse material — o que ia virar regra já virou.
+              </span>
+            </div>
+          )}
+          {tratarCandidatas.isError && <Aviso tipo="erro">{mensagemDeErro(tratarCandidatas.error)}</Aviso>}
 
           <div className="space-y-3">
             {GRUPOS.map((g) => {

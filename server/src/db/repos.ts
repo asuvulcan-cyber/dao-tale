@@ -568,6 +568,7 @@ type LinhaMineracao = {
   texto_pt_original_ia: string | null;
   texto_pt: string;
   origem_edicao: string | null;
+  edicao_tratada_texto: string | null;
 };
 
 export const reposFrases = {
@@ -602,7 +603,8 @@ export const reposFrases = {
     const linhas = db
       .prepare(
         `SELECT f.id, f.ordem, c.numero capitulo_numero, f.texto_zh,
-                f.texto_pt_original_ia, f.texto_pt, f.editado_manualmente, f.origem_edicao
+                f.texto_pt_original_ia, f.texto_pt, f.editado_manualmente, f.origem_edicao,
+                f.edicao_tratada_texto
          FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
          WHERE c.obra_id = ? ORDER BY c.numero, f.ordem`,
       )
@@ -610,6 +612,23 @@ export const reposFrases = {
     // Mesmo padrão de `paraFrase` (linha ~60): SQLite guarda booleano como 0/1;
     // o domínio usa `boolean`.
     return linhas.map((l) => ({ ...l, editado_manualmente: !!l.editado_manualmente }));
+  },
+
+  /** Marca as edições destas frases como já tratadas, gravando o texto CORRENTE.
+   *
+   *  Grava o texto e não um sinalizador porque a marca vale para aquele texto:
+   *  reescrever a frase depois é lição nova, e ela precisa voltar a ser candidata
+   *  (mesmo princípio da dispensa por trinca em `estilo_ignorado`).
+   *
+   *  Devolve quantas frases foram marcadas — a tela precisa do número para dizer
+   *  o que aconteceu, e um zero silencioso esconderia ids que não existem. */
+  marcarEdicoesTratadas(db: BancoDados, ids: number[]): number {
+    if (ids.length === 0) return 0;
+    const marcar = db.prepare('UPDATE frases SET edicao_tratada_texto = texto_pt WHERE id = ?');
+    // Transação: marcar metade seria pior que não marcar nada — o revisor veria
+    // a lista encolher pela metade e não saberia se o resto foi consumido.
+    const emLote = db.transaction((lista: number[]) => lista.reduce((n, id) => n + marcar.run(id).changes, 0));
+    return emLote(ids);
   },
 
   editarTexto(db: BancoDados, id: number, textoPt: string, origem: string | null = null): Frase | undefined {

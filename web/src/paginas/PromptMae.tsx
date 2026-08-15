@@ -171,6 +171,10 @@ function GerenciadorPrompts({
   const [selecionado, setSelecionado] = useState<number | null>(null);
   const [painel, setPainel] = useState<Painel>(painelInicial ?? 'ver');
   const [rascunhoInicial, setRascunhoInicial] = useState<string | null>(null);
+  // Os ids viajam com o rascunho porque o consumo acontece na ACEITAÇÃO —
+  // entre a proposta e o salvar existe um passo em que o revisor pode
+  // desistir, e desistir tem de deixar as edições vivas para a próxima.
+  const [edicoesDoRascunho, setEdicoesDoRascunho] = useState<number[]>([]);
   const [erro, setErro] = useState('');
   // Avisos da última versão salva (doc 15 §7). Vivem fora do painel de criação
   // porque ele fecha no sucesso — o aviso precisa sobreviver ao fechamento.
@@ -197,6 +201,9 @@ function GerenciadorPrompts({
       ativar: boolean;
       tipo?: TipoPrompt;
       preferencias?: PreferenciasEstilo;
+      // Frases cujas edições alimentaram a proposta que virou esta versão. O
+      // consumo é na ACEITAÇÃO: proposta recusada deixa o sinal vivo.
+      edicoes_tratadas?: number[];
     }) => api<{ avisos?: AvisoCamada[] }>('POST', urlCriar, dados),
     onSuccess: (resposta) => {
       invalidar();
@@ -342,8 +349,9 @@ function GerenciadorPrompts({
           ) : painel === 'refinar' && podeRefinar && obraId ? (
             <RefinadorIA
               obraId={obraId}
-              aoUsarRascunho={(texto) => {
+              aoUsarRascunho={(texto, edicoesFraseIds) => {
                 setRascunhoInicial(`${(ativo?.conteudo ?? '').trim()}\n\n${texto}`.trim());
+                setEdicoesDoRascunho(edicoesFraseIds);
                 setPainel('nova');
               }}
             />
@@ -353,7 +361,7 @@ function GerenciadorPrompts({
               versaoSugerida={sugerirVersao(versoes ?? [])}
               delta={!!obraId && (ativo ? ehDelta : true)}
               enviando={criar.isPending}
-              aoEnviar={(d) => criar.mutate(d)}
+              aoEnviar={(d) => criar.mutate({ ...d, edicoes_tratadas: edicoesDoRascunho })}
             />
           ) : exibido ? (
             <div className="cartao p-4">
@@ -750,13 +758,20 @@ function ConversorCamadas({
 
 /** Refinamento semiautomático (doc 08 §7): recorrências do banco de testes →
     propostas de regra para o delta; nada é gravado sem aprovação. */
-function RefinadorIA({ obraId, aoUsarRascunho }: { obraId: string; aoUsarRascunho: (texto: string) => void }) {
+function RefinadorIA({
+  obraId,
+  aoUsarRascunho,
+}: {
+  obraId: string;
+  aoUsarRascunho: (texto: string, edicoesFraseIds: number[]) => void;
+}) {
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
 
   const sugerir = useMutation({
     mutationFn: () =>
       api<{
         propostas: { secao_regra: string; regra_proposta: string; justificativa: string }[];
+        edicoes_frase_ids?: number[];
         recorrencias: { secao_regra: string; casos: number }[];
         provedor: string;
         modelo: string;
@@ -818,6 +833,7 @@ function RefinadorIA({ obraId, aoUsarRascunho }: { obraId: string; aoUsarRascunh
                     .filter((_, i) => selecionadas.has(i))
                     .map((p) => `- ${p.regra_proposta}`)
                     .join('\n'),
+                  sugerir.data.edicoes_frase_ids ?? [],
                 )
               }
             >

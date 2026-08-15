@@ -101,6 +101,13 @@ describe('migração 024 — backfill de origem_edicao', () => {
     expect(reposFrases.obter(db, fraseQa.id)!.origem_edicao).toBe('qa');
     expect(reposFrases.obter(db, fraseManual.id)!.origem_edicao).toBeNull();
 
+    // As asserções acima são o que a 024 prova, e já passaram. Daqui para baixo o
+    // teste usa código ATUAL (`paraMineracao`), que lê colunas de migrações
+    // posteriores — então o banco precisa alcançá-las. Sem isto, toda migração
+    // nova que tocasse `frases` quebraria este arquivo sem nada de errado ter
+    // acontecido.
+    aplicar(db, '025_edicao_tratada.sql');
+
     // O ponto do item: sem o backfill, a frase A entraria duas vezes na mineração
     // (uma vez como caso do banco de testes, outra como "digitada à mão"). Depois
     // da 024, só a frase C — a digitada de verdade — aparece.

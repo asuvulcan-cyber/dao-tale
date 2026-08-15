@@ -1,0 +1,20 @@
+-- Consumo das edições manuais (relato de 2026-08-15).
+--
+-- O canal do banco de testes já consumia sozinho: `recorrencias` filtra por
+-- status, então um caso `confirmado` ou `rejeitado` sai das recorrências. O
+-- canal das edições manuais nasceu sem equivalente — `classificarEdicoes`
+-- recalculava tudo do zero a cada chamada, e as mesmas candidatas voltavam para
+-- sempre. Na obra real eram 87 candidatas a diretriz contra uma amostra de 15
+-- por chamada: regras já escritas eram repropostas, e cada reproposição é uma
+-- chamada paga.
+--
+-- Guarda o TEXTO tratado, não um booleano nem uma data. É o mesmo princípio da
+-- dispensa por trinca em `estilo_ignorado`: a marca vale para aquele texto. Se o
+-- revisor reescrever a frase depois, `texto_pt` deixa de bater e a edição volta a
+-- ser candidata — que é o certo, porque é uma lição nova sobre a mesma frase.
+-- Um booleano silenciaria a frase para sempre; uma data não daria para comparar,
+-- porque `frases` não tem carimbo de tempo de edição.
+--
+-- NULL = nunca tratada. É o estado de toda frase existente, e é o que faz a
+-- migração ser um no-op para quem ainda não usou o refinamento.
+ALTER TABLE frases ADD COLUMN edicao_tratada_texto TEXT;

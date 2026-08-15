@@ -182,6 +182,10 @@ export function classificarEdicoes(
     texto_pt: string;
     editado_manualmente: boolean;
     origem_edicao: string | null;
+    /** O texto que já foi tratado num refinamento aceito, ou `null`. Comparado ao
+     *  `texto_pt` corrente, não a um booleano: reescrever a frase depois é lição
+     *  nova, e ela precisa voltar a ser candidata. */
+    edicao_tratada_texto?: string | null;
   }[],
   glossario: EntradaGlossario[],
   prefs: PreferenciasEstilo,
@@ -192,6 +196,10 @@ export function classificarEdicoes(
     // lote — Task 6, achado da revisão da Task 2) já é decisão registrada em outro
     // canal, e recontá-la ensinaria a mesma lição várias vezes.
     if (!f.editado_manualmente || f.origem_edicao !== null) continue;
+    // Já tratada num refinamento aceito. A comparação é com o TEXTO, não com um
+    // sinalizador: se o revisor reescreveu a frase depois, isto deixa de bater e
+    // a edição volta a ser candidata — lição nova sobre a mesma frase.
+    if (f.edicao_tratada_texto != null && f.edicao_tratada_texto === f.texto_pt) continue;
     const ia = f.texto_pt_original_ia;
     if (!ia || ia === f.texto_pt) continue;
 

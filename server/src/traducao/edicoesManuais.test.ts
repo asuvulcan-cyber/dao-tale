@@ -176,6 +176,31 @@ describe('classificarEdicoes', () => {
     });
   });
 
+  // O canal do banco de testes já consumia sozinho (recorrencias filtra por
+  // status); o das edições manuais nasceu sem equivalente e as mesmas candidatas
+  // voltavam para sempre — 87 na obra real, contra amostra de 15 por chamada
+  // paga.
+  describe('edição já tratada num refinamento aceito', () => {
+    it('sai da lista', () => {
+      expect(uma('ele errara', 'ele errou', { edicao_tratada_texto: 'ele errou' })).toHaveLength(0);
+    });
+
+    it('volta a ser candidata quando o revisor reescreve a frase', () => {
+      // A marca vale para AQUELE texto. Reescrever é lição nova sobre a mesma
+      // frase, e um sinalizador booleano a silenciaria para sempre.
+      const r = uma('ele errara', 'ele tinha se enganado', { edicao_tratada_texto: 'ele errou' });
+      expect(r).toHaveLength(1);
+    });
+
+    it('marca nula não esconde nada — é o estado de toda frase existente', () => {
+      expect(uma('ele errara', 'ele errou', { edicao_tratada_texto: null })).toHaveLength(1);
+    });
+
+    it('campo ausente também não esconde — chamadores antigos seguem valendo', () => {
+      expect(uma('ele errara', 'ele errou')).toHaveLength(1);
+    });
+  });
+
   it('edição vinda de botão não entra', () => {
     expect(uma('ele errara', 'ele errou', { origem_edicao: 'revisao' })).toHaveLength(0);
     expect(uma('ele errara', 'ele errou', { origem_edicao: 'passe-estilo' })).toHaveLength(0);

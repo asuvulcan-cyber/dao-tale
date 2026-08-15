@@ -115,6 +115,11 @@ const criarPromptSchema = z.object({
       registro: z.string().trim().min(1).max(200).optional(),
     })
     .optional(),
+  // Frases cujas edições manuais alimentaram a proposta que virou esta versão
+  // (vêm de `sugerir-refinamento`). O consumo acontece AQUI, na aceitação, e não
+  // na chamada que propôs: proposta recusada tem de deixar o sinal vivo para a
+  // próxima. Ausente numa versão escrita à mão, que não consome nada.
+  edicoes_tratadas: z.array(z.number().int().positive()).optional(),
 });
 
 const criarPromptPadraoSchema = z.object({
@@ -401,8 +406,9 @@ export function rotasObras(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Um prompt completo não pode ser vazio.' } }, 400);
     }
     try {
+      const { edicoes_tratadas, ...dadosDaVersao } = corpo.data;
       const criado = reposPrompts.criar(db, obraId, {
-        ...corpo.data,
+        ...dadosDaVersao,
         tipo,
         nucleo_id: tipo === 'delta' ? (reposPromptPadrao.ativo(db)?.id ?? null) : null,
         preferencias: normalizarPreferencias({ ...(ativo?.preferencias ?? {}), ...(corpo.data.preferencias ?? {}) }),
@@ -410,7 +416,11 @@ export function rotasObras(db: BancoDados): Hono {
       // Aviso, nunca bloqueio (doc 15 §7): a versão fica salva de qualquer jeito. Um
       // prompt `completo` legado não é Delta — nele o tema de Beta está no lugar certo.
       const avisos = tipo === 'delta' ? avisosDaCamada(corpo.data.conteudo, 'delta') : [];
-      return c.json({ ...criado, avisos }, 201);
+      // A versão nasceu de um refinamento: as edições que o alimentaram viraram
+      // regra e param de ser candidatas. Depois de `criar` de propósito — marcar
+      // antes deixaria o sinal consumido se a criação falhasse (versão duplicada).
+      const tratadas = reposFrases.marcarEdicoesTratadas(db, edicoes_tratadas ?? []);
+      return c.json({ ...criado, avisos, edicoes_tratadas: tratadas }, 201);
     } catch (e: any) {
       if (String(e.message).includes('UNIQUE')) {
         return c.json({ erro: { codigo: 'versao-duplicada', mensagem: 'Já existe uma versão com esse identificador nesta obra.' } }, 409);
@@ -506,12 +516,17 @@ export function rotasObras(db: BancoDados): Hono {
     // espalhar mostra repetição ao longo da obra inteira, que é o próprio
     // critério que separa gosto isolado de regra (ver instrução em
     // `sistemaRefinarPromptPartes`).
-    const edicoes = amostrarEspalhado(edicoesDiretriz, 15).map((e) => ({
+    const amostradas = amostrarEspalhado(edicoesDiretriz, 15);
+    const edicoes = amostradas.map((e) => ({
       trecho_zh: e.texto_zh,
       ia: e.ia,
       voce: e.voce,
       mudou: { de: e.de, para: e.para },
     }));
+    // Quais frases alimentaram esta proposta. Vão na resposta para a tela poder
+    // devolvê-las na hora de SALVAR a versão nova — o consumo acontece na
+    // aceitação, não aqui: se a proposta for recusada, o sinal continua vivo.
+    const edicoes_frase_ids = amostradas.map((e) => e.frase_id);
 
     const todasRecorrencias = reposTestes.recorrencias(db, obraId);
     if (todasRecorrencias.length === 0 && edicoes.length === 0) {
@@ -618,7 +633,7 @@ export function rotasObras(db: BancoDados): Hono {
         modelo,
         uso: resposta.uso,
       });
-      return c.json({ propostas: resposta.propostas, recorrencias, provedor: provedorId, modelo });
+      return c.json({ propostas: resposta.propostas, recorrencias, edicoes_frase_ids, provedor: provedorId, modelo });
     } catch (e) {
       return c.json({ erro: { codigo: 'provedor', mensagem: (e as Error).message } }, 502);
     }
@@ -632,6 +647,26 @@ export function rotasObras(db: BancoDados): Hono {
     if (!reposObras.obter(db, obraId)) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
     return c.json(classificarEdicoes(reposFrases.paraMineracao(db, obraId), reposGlossario.listar(db, obraId), prefs));
+  });
+
+  // Zera o acúmulo de candidatas a diretriz de uma vez.
+  //
+  // O consumo normal é na aceitação de um refinamento, mas quem já usava o app
+  // antes disso existir tem uma pilha herdada — 87 na obra real, contra amostra
+  // de 15 por chamada — que continuaria alimentando refinamentos com material já
+  // transformado em regra. Marca só a rota `diretriz`: as outras não vão para o
+  // refinamento de qualquer forma, e apagá-las esconderia da tela o que o revisor
+  // ainda usa para conferir a classificação.
+  app.post('/obras/:id/edicoes-manuais/tratar-candidatas', (c) => {
+    const obraId = Number(c.req.param('id'));
+    if (!reposObras.obter(db, obraId)) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
+    const prefs = normalizarPreferencias(reposPrompts.ativo(db, obraId)?.preferencias);
+    const candidatas = classificarEdicoes(
+      reposFrases.paraMineracao(db, obraId),
+      reposGlossario.listar(db, obraId),
+      prefs,
+    ).filter((e) => e.rota === 'diretriz');
+    return c.json({ tratadas: reposFrases.marcarEdicoesTratadas(db, candidatas.map((e) => e.frase_id)) });
   });
 
   // Copia o prompt padrão ativo como v1.0 da obra (só quando ela não tem versões).
