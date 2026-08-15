@@ -49,6 +49,11 @@ const NAO_VERBOS = new Set([
   // "romãzeira" apareceu como violação fantasma no capítulo 3 da 死人经.
   'romãzeira', 'palmeira', 'oliveira', 'figueira', 'videira', 'macieira', 'laranjeira',
   'bananeira', 'mangueira', 'trepadeira', 'roseira', 'amoreira',
+  // Adjetivos em -ora/-eira que entram em APELIDO traduzido. Epíteto de jianghu é
+  // classe produtiva aqui (Seção 5 regra 2 manda traduzi-lo), e o nome repete muito:
+  // 飞鹰 → "Águia Voadora" sozinho rendeu 3 falsos positivos no cap. 4 e reaparece 19
+  // vezes no 5. Falso positivo em nome próprio é o pior tipo — repete e não some.
+  'voadora', 'caçadora', 'matadora', 'errante', 'guerreira', 'feiticeira', 'traiçoeira',
 ]);
 
 // {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então

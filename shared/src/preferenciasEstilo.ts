@@ -227,16 +227,25 @@ const ONOMATOPEIA: Record<PoliticaOnomatopeia, string> = {
 // mais difícil de escrever, porque a decisão não é só lexical: depende da
 // CATEGORIA (pessoa translitera-se mesmo tendo sentido pleno) e admite forma
 // HÍBRIDA dentro de um mesmo nome (少林寺 → "Templo Shaolin").
+//
+// APELIDO NÃO É NOME DE GENTE — a regra 1 dizia "Pessoa (nome, apelido, forma curta):
+// sempre em pinyin" e a regra do desempate mandava traduzir o que dá imagem ao leitor.
+// As duas se contradiziam exatamente em cima do apelido, que é escolhido PELA imagem.
+// Na 死人经 o resultado foi 飞鹰 revisado para "Feiying" com base na regra 1, contra a
+// prática que a própria obra já tinha (独步王 → Rei Incomparável, 老虎 → "tigre") e contra
+// o que a IA produzira sozinha ("Águia"). Apelido agora cai na regra de título; o nome de
+// nascimento continua em pinyin, e o desempate declara que não vale para ele.
 const NOMES: Record<PoliticaNomes, string[]> = {
   mesclar: [
     '**Nomes próprios — decida por sentido ou som, nesta ordem:**',
-    '1. **Pessoa** (nome, apelido, forma curta): **sempre em pinyin**, sem tom — `铁心` → Tie Xin, `小青` → Xiao Qing. Vale mesmo quando os caracteres têm sentido pleno: em português não se traduz nome de gente.',
-    '2. **Lugar, seita, obra citada, técnica, título e cargo:** pergunte se os caracteres DESCREVEM o referente ou se são só transcrição de som.',
+    '1. **Pessoa — o nome de nascimento e suas formas curtas:** **sempre em pinyin**, sem tom — `铁心` → Tie Xin, `小青` → Xiao Qing. Vale mesmo quando os caracteres têm sentido pleno: em português não se traduz nome de gente.',
+    '2. **Apelido, epíteto ou hao — o nome que a história DÁ a alguém:** resolva pela regra 3, como título. Ele foi escolhido pela imagem que evoca, e é essa imagem que o leitor do original recebe: `飞鹰` → Águia Voadora, nunca "Feiying". O contraste com a regra 1 é o ponto: `铁心` carrega sentido igual, mas é nome de nascimento e fica Tie Xin.',
+    '3. **Lugar, seita, obra citada, técnica, título e cargo:** pergunte se os caracteres DESCREVEM o referente ou se são só transcrição de som.',
     '   - **Descrevem → traduza o sentido.** `中原` (centro + planície) → Planícies Centrais; `北庭` (norte + corte) → Corte do Norte; `天刀` → Sabre Celeste.',
     '   - **São transcrição fonética de um nome estrangeiro → mantenha em pinyin.** `疏勒` (Kashgar) → Shule. Traduzir "esparso" e "rédea" inventaria sentido que o original não tem.',
-    '3. **Forma híbrida quando o nome tem classificador:** traduza o classificador e resolva o núcleo pela regra 2. `少林寺` → Templo Shaolin; `天山` → Montanhas Celestiais.',
-    '4. **Termo de gênero já consagrado em português fica como está:** `江湖` → jianghu, `qi`, `dao`. Não traduza nem explique dentro da prosa.',
-    '5. Na dúvida entre os dois, pergunte-se: um leitor chinês recebe uma imagem ao ler este nome? Se sim, traduza. Se o nome só soa, translitere.',
+    '4. **Forma híbrida quando o nome tem classificador:** traduza o classificador e resolva o núcleo pela regra 3. `少林寺` → Templo Shaolin; `天山` → Montanhas Celestiais.',
+    '5. **Termo de gênero já consagrado em português fica como está:** `江湖` → jianghu, `qi`, `dao`. Não traduza nem explique dentro da prosa.',
+    '6. **Desempate — vale para as regras 2 e 3, nunca para a 1:** um leitor chinês recebe uma imagem ao ler este nome? Se sim, traduza. Se o nome só soa, translitere.',
   ],
   traduzir: [
     '**Nomes próprios — traduza tudo o que tiver sentido.** Lugares, seitas, técnicas, títulos e obras citadas vão para o português pelo significado dos caracteres, sem deixar pinyin: `中原` → Planícies Centrais, `江湖` → submundo das artes marciais.',
