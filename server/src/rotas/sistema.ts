@@ -7,6 +7,7 @@ import { reposConfig, reposUso } from '../db/repos.js';
 import { definirChave, modoGuarda, removerChave, temChave, obterChave } from '../credenciais/index.js';
 import { listarProvedores, obterProvedor } from '../ia/fabrica.js';
 import { diretorioDados, ehInstanciaCanonica, PORTA } from '../config.js';
+import { lerVersao } from '../versao.js';
 import { fazerBackup, listarBackups } from '../db/backup.js';
 import { telemetriaDoDia } from '../telemetria/painel.js';
 import { recalcularCustos } from '../telemetria/registrar.js';
@@ -18,9 +19,14 @@ export function rotasSistema(db: BancoDados): Hono {
   // seção Dados. `canonico=false` avisa que não é a obra real na porta padrão.
   app.get('/saude', (c) => {
     const backups = listarBackups();
+    // `versao` era a string literal '0.1.0', igual desde o primeiro dia — quem
+    // olhasse ali achando que sabia o que estava no ar se enganava. O carimbo
+    // vem do VERSAO.json que o `subir.mjs` grava no envio; em desenvolvimento
+    // ele não existe e os campos saem `null`, que é a resposta honesta.
+    const versao = lerVersao();
     return c.json({
       ok: true,
-      versao: '0.1.0',
+      versao,
       porta: PORTA,
       caminho_dados: diretorioDados(),
       canonico: ehInstanciaCanonica(),

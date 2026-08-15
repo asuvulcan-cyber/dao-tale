@@ -192,6 +192,14 @@ export function Casca() {
               Guia
             </NavLink>
             <NavLink
+              to="/mudancas"
+              className={({ isActive }) =>
+                isActive ? 'font-semibold text-tinta' : 'text-tinta-2 hover:text-tinta'
+              }
+            >
+              Mudanças
+            </NavLink>
+            <NavLink
               to="/configuracoes"
               className={({ isActive }) =>
                 isActive ? 'font-semibold text-tinta' : 'text-tinta-2 hover:text-tinta'

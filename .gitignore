@@ -10,6 +10,9 @@ dist/
 *-backup.json
 # Segredos da hospedagem (doc 13 §6) — nunca versionar
 auth.json
+# Carimbo do deploy: gerado pelo subir.mjs no momento do envio. Versionar faria
+# cada deploy sujar a árvore e o carimbo seguinte se declarar "-sujo".
+VERSAO.json
 sessao.chave
 credenciais.json
 dao-tale.env

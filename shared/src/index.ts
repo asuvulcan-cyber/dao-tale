@@ -734,9 +734,17 @@ export interface EstadoConfiguracoes {
 
 // GET /api/saude — estado da instância (doc 10 §2): porta, pasta de dados, se é a
 // instância canônica (real, porta padrão) e um resumo dos backups.
+/** Que código está rodando. Tudo `null` em desenvolvimento — o VPS não tem git
+ *  (o `.git` fica fora do rsync), então o carimbo é gravado no envio. */
+export interface CarimboVersao {
+  commit: string | null;
+  publicado_em: string | null;
+  assunto: string | null;
+}
+
 export interface EstadoSaude {
   ok: boolean;
-  versao: string;
+  versao: CarimboVersao;
   porta: number;
   caminho_dados: string;
   canonico: boolean;

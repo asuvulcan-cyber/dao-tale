@@ -17,6 +17,7 @@
 // Requer a chave em ~/.ssh/dao_tale.
 
 import { execFileSync, execSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -28,7 +29,9 @@ const SSH = `ssh -i ${CHAVE} -o BatchMode=yes`;
 const SECO = process.argv.includes('--seco');
 
 // `node_modules` e `*.db` fora: as dependências são instaladas lá, e o banco é DELE.
-const ENVIAR = ['shared', 'server', 'web', 'package.json', 'package-lock.json', 'tsconfig.base.json'];
+// `VERSAO.json` é gerado logo antes do envio (ver `carimbar`) — o VPS não tem git,
+// então é a única forma de a máquina saber que código está rodando nela.
+const ENVIAR = ['shared', 'server', 'web', 'package.json', 'package-lock.json', 'tsconfig.base.json', 'VERSAO.json'];
 const EXCLUIR = ['node_modules', '.git', '*.db*', 'dist/.vite'];
 
 const sh = (cmd) => execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
@@ -59,6 +62,25 @@ passo('Dependências mudaram?');
 const deps = sh('git diff HEAD~1..HEAD --name-only -- package.json package-lock.json */package.json || true');
 const precisaInstalar = deps.length > 0;
 console.log(precisaInstalar ? `  sim: ${deps.split('\n').join(', ')} — vai rodar npm ci lá` : '  não — pula o npm ci');
+
+passo('Carimbo da versão');
+// O VPS não tem git (o `.git` fica fora do rsync de propósito), então não há como
+// perguntar à máquina qual commit é este. O carimbo é gravado aqui, no momento do
+// envio, e a rota /saude o lê — antes disto ela respondia a string fixa '0.1.0',
+// igual desde o primeiro dia, que parecia resposta e não era.
+//
+// `--dirty` na descrição quando a árvore de trabalho difere do HEAD: o rsync manda
+// a ÁRVORE, não o commit, então omitir isso faria o carimbo apontar para um commit
+// que não é exatamente o que está rodando lá.
+const sujo = sh('git status --porcelain').length > 0;
+const carimbo = {
+  commit: sh('git rev-parse --short HEAD') + (sujo ? '-sujo' : ''),
+  publicado_em: new Date().toISOString(),
+  assunto: sh('git log -1 --format=%s'),
+};
+writeFileSync('VERSAO.json', JSON.stringify(carimbo, null, 2) + '\n');
+console.log(`  ${carimbo.commit} — ${carimbo.assunto}`);
+if (sujo) console.log('  ⚠ árvore de trabalho com alterações não commitadas: elas SOBEM, e o carimbo avisa com "-sujo"');
 
 const args = [...EXCLUIR.flatMap((e) => ['--exclude', e]), '-e', SSH];
 passo('O que muda no VPS');

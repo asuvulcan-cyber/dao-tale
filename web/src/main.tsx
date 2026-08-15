@@ -16,6 +16,7 @@ import { PromptMae, PaginaPromptPadrao } from './paginas/PromptMae';
 import { BancoTestes } from './paginas/BancoTestes';
 import { TermosSugeridos } from './paginas/TermosSugeridos';
 import { Configuracoes } from './paginas/Configuracoes';
+import { Changelog } from './paginas/Changelog';
 import { Docs } from './paginas/Docs';
 import { ComparadorModelos } from './paginas/ComparadorModelos';
 import { Telemetria } from './paginas/Telemetria';
@@ -56,6 +57,7 @@ const rotasBancada = createBrowserRouter([
     children: [
       { index: true, element: <ListaObras /> },
       { path: 'docs', element: <Docs /> },
+      { path: 'mudancas', element: <Changelog /> },
       { path: 'prompt-padrao', element: <PaginaPromptPadrao /> },
       { path: 'configuracoes', element: <Configuracoes /> },
       {
