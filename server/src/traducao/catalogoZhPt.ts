@@ -81,13 +81,36 @@ export interface LinhaAfericao {
    *  na precisão; existe para a conta não ser feita por subtração de agregados,
    *  que esconderia uma sumindo e outra nascendo. */
   novas: number;
+  /** Acusadas na IA cujo texto final veio de um botão do app (passe de estilo,
+   *  revisão, QA, substituição em lote): ficam FORA de `acusadas` e de
+   *  `corrigidas`.
+   *
+   *  A pergunta da aferição é o que o revisor faria SEM ser avisado, e para
+   *  estas a resposta é inobservável. Contá-las como corrigidas inflaria a
+   *  precisão com o próprio trabalho do app — medido: a mesma obra saía de
+   *  {acusadas 4, corrigidas 3} para {acusadas 4, corrigidas 4} depois de um
+   *  passe, sem ninguém mudar de ideia. Contá-las só no denominador afundaria
+   *  uma entrada justamente porque ela funcionou. Excluir é o único tratamento
+   *  que não escolhe um lado.
+   *
+   *  O número existe para a amostra encolhendo aparecer: se ela cair abaixo de
+   *  AMOSTRA_MINIMA, a entrada deixa de poder se justificar por dado novo — o
+   *  que também é uma resposta. */
+  assistidas: number;
   precisao: number;
 }
 
 /** Responde "esta regra merece existir?" sem opinião. Função pura: o script lê
  *  o banco, isto aqui só conta. */
 export function aferirCatalogo(
-  frases: { texto_zh: string; texto_pt: string; texto_pt_original_ia: string | null }[],
+  frases: {
+    texto_zh: string;
+    texto_pt: string;
+    texto_pt_original_ia: string | null;
+    /** `null` = digitada pelo revisor, que é a única coisa que a aferição sabe
+     *  ler. Qualquer valor = veio de um botão; ver `assistidas`. */
+    origem_edicao: string | null;
+  }[],
   entradas: readonly EntradaCatalogo[],
 ): LinhaAfericao[] {
   return entradas.map((e) => {
@@ -95,6 +118,7 @@ export function aferirCatalogo(
     let restantes = 0;
     let corrigidas = 0;
     let novas = 0;
+    let assistidas = 0;
     for (const f of frases) {
       if (!f.texto_zh.includes(e.gatilho_zh)) continue;
       // Sem o original da IA não há comparação possível — a frase não entra em
@@ -102,6 +126,13 @@ export function aferirCatalogo(
       if (f.texto_pt_original_ia == null) continue;
       const naIa = e.evitar_pt.test(f.texto_pt_original_ia);
       const noFim = e.evitar_pt.test(f.texto_pt ?? '');
+      if (f.origem_edicao != null) {
+        // Só conta como amostra perdida a frase que ESTA entrada acusava: a que
+        // o botão editou sem nunca ter sido acusada não é buraco na medição
+        // dela, e contá-la faria `assistidas` medir o uso do passe.
+        if (naIa) assistidas++;
+        continue;
+      }
       if (naIa) acusadas++;
       if (naIa && noFim) restantes++;
       if (naIa && !noFim) corrigidas++;
@@ -114,6 +145,7 @@ export function aferirCatalogo(
       restantes,
       corrigidas,
       novas,
+      assistidas,
       precisao: acusadas === 0 ? 0 : corrigidas / acusadas,
     };
   });

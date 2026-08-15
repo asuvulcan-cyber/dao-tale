@@ -113,25 +113,31 @@ describe('aferirCatalogo', () => {
     aferido: { obra_id: 0, acusadas: 0, corrigidas: 0, em: '2026-01-01' },
   };
 
+  /** `origem_edicao: null` é o caso que a aferição sabe ler — texto digitado
+   *  pelo revisor. Quem testa o conserto vindo de botão passa a origem. */
+  const af = (
+    texto_zh: string,
+    texto_pt_original_ia: string | null,
+    texto_pt: string,
+    origem_edicao: string | null = null,
+  ) => ({ texto_zh, texto_pt_original_ia, texto_pt, origem_edicao });
+
   it('mede a precisão por frase, não por subtração de agregados', () => {
     const frases = [
       // 3 acusadas na IA e consertadas pelo revisor
-      ...[1, 2, 3].map(() => ({ texto_zh: '甲甲', texto_pt_original_ia: 'xyzzy', texto_pt: 'outra coisa' })),
+      ...[1, 2, 3].map(() => af('甲甲', 'xyzzy', 'outra coisa')),
       // 1 acusada na IA e mantida
-      { texto_zh: '甲甲', texto_pt_original_ia: 'xyzzy', texto_pt: 'xyzzy' },
+      af('甲甲', 'xyzzy', 'xyzzy'),
     ];
     const [linha] = aferirCatalogo(frases, [entrada]);
-    expect(linha).toMatchObject({ acusadas: 4, corrigidas: 3, restantes: 1, novas: 0 });
+    expect(linha).toMatchObject({ acusadas: 4, corrigidas: 3, restantes: 1, novas: 0, assistidas: 0 });
     expect(linha.precisao).toBeCloseTo(0.75);
   });
 
   it('conta separadamente a violação que APARECEU na revisão', () => {
     // A subtração de agregados esconderia este caso: uma some, outra nasce, e o
     // total não muda. É por isso que a conta é por frase.
-    const frases = [
-      { texto_zh: '甲甲', texto_pt_original_ia: 'xyzzy', texto_pt: 'outra coisa' },
-      { texto_zh: '甲甲', texto_pt_original_ia: 'outra coisa', texto_pt: 'xyzzy' },
-    ];
+    const frases = [af('甲甲', 'xyzzy', 'outra coisa'), af('甲甲', 'outra coisa', 'xyzzy')];
     const [linha] = aferirCatalogo(frases, [entrada]);
     expect(linha).toMatchObject({ acusadas: 1, corrigidas: 1, novas: 1 });
     // `novas` não entra no denominador — a precisão é sobre `acusadas` (1), não
@@ -141,8 +147,7 @@ describe('aferirCatalogo', () => {
   });
 
   it('ignora frase sem texto original da IA — não há o que comparar', () => {
-    const frases = [{ texto_zh: '甲甲', texto_pt_original_ia: null, texto_pt: 'xyzzy' }];
-    const [linha] = aferirCatalogo(frases, [entrada]);
+    const [linha] = aferirCatalogo([af('甲甲', null, 'xyzzy')], [entrada]);
     expect(linha).toMatchObject({ acusadas: 0, corrigidas: 0, novas: 0, precisao: 0 });
   });
 
@@ -151,24 +156,79 @@ describe('aferirCatalogo', () => {
     // tem o gatilho. Sem o `includes(gatilho_zh)` dentro de `aferirCatalogo`,
     // esta frase entraria como acusada — e a aferição deixaria de ser bilíngue,
     // a mesma propriedade que distingue `varrerCatalogo` de `analisarEstilo`.
-    const frases = [{ texto_zh: 'nada a ver aqui', texto_pt_original_ia: 'xyzzy', texto_pt: 'xyzzy' }];
-    const [linha] = aferirCatalogo(frases, [entrada]);
+    const [linha] = aferirCatalogo([af('nada a ver aqui', 'xyzzy', 'xyzzy')], [entrada]);
     expect(linha).toMatchObject({ acusadas: 0, restantes: 0, corrigidas: 0, novas: 0, precisao: 0 });
   });
 
   it('a aferição confirma os números gravados no catálogo em produção', () => {
     // Guarda contra o `aferido` virar folclore: reproduz a conta com um corpus
-    // sintético do tamanho declarado.
+    // sintético do tamanho declarado. Tudo com `origem_edicao: null` porque as
+    // 561 frases da obra 1 são anteriores ao passe de estilo existir — o número
+    // gravado no `aferido` é de correção digitada, e assim continua sendo lido.
     const alvo = CATALOGO[0];
     const frases = [
-      ...Array.from({ length: alvo.aferido.corrigidas }, () => ({
-        texto_zh: alvo.gatilho_zh, texto_pt_original_ia: 'sempre', texto_pt: 'até então',
-      })),
-      ...Array.from({ length: alvo.aferido.acusadas - alvo.aferido.corrigidas }, () => ({
-        texto_zh: alvo.gatilho_zh, texto_pt_original_ia: 'sempre', texto_pt: 'sempre',
-      })),
+      ...Array.from({ length: alvo.aferido.corrigidas }, () => af(alvo.gatilho_zh, 'sempre', 'até então')),
+      ...Array.from({ length: alvo.aferido.acusadas - alvo.aferido.corrigidas }, () =>
+        af(alvo.gatilho_zh, 'sempre', 'sempre'),
+      ),
     ];
     const [linha] = aferirCatalogo(frases, [alvo]);
     expect(linha.precisao).toBeCloseTo(precisaoAferida(alvo.aferido));
+    expect(linha.assistidas).toBe(0);
+  });
+
+  // O defeito que a revisão final provou por execução: `editarTexto(...,
+  // 'passe-estilo')` muda `texto_pt` e PRESERVA `texto_pt_original_ia`, então o
+  // conserto que o próprio app propôs voltava como numerador da precisão do
+  // próprio catálogo — a mesma obra saía de {acusadas 4, corrigidas 3} para
+  // {acusadas 4, corrigidas 4} depois de um passe, sem ninguém mudar de ideia.
+  describe('frase consertada por botão do app fica FORA da medição', () => {
+    it('o conserto do passe de estilo não faz a precisão subir', () => {
+      const frases = [
+        // Digitadas pelo revisor: 1 corrigida em 3 acusadas = 33%.
+        af('甲甲', 'xyzzy', 'outra coisa'),
+        af('甲甲', 'xyzzy', 'xyzzy'),
+        af('甲甲', 'xyzzy', 'xyzzy'),
+        // Consertada pelo passe. Contada, a precisão viraria 2/4 = 50% e a
+        // entrada passaria a se justificar com o próprio trabalho do app.
+        af('甲甲', 'xyzzy', 'outra coisa', 'passe-estilo'),
+      ];
+      const [linha] = aferirCatalogo(frases, [entrada]);
+      expect(linha).toMatchObject({ acusadas: 3, corrigidas: 1, restantes: 2, assistidas: 1 });
+      expect(linha.precisao).toBeCloseTo(1 / 3);
+    });
+
+    it('a assistida sai do denominador junto — não vira "não corrigida"', () => {
+      // Uma digitada e corrigida, uma assistida e corrigida. Contar a assistida
+      // só em `acusadas` (o conserto que a revisão propôs) daria 1/2 = 50%:
+      // afundaria uma entrada JUSTAMENTE porque ela funcionou. Excluir a frase
+      // inteira é o único tratamento que não escolhe um lado.
+      const frases = [af('甲甲', 'xyzzy', 'outra coisa'), af('甲甲', 'xyzzy', 'outra coisa', 'passe-estilo')];
+      const [linha] = aferirCatalogo(frases, [entrada]);
+      expect(linha).toMatchObject({ acusadas: 1, corrigidas: 1, assistidas: 1 });
+      expect(linha.precisao).toBeCloseTo(1);
+    });
+
+    it('vale para qualquer origem, não só o passe — e também quando o botão NÃO consertou', () => {
+      // `revisao`, `qa`, `substituicao`, `retraducao`: em todas o revisor foi
+      // avisado ou o texto foi mexido por outro canal, e o que ele faria sozinho
+      // é inobservável. A que continua acusada também sai: ela não é prova de
+      // que ele deixaria passar.
+      const frases = [
+        af('甲甲', 'xyzzy', 'outra coisa', 'revisao'),
+        af('甲甲', 'xyzzy', 'outra coisa', 'qa'),
+        af('甲甲', 'xyzzy', 'xyzzy', 'substituicao'),
+      ];
+      const [linha] = aferirCatalogo(frases, [entrada]);
+      expect(linha).toMatchObject({ acusadas: 0, corrigidas: 0, restantes: 0, novas: 0, assistidas: 3, precisao: 0 });
+    });
+
+    it('só entra em `assistidas` a frase que a entrada acusava na IA', () => {
+      // A frase que o botão editou sem nunca ter sido acusada não é amostra
+      // perdida desta entrada — contá-la faria `assistidas` medir o uso do
+      // passe, não o buraco que ele abre nesta medição.
+      const [linha] = aferirCatalogo([af('甲甲', 'outra coisa', 'outra coisa', 'passe-estilo')], [entrada]);
+      expect(linha).toMatchObject({ acusadas: 0, assistidas: 0 });
+    });
   });
 });

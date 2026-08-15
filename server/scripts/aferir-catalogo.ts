@@ -33,6 +33,7 @@ interface FraseParaAfericao {
   texto_zh: string;
   texto_pt: string;
   texto_pt_original_ia: string | null;
+  origem_edicao: string | null;
 }
 
 // Somente leitura, de propósito: este script decide se uma regra MERECE existir,
@@ -52,9 +53,18 @@ function lerFrases(): FraseParaAfericao[] {
       console.log(`(banco em ${caminho} ainda sem a tabela 'frases' — todas as linhas saem em zero)\n`);
       return [];
     }
+    // `origem_edicao` nasceu na migração 023 e foi retroativada pela 024. Num
+    // banco anterior a elas a coluna não existe — e a leitura certa nesse caso é
+    // `null` (digitada pelo revisor), que é o que o corpus daquela época era:
+    // todas as frases da obra 1 são anteriores ao passe de estilo existir.
+    const temOrigem = (db.prepare('PRAGMA table_info(frases)').all() as { name: string }[]).some(
+      (c) => c.name === 'origem_edicao',
+    );
+    if (!temOrigem) console.log('(banco anterior à migração 023 — nenhuma frase tem origem, todas contam como digitadas)\n');
     return db
       .prepare(
-        `SELECT f.texto_zh, f.texto_pt, f.texto_pt_original_ia
+        `SELECT f.texto_zh, f.texto_pt, f.texto_pt_original_ia,
+                ${temOrigem ? 'f.origem_edicao' : 'NULL'} AS origem_edicao
            FROM frases f JOIN capitulos c ON c.id = f.capitulo_id
           WHERE c.obra_id = ? AND f.status_traducao = 'traduzida'`,
       )
@@ -71,8 +81,17 @@ function imprimirLinha(l: LinhaAfericao): void {
     `  ${l.entrada_id.padEnd(22)} ${l.gatilho_zh.padEnd(4)} ` +
       `acusadas ${String(l.acusadas).padStart(4)} · restantes ${String(l.restantes).padStart(4)} · ` +
       `corrigidas ${String(l.corrigidas).padStart(4)} · novas ${String(l.novas).padStart(3)} · ` +
-      `precisão ${(l.precisao * 100).toFixed(0)}%`,
+      `assistidas ${String(l.assistidas).padStart(3)} · precisão ${(l.precisao * 100).toFixed(0)}%`,
   );
+  // A amostra encolhendo tem de aparecer: cada frase que o app consertou é uma
+  // frase que esta medição não pode mais ler. Se sobrarem menos que o piso, a
+  // entrada deixa de poder se justificar por dado novo — e isso é uma resposta.
+  if (l.assistidas > 0) {
+    console.log(
+      `    (${l.assistidas} frase(s) que a entrada acusava foram consertadas por botão do app e saíram da conta — ` +
+        'o que o revisor faria sozinho nelas é inobservável)',
+    );
+  }
   // O portão real (shared/src/catalogoErros.ts): mesmo cálculo que decide se uma
   // entrada pode estar em CATALOGO, aplicado aos números frescos desta obra.
   const aprovada = entradaAprovada({ obra_id: obraId, acusadas: l.acusadas, corrigidas: l.corrigidas, em: '' });
