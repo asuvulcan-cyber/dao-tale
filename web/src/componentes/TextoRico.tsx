@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { partirInline, type EntradaGlossario } from '@dao-tale/shared';
+import { padraoDeTermo, partirInline, type EntradaGlossario } from '@dao-tale/shared';
 
 // ── Marcação de termos do glossário no texto (item 13 do backlog) ───────────
 
@@ -7,26 +7,50 @@ export interface MarcadorGlossario {
   regexZh: RegExp | null;
   regexPt: RegExp | null;
   glosaZh: Map<string, string>;
-  glosaPt: Map<string, string>;
+  /** A glosa de um trecho JÁ FLEXIONADO ("Assassinos" → a entrada de 杀手).
+   *  `Map.get` direto não serve: a chave é o termo canônico e o texto traz a
+   *  forma flexionada, então o grifo apareceria sem explicação no title. */
+  glosaDoTrecho: (trecho: string) => string | undefined;
 }
 
 export function montarMarcadorGlossario(entradas: EntradaGlossario[] | undefined): MarcadorGlossario | null {
   if (!entradas || entradas.length === 0) return null;
   const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Termos maiores primeiro, para o composto vencer o termo contido (人级 antes de 人).
+  // Termos maiores primeiro, para o composto vencer o termo contido — 人级 antes
+  // de 人, e "Homem de Sabre" antes de "sabre". A alternância do regex resolve na
+  // ORDEM, então esta ordenação é o que impede o grifo de apontar para a entrada
+  // errada dentro de um termo composto.
   const zh = entradas
     .filter((e) => e.termo_zh.trim().length >= 2) // 1 caractere é ambíguo demais (mesma regra da consistência)
     .sort((a, b) => b.termo_zh.length - a.termo_zh.length);
   const pt = entradas
     .filter((e) => e.termo_pt.trim().length >= 3)
     .sort((a, b) => b.termo_pt.length - a.termo_pt.length);
+
+  // Um padrão flexionado por termo, na mesma ordem. `padraoDeTermo` é a fonte
+  // única compartilhada com a varredura de consistência (shared/flexaoTermo.ts).
+  const padroes = pt.map((e) => ({ entrada: e, padrao: padraoDeTermo(e.termo_pt) })).filter((x) => x.padrao);
+
+  const normalizar = (t: string) =>
+    t
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toLowerCase();
+
   return {
     regexZh: zh.length ? new RegExp(`(${zh.map((e) => escapar(e.termo_zh)).join('|')})`, 'gu') : null,
-    regexPt: pt.length
-      ? new RegExp(`(?<![\\p{L}\\p{M}])(${pt.map((e) => escapar(e.termo_pt)).join('|')})(?![\\p{L}\\p{M}])`, 'giu')
+    // Sem a fronteira à direita: ela é o que barrava "Assassinos". O próprio
+    // `padraoDeTermo` já termina em `\b` em cada palavra, então a fronteira
+    // continua garantida — só passou a vir DEPOIS da flexão, não antes.
+    regexPt: padroes.length
+      ? new RegExp(`(?<![\\p{L}\\p{M}])(${padroes.map((x) => x.padrao).join('|')})`, 'giu')
       : null,
     glosaZh: new Map(zh.map((e) => [e.termo_zh, `${e.termo_zh} → ${e.termo_pt}`])),
-    glosaPt: new Map(pt.map((e) => [e.termo_pt.toLowerCase(), `${e.termo_zh} → ${e.termo_pt}`])),
+    glosaDoTrecho: (trecho: string) => {
+      const t = normalizar(trecho);
+      const achado = padroes.find((x) => new RegExp(`^${x.padrao}$`, 'u').test(t));
+      return achado ? `${achado.entrada.termo_zh} → ${achado.entrada.termo_pt}` : undefined;
+    },
   };
 }
 
@@ -65,7 +89,7 @@ export function TextoTraduzido({
   marcador: MarcadorGlossario | null;
 }) {
   const decorar = (t: string): ReactNode =>
-    marcador ? marcarTermos(t, marcador.regexPt, (x) => marcador.glosaPt.get(x.toLowerCase())) : t;
+    marcador ? marcarTermos(t, marcador.regexPt, (x) => marcador.glosaDoTrecho(x)) : t;
   if (!texto) return null;
   return (
     <>

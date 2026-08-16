@@ -25,6 +25,9 @@ export * from './temasDoPrompt.js';
 // Catálogo de erros comuns zh→pt-BR (doc 2026-08-10): entradas com aferição
 // medida no corpus real, e não intuição de prompt.
 export * from './catalogoErros.js';
+// Regras de flexão de termo do glossário (plural, gênero, conector): fonte única
+// para a varredura de consistência e o grifo do editor.
+export * from './flexaoTermo.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
