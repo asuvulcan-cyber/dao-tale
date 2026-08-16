@@ -494,6 +494,11 @@ Crie `server/src/ia/glossarioNoPrompt.test.ts` cobrindo:
 2. **Dois blocos**: um termo de cada espécie → dois cabeçalhos, cada termo sob o seu.
 3. **Instrução oposta**: o bloco lexical manda flexionar número, gênero e caixa; o de identidade manda usar a forma exata. Asserte pelo conteúdo da instrução.
 4. **`nota_uso` na linha do termo**: sai junto daquele termo, e um termo sem nota não emite linha vazia.
+4b. **A nota não impõe tradução ao sentido comum**: o texto da nota é emitido literalmente,
+   e o campo é livre — então este teste é sobre a INSTRUÇÃO do bloco, que precisa dizer ao
+   modelo que a nota delimita quando o termo se aplica, sem prescrever o resto. Fixe a
+   frase da instrução. (O porquê: "senão é 'cuidado'" fixaria uma palavra para o sentido
+   comum e viraria glossário clandestino — ver spec §2b.)
 5. **`nota_uso` em `identidade` é ignorada**: gravada ali, não é emitida.
 6. **Variante continua funcionando**: `principal_id` segue rendendo "· variante de X", em qualquer das duas espécies.
 

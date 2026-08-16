@@ -173,11 +173,22 @@ mesma coisa: uma linha sobre **quando e como** aquele termo se aplica, entregue 
 dele.
 
 > `杀手` · "Maiúscula só quando for o posto na Fortaleza do Peng Dourado."
-> `小心` · "Só é a criada Xiao Xin quando for nome de pessoa; senão é 'cuidado'."
+> `小心` · "Só é a criada Xiao Xin quando for nome de pessoa; nos demais usos é substantivo comum."
 
 Dois campos separados sugeririam que capitalização e desambiguação são problemas
 diferentes. Não são: os dois existem porque o par `zh → pt` sozinho não carrega a regra de
 uso, e o remédio é o mesmo — texto curto no ponto do uso, nunca no núcleo.
+
+### A nota delimita o território do termo, e não traduz o resto
+
+Escrever *"senão é 'cuidado'"* pareceria mais útil e seria pior: fixaria uma palavra para o
+sentido comum, e o modelo passaria a escrever "cuidado" onde "cautela", "atenção" ou "com
+cuidado" servem melhor. A nota viraria um **glossário clandestino** — uma tradução imposta
+que não passou por `especie`, não aparece na lista de termos e ninguém revisa.
+
+A regra vale para toda `nota_uso`, não só para esta: ela diz **quando o termo se aplica**, e
+devolve o resto ao tradutor. Se o sentido comum realmente merecer tradução fixa, ele é uma
+entrada `lexical` do glossário — que é o caminho que já existe, com revisão e varredura.
 
 ## 3. Adicionar um termo pela seleção
 
