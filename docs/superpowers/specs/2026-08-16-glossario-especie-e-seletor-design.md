@@ -9,7 +9,7 @@ parecia; uma terceira ideia encolhe até caber em três linhas de código.
 
 ## 1. O que a medição mostrou
 
-### Flexão já funciona — nos dois lados
+### Flexão funciona na varredura e no modelo — e NÃO no grifo do editor
 
 `contemTermoFlexionado` (`server/src/traducao/flexao.ts`) normaliza acento e caixa e
 compara por radical. Testado contra os exemplos do relato:
@@ -37,6 +37,36 @@ duplicada por causa de flexão no português.
 `主子` virou "senhora" quando o referente era mulher, sem ninguém pedir. Declarar as formas
 permitidas (`senhor(a)`, `Senhores`…) resolveria um problema que não existe, e custaria
 manutenção em 116 termos.
+
+### Mas o grifo do editor tem outro casamento, e ele é literal
+
+O ponto pontilhado sob os termos vem de `montarMarcadorGlossario`
+(`web/src/componentes/TextoRico.tsx:24`), que **não** usa `contemTermoFlexionado`. Ele monta
+uma alternância literal dos termos com fronteira de letra dos dois lados:
+
+```js
+new RegExp(`(?<![\\p{L}\\p{M}])(${termos.map(escapar).join('|')})(?![\\p{L}\\p{M}])`, 'giu')
+```
+
+A flag `i` explica por que "Assassino" e "assassino" são grifados igual. A fronteira à
+direita explica o resto — reproduzido com os termos reais:
+
+```
+NÃO GRIFA  "Os Assassinos atacaram."
+GRIFA      "O assassino sorriu."        → assassino
+NÃO GRIFA  "as Senhoras chegaram."
+NÃO GRIFA  "dois sabres"
+GRIFA      "Dois Homens de Sabre."      → Sabre          ← pior que não grifar
+```
+
+A última linha é a mais grave e não estava no relato: o termo composto `Homem de Sabre`
+falha, e `sabre` — outro termo do glossário — casa dentro dele. O revisor vê um grifo que
+aponta para a entrada errada.
+
+**São dois casadores para a mesma pergunta**, e só um sabe flexão. A correção não é
+reescrever o grifo: é extrair as regras de `flexao.ts` para `shared/` e fazer os dois
+consumirem a mesma fonte — que é o mesmo remédio aplicado a `orientacaoDaRegra` na entrega
+do catálogo, pelo mesmo motivo (duas cópias divergem em silêncio).
 
 ### O que existe de verdade: a caixa é decidida no chute
 
@@ -202,6 +232,16 @@ pedida na tela, aos poucos, e o que não foi respondido segue como hoje.
     com o outro lado vazio é recusado antes da chamada.
 12. **Duplicata na captura**: termo chinês já existente devolve 409 e o painel oferece o
     existente.
+13. **Grifo com flexão**: "Assassinos", "Senhoras" e "sabres" passam a ser grifados; a
+    caixa continua indiferente ("assassino" e "Assassino" seguem iguais).
+14. **Grifo do termo composto**: "Homens de Sabre" grifa o termo inteiro e aponta para
+    `刀手`, não a palavra "Sabre" apontando para `刀`. É o caso que hoje aponta para a
+    entrada errada, e o que prova que a correção não é só afrouxar a fronteira.
+15. **Grifo não invade palavra maior**: um termo curto não pode casar dentro de outra
+    palavra — a mesma regra de duas faixas de `flexao.ts` (palavra curta aceita só plural
+    simples), senão "rei" grifaria dentro de "reino".
+16. **Uma fonte só**: a suíte atual de `flexao.test.ts` passa sem edição depois da
+    extração para `shared/` — é a prova de que o comportamento da varredura não mudou.
 
 ## 7. Riscos
 
@@ -226,8 +266,10 @@ ao lado, não abandonar o limite.
 
 - **Não se lista forma permitida por termo** (`senhor(a)`, `Senhores`). A medição mostra que
   o modelo já flexiona e que a varredura já casa; a lista seria manutenção sem retorno.
-- **Não se altera `contemTermoFlexionado`**, nem o filtro de termos curtos, nem
-  `varrerConsistencia`. Eles não são o problema — foi o que a medição estabeleceu.
+- **Não se altera o COMPORTAMENTO de `contemTermoFlexionado`**, nem o filtro de termos
+  curtos, nem `varrerConsistencia`. As regras de flexão são movidas para `shared/` para o
+  grifo poder consumi-las, e a prova de que nada mudou são os testes atuais de
+  `flexao.test.ts` passando sem edição.
 - **Não se corta versão nova de Alfa.** O que muda é como o glossário é renderizado, não o
   texto do núcleo.
 - **Nenhuma tela de árvore, mapa ou grafo** nesta entrega.
