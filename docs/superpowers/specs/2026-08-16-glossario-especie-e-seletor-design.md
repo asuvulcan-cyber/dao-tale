@@ -121,15 +121,63 @@ lista só:
 A segunda instrução é o oposto do que o prompt diz hoje para esses termos, e é o objetivo
 da entrega.
 
-### `nota_caixa`: a regra de capitalização no ponto do uso
+### `nota_uso`: a regra daquele termo, no ponto do uso
 
-Campo de texto curto, opcional, só faz sentido em `lexical`:
+Campo de texto curto e opcional (ver §2b, que o generaliza para desambiguação):
 
-> `杀手` · nota_caixa: "Maiúscula só quando for o posto na Fortaleza do Peng Dourado."
+> `杀手` · nota_uso: "Maiúscula só quando for o posto na Fortaleza do Peng Dourado."
 
 Entregue junto **daquele termo**, na linha dele, como o `certo` do catálogo de erros — não
 como regra geral no núcleo. A investigação de 2026-08-05 mediu texto de marcador no prompt
 como sem efeito; texto no ponto do uso é o que funcionou.
+
+## 2b. Termo ambíguo: quando o gatilho chinês não é o termo
+
+Caso real de 2026-08-16, medido na obra 1: `小心 → Xiao Xin [personagem]` aparece em **8
+frases traduzidas, e só 1 é a personagem**. As outras 7 são a expressão comum ("cuidado"),
+e todas viram violação de consistência.
+
+É o equivalente a ter uma personagem chamada **Socorro**: a varredura pergunta *"o chinês
+tem 小心, logo o português tem de ter Xiao Xin?"* — e para um homógrafo essa pergunta está
+errada em 7 dos 8 casos. A pergunta útil é a inversa: *quando o revisor escreveu o nome, ele
+escreveu certo?*
+
+**Nenhum sinal determinístico resolve.** Nem a categoria (`personagem` não implica
+ambiguidade), nem o contexto chinês (小心 adverbial e 小心 nome ocupam as mesmas posições).
+Pedir a desambiguação a uma IA transformaria uma varredura gratuita e determinística numa
+chamada paga por frase — o oposto do que ela é.
+
+Então o app **para de fingir que sabe**, com um campo:
+
+```ts
+/** O gatilho chinês nem sempre é este termo (小心 = "cuidado" e também a criada
+ *  Xiao Xin). Tira o termo da varredura direta, que erraria a maior parte das
+ *  vezes, e entrega a regra de desambiguação ao modelo na linha dele. */
+ambiguo: boolean;
+```
+
+Duas consequências, e nenhuma delas mexe em `varrerConsistencia`:
+
+1. **A varredura não recebe o termo.** Quem chama separa o glossário em checáveis e
+   ambíguos e passa só os primeiros — a função pura continua intocada, que é a restrição do
+   projeto. Os ambíguos aparecem numa lista própria da tela, rotulada *"confira caso a
+   caso"*, sem entrar na contagem de violações. Contagem inflada por ruído é o que ensina o
+   revisor a ignorar a tela, e 7 de 8 é ruído.
+2. **O modelo recebe a regra.** A nota do termo vai na linha dele, no prompt — é onde a
+   desambiguação tem chance de funcionar, porque é sobre aquele termo naquele trecho.
+
+### `nota_uso` no lugar de `nota_caixa`
+
+O campo que a §2 chamava de `nota_caixa` vira **`nota_uso`**, porque as duas notas são a
+mesma coisa: uma linha sobre **quando e como** aquele termo se aplica, entregue na linha
+dele.
+
+> `杀手` · "Maiúscula só quando for o posto na Fortaleza do Peng Dourado."
+> `小心` · "Só é a criada Xiao Xin quando for nome de pessoa; senão é 'cuidado'."
+
+Dois campos separados sugeririam que capitalização e desambiguação são problemas
+diferentes. Não são: os dois existem porque o par `zh → pt` sozinho não carrega a regra de
+uso, e o remédio é o mesmo — texto curto no ponto do uso, nunca no núcleo.
 
 ## 3. Adicionar um termo pela seleção
 
@@ -197,7 +245,8 @@ Uma migração, três colunas, todas anuláveis — nenhuma reconstrução de ta
 
 ```sql
 ALTER TABLE glossario ADD COLUMN especie TEXT;        -- NULL = 'identidade'
-ALTER TABLE glossario ADD COLUMN nota_caixa TEXT;
+ALTER TABLE glossario ADD COLUMN nota_uso TEXT;
+ALTER TABLE glossario ADD COLUMN ambiguo INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE glossario ADD COLUMN termo_pai_id INTEGER REFERENCES glossario(id);
 ```
 
@@ -218,10 +267,11 @@ pedida na tela, aos poucos, e o que não foi respondido segue como hoje.
    cabeçalhos, cada termo sob o seu.
 3. **Instrução oposta**: o bloco lexical manda flexionar caixa e número; o de identidade,
    não. Teste por conteúdo, não por presença de cabeçalho.
-4. **`nota_caixa` no ponto do uso**: sai na linha daquele termo, e só nele; termo sem nota
+4. **`nota_uso` no ponto do uso**: sai na linha daquele termo, e só nele; termo sem nota
    não emite linha vazia.
-5. **`nota_caixa` só em lexical**: gravada num termo de identidade, não é emitida — a forma
-   já é lei ali, e a nota contradiria.
+5. **`nota_uso` vale nas duas espécies**: um termo `identidade` e ambíguo (`小心`) emite a
+   nota — ela diz QUANDO o termo se aplica, não como escrevê-lo, e a forma continuar sendo
+   lei não a torna dispensável.
 6. **Filtro puxa o pai**: trecho com `西堡` traz `西堡` **e** `金鹏堡`.
 7. **Um nível só**: numa cadeia de três, o avô não entra.
 8. **Pai ausente ou apagado** não quebra o filtro nem duplica o termo na lista.
@@ -242,6 +292,14 @@ pedida na tela, aos poucos, e o que não foi respondido segue como hoje.
     simples), senão "rei" grifaria dentro de "reino".
 16. **Uma fonte só**: a suíte atual de `flexao.test.ts` passa sem edição depois da
     extração para `shared/` — é a prova de que o comportamento da varredura não mudou.
+17. **Termo ambíguo sai da varredura direta**: com `小心` marcado, as 7 frases de "cuidado"
+    param de gerar violação, e a contagem do capítulo cai.
+18. **Mas não some da tela**: ele aparece na lista "confira caso a caso", com as ocorrências
+    — silenciar de vez seria trocar ruído por cegueira.
+19. **`varrerConsistencia` intocada**: quem separa checáveis de ambíguos é o chamador; a
+    função pura recebe só os checáveis, e sua suíte passa sem edição.
+20. **Ambíguo ainda vai ao prompt**: ele continua entrando no glossário do trecho, com a
+    `nota_uso` — tirar da varredura não é tirar da tradução.
 
 ## 7. Riscos
 
@@ -273,4 +331,7 @@ ao lado, não abandonar o limite.
 - **Não se corta versão nova de Alfa.** O que muda é como o glossário é renderizado, não o
   texto do núcleo.
 - **Nenhuma tela de árvore, mapa ou grafo** nesta entrega.
+- **Nenhuma desambiguação por IA.** A varredura é determinística e gratuita; resolver
+  homógrafo por chamada paga por frase inverteria o que ela é. O app marca o termo, entrega
+  a regra ao modelo e devolve o caso a caso ao revisor.
 - **Nenhum backfill por heurística** da espécie dos 116 termos existentes.
