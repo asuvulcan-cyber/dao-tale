@@ -640,7 +640,12 @@ Expected: FAIL.
 
 - Seletor de espécie na linha do termo (identidade / escolha de palavra), com o texto curto
   explicando cada um.
-- Campo `nota_uso`, visível **só** quando a espécie é `lexical`.
+- Campo `nota_uso`, visível nas DUAS espécies — `小心 → Xiao Xin` é `personagem`
+  (identidade) E ambíguo, e é justamente ele que precisa da nota.
+- Marca `ambiguo`, com o texto explicando o efeito: o termo sai da contagem de
+  consistência e vai para a lista de conferência. **Sem este controle a Task 7 fica
+  inalcançável pela tela** — o campo existiria no banco e no prompt, e o revisor não teria
+  como marcá-lo.
 - Campo de termo pai, escolhendo entre os termos da obra (com "nenhum").
 - No topo: *"N termos ainda sem classificação"*, com filtro para mostrar só eles.
 
@@ -709,8 +714,7 @@ Expected: FAIL.
   **Adicionar ao glossário**.
 - O painel abre com o lado selecionado preenchido e **o outro campo vazio e com o foco** —
   o outro lado nunca é adivinhado (ver spec §3).
-- Campos: `termo_zh`, `termo_pt`, categoria, **espécie** e `nota_uso` (esta só quando
-  `lexical`).
+- Campos: `termo_zh`, `termo_pt`, categoria, **espécie** e `nota_uso` (nas duas espécies).
 - Salvar chama `POST /obras/:obraId/glossario`. No 409, o painel mostra o termo existente e
   oferece abri-lo, em vez de repetir o erro.
 - Ao gravar, invalidar a query `['glossario', obraId]` — a prova de que pegou é o grifo

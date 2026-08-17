@@ -328,6 +328,11 @@ function LinhaTermo({
   const [especie, setEspecie] = useState<EspecieTermo | ''>(entrada.especie ?? '');
   const [notaUso, setNotaUso] = useState(entrada.nota_uso ?? '');
   const [termoPaiSel, setTermoPaiSel] = useState<number | null>(entrada.termo_pai_id);
+  // O gatilho chinês nem sempre é este termo: 小心 é "cuidado" em 7 das 8
+  // ocorrências da obra, e a criada Xiao Xin em 1. Sem este controle na tela, o
+  // campo existia no banco e no prompt mas era inalcançável pelo revisor — e a
+  // varredura seguia acusando as 7.
+  const [ambiguo, setAmbiguo] = useState(entrada.ambiguo);
 
   const ehVariante = entrada.principal_id != null;
   const principal = ehVariante ? todas.find((e) => e.id === entrada.principal_id) : undefined;
@@ -353,6 +358,7 @@ function LinhaTermo({
         // sem quebrar a validação (o prompt já trata nota_uso vazia como ausente).
         nota_uso: notaUso.trim(),
         termo_pai_id: termoPaiSel,
+        ambiguo,
       });
       if ((principalSel ?? null) !== (entrada.principal_id ?? null)) {
         await api('POST', `/glossario/${entrada.id}/vincular`, { principal_id: principalSel });
@@ -605,6 +611,25 @@ function LinhaTermo({
               <p className="mt-1 text-xs text-tinta-2">
                 Quando o termo se aplica — vale nas duas espécies. Nunca é a tradução do sentido comum: escrever
                 "senão é 'cuidado'" fixaria essa palavra fora do glossário.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-tinta-2" htmlFor={`ambiguo-${entrada.id}`}>
+                Gatilho ambíguo
+              </label>
+              <label className="mt-0.5 flex items-center gap-2 text-sm" htmlFor={`ambiguo-${entrada.id}`}>
+                <input
+                  id={`ambiguo-${entrada.id}`}
+                  type="checkbox"
+                  checked={ambiguo}
+                  onChange={(e) => setAmbiguo(e.target.checked)}
+                />
+                <span>O chinês nem sempre é este termo</span>
+              </label>
+              <p className="mt-1 text-xs text-tinta-2">
+                Marque quando o gatilho tiver outro sentido comum — 小心 é "cuidado" na maior parte das vezes e a
+                criada Xiao Xin em poucas. O termo sai da contagem de consistência e vai para a lista de conferência,
+                em vez de acusar as ocorrências que não são ele.
               </p>
             </div>
             <div>
