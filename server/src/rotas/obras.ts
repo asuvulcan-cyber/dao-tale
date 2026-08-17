@@ -18,6 +18,7 @@ import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConsistencia, reposFrases, reposLotes, reposObras, reposPrompts, reposPromptPadrao, reposConfig, reposGlossario, reposTestes, reposUso } from '../db/repos.js';
 import { amostrarEspalhado, classificarEdicoes } from '../traducao/edicoesManuais.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
+import { separarPorChecagem } from '../traducao/glossarioChecavel.js';
 import { jobEmExecucao } from '../traducao/job.js';
 import { cancelarLote, emissorDoLote, iniciarLote, loteEmExecucao, retomarLote } from '../traducao/lote.js';
 import { checkpointDaObra } from '../traducao/checkpoint.js';
@@ -241,7 +242,12 @@ export function rotasObras(db: BancoDados): Hono {
     }
     const frases = reposFrases.listarPorObra(db, obraId);
     const glossario = reposGlossario.listar(db, obraId);
-    const resultado = varrerConsistencia(frases, glossario, reposConsistencia.ignoradasDaObra(db, obraId));
+    // Termo `ambiguo` (小心: "cuidado" em 7 de 8 ocorrências da obra 1) sai da
+    // varredura direta — ela erraria a maioria das vezes (doc da Task 7). Ele
+    // não some da tela: reaparece abaixo, fora da contagem, para conferência
+    // caso a caso.
+    const { checaveis, ambiguos } = separarPorChecagem(glossario);
+    const resultado = varrerConsistencia(frases, checaveis, reposConsistencia.ignoradasDaObra(db, obraId));
 
     const porFrase = new Map(frases.map((f) => [f.id, f]));
     interface ViolacaoNaObra {
@@ -257,7 +263,7 @@ export function rotasObras(db: BancoDados): Hono {
       { glossario_id: number; termo_zh: string; termo_pt: string; violacoes: ViolacaoNaObra[] }
     >();
     for (const v of resultado.violacoes) {
-      const entrada = glossario.find((g) => g.termo_zh === v.termo_zh);
+      const entrada = checaveis.find((g) => g.termo_zh === v.termo_zh);
       const grupo = porTermo.get(v.termo_zh) ?? {
         glossario_id: entrada?.id ?? 0,
         termo_zh: v.termo_zh,
@@ -282,11 +288,35 @@ export function rotasObras(db: BancoDados): Hono {
       (a, b) => b.violacoes.length - a.violacoes.length || a.termo_pt.localeCompare(b.termo_pt, 'pt-BR'),
     );
 
+    // Bloco à parte da contagem de violações: um termo ambíguo não afirma nem
+    // desmente a tradução (o gatilho chinês nem sempre é ele), então "acertou"
+    // e "errou" não fazem sentido aqui — só "confira". Mesmo agrupamento por
+    // termo dos demais, com as ocorrências em vez de violações.
+    const por_termo_ambiguo = ambiguos
+      .map((termo) => ({
+        glossario_id: termo.id,
+        termo_zh: termo.termo_zh,
+        termo_pt: termo.termo_pt,
+        nota_uso: termo.nota_uso,
+        ocorrencias: frases
+          .filter((f) => f.status_traducao === 'traduzida' && f.texto_zh.includes(termo.termo_zh))
+          .map((f) => ({
+            frase_id: f.id,
+            capitulo_id: f.capitulo_id,
+            capitulo_numero: f.capitulo_numero,
+            ordem: f.ordem,
+            texto_zh: f.texto_zh,
+            texto_pt: f.texto_pt,
+          })),
+      }))
+      .filter((termo) => termo.ocorrencias.length > 0);
+
     return c.json({
       ocorrencias: resultado.ocorrencias,
       termos_curtos_ignorados: resultado.termos_curtos_ignorados,
       frases_examinadas: frases.filter((f) => f.status_traducao === 'traduzida').length,
       por_termo,
+      por_termo_ambiguo,
     });
   });
 

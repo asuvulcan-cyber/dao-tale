@@ -13,6 +13,7 @@ import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
 import { montarBloco } from './bloco.js';
 import { varrerConsistencia } from './consistencia.js';
+import { separarPorChecagem } from './glossarioChecavel.js';
 import { registrarEvento } from '../telemetria/registrar.js';
 
 // Orquestração da tradução em blocos (doc 05 §2, fases no doc 09).
@@ -410,9 +411,12 @@ async function executarJob(
       // checkpoint. Nunca derruba o job.
       if (prontas > 0) {
         try {
+          // Termo `ambiguo` sai da varredura direta — ela erraria a maioria das
+          // vezes (小心: "cuidado" em 7 de 8 ocorrências da obra 1; doc da Task 7).
+          const { checaveis } = separarPorChecagem(reposGlossario.listar(db, capitulo.obra_id));
           const violacoes = varrerConsistencia(
             finais,
-            reposGlossario.listar(db, capitulo.obra_id),
+            checaveis,
             reposConsistencia.ignoradasDoCapitulo(db, capituloId),
           ).violacoes.length;
           reposCapitulos.definirConsistencia(db, capituloId, violacoes);

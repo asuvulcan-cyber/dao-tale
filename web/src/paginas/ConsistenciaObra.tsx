@@ -33,6 +33,27 @@ interface GrupoTermo {
   violacoes: ViolacaoNaObra[];
 }
 
+/** Uma ocorrência do gatilho chinês de um termo `ambiguo`, sem veredito — a
+ *  varredura não sabe (nem tenta saber) se ali é o nome ou a palavra comum. */
+interface OcorrenciaAmbigua {
+  frase_id: number;
+  capitulo_id: number | null;
+  capitulo_numero: number | null;
+  ordem: number;
+  texto_zh: string;
+  texto_pt: string;
+}
+
+/** Um termo `ambiguo` (Task 7) e onde o gatilho chinês dele aparece. Fora da
+ *  contagem de violações — ver `BlocoAmbiguos`. */
+interface GrupoTermoAmbiguo {
+  glossario_id: number;
+  termo_zh: string;
+  termo_pt: string;
+  nota_uso: string | null;
+  ocorrencias: OcorrenciaAmbigua[];
+}
+
 /** O que `GET /obras/:id/consistencia` devolve. A rota calcula na hora a cada
  *  chamada (~10 ms numa obra real), então o que está na tela é o estado do
  *  banco agora — não um relatório guardado de ontem. */
@@ -43,6 +64,10 @@ interface RelatorioConsistencia {
   termos_curtos_ignorados: number;
   frases_examinadas: number;
   por_termo: GrupoTermo[];
+  /** Termos ambíguos (小心: "cuidado" em 7 de 8 ocorrências da obra 1) — saíram
+   *  da varredura acima porque ela erraria a maioria das vezes, mas não saem
+   *  da tela: aqui embaixo, para conferência caso a caso. */
+  por_termo_ambiguo: GrupoTermoAmbiguo[];
 }
 
 /** Acima disto a lista de um termo vira rolagem pura e o pé do bloco — onde
@@ -105,6 +130,13 @@ export function ConsistenciaObra() {
                 <BlocoTermo key={g.termo_zh} grupo={g} obraId={obraId!} />
               ))}
             </div>
+          )}
+          {/* Fora da contagem de cima de propósito: um termo ambíguo não prova
+              erro nem acerto, então misturá-lo à lista de violações ensinaria
+              o revisor a desconfiar da lista inteira (o próprio problema que
+              esta tela existe para evitar). */}
+          {relatorio.por_termo_ambiguo.length > 0 && (
+            <BlocoAmbiguos grupos={relatorio.por_termo_ambiguo} obraId={obraId!} />
           )}
         </>
       )}
@@ -400,5 +432,94 @@ function LinhaViolacao({
         </Botao>
       </div>
     </div>
+  );
+}
+
+/**
+ * Termo ambíguo (Task 7): o gatilho chinês nem sempre é este termo — 小心 é
+ * "cuidado" em 7 das 8 ocorrências medidas na obra 1, e só 1 é a criada Xiao
+ * Xin. A varredura de cima já tira esses termos da contagem (checaria errado
+ * na maioria das vezes), mas tirar da CONTAGEM não é tirar da TELA: sem este
+ * bloco o revisor não teria como notar que escreveu o nome errado nas vezes
+ * em que o gatilho É a personagem — silenciar de vez trocaria ruído por
+ * cegueira, o mesmo problema do lado oposto.
+ *
+ * Nem Dispensar nem Trocar aparecem aqui: as duas ações assumem que existe
+ * uma violação a resolver, e aqui não há veredito nenhum para resolver —
+ * só uma lista para o revisor olhar caso a caso.
+ */
+function BlocoAmbiguos({ grupos, obraId }: { grupos: GrupoTermoAmbiguo[]; obraId: string }) {
+  return (
+    <section className="mt-6 border-t border-linha/50 pt-4">
+      <h3 className="font-display text-base font-semibold">Termo ambíguo — confira caso a caso</h3>
+      <p className="mt-1 max-w-[62ch] text-sm text-tinta-2">
+        O chinês destes termos também é uma palavra comum, então contar como violação acertaria só a minoria
+        das ocorrências. Cada frase abaixo precisa de um olhar: o gatilho ali é o nome, ou é a palavra do
+        dia a dia?
+      </p>
+      <div className="mt-3 space-y-3">
+        {grupos.map((g) => (
+          <BlocoTermoAmbiguo key={g.termo_zh} grupo={g} obraId={obraId} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BlocoTermoAmbiguo({ grupo, obraId }: { grupo: GrupoTermoAmbiguo; obraId: string }) {
+  const visiveis = grupo.ocorrencias.length > LIMITE_PARA_DOBRAR ? FRASES_VISIVEIS : grupo.ocorrencias.length;
+  const dobradas = grupo.ocorrencias.slice(visiveis);
+
+  const linha = (o: OcorrenciaAmbigua) => (
+    <div key={`${o.frase_id}|${grupo.termo_zh}`} className="border-b border-linha/50 py-2.5 last:border-b-0">
+      <p className="text-sm leading-relaxed">{o.texto_pt}</p>
+      {/* Mesmo destaque jade da lista de violações: aqui ele marca "achei o
+          gatilho", não "está certo" — a decisão sobre o que ele significa é
+          do revisor, não da varredura. */}
+      <p className="texto-zh mt-0.5 text-xs text-tinta-2">
+        <TextoComDestaque texto={o.texto_zh} trecho={grupo.termo_zh} cor="jade" />
+      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-tinta-2">
+        <span>
+          cap. {o.capitulo_numero ?? '—'} · frase {o.ordem + 1}
+        </span>
+        {o.capitulo_id != null && (
+          <Link
+            to={`/obras/${obraId}/capitulos/${o.capitulo_id}?frase=${o.frase_id}`}
+            className="text-jade-forte hover:underline"
+          >
+            ir à frase
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <section className="cartao p-4">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="texto-zh text-lg">{grupo.termo_zh}</span>
+        <span className="text-tinta-2">→</span>
+        <span className="font-display font-semibold">{grupo.termo_pt}</span>
+        {/* Neutro, não ocre: ocre aqui diria "fora do padrão", e nenhuma
+            destas ocorrências foi julgada — é só onde o gatilho aparece. */}
+        <Etiqueta cor="neutro">
+          {grupo.ocorrencias.length} ocorrência{grupo.ocorrencias.length === 1 ? '' : 's'}
+        </Etiqueta>
+      </div>
+      {grupo.nota_uso && <p className="mt-1 max-w-[62ch] text-xs text-tinta-2">{grupo.nota_uso}</p>}
+
+      <div className="mt-2 border-t border-linha/50">
+        {grupo.ocorrencias.slice(0, visiveis).map(linha)}
+        {dobradas.length > 0 && (
+          <details>
+            <summary className="cursor-pointer py-2 text-sm text-jade-forte hover:underline">
+              mostrar as outras {dobradas.length} ocorrências
+            </summary>
+            {dobradas.map(linha)}
+          </details>
+        )}
+      </div>
+    </section>
   );
 }

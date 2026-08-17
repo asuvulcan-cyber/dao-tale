@@ -30,6 +30,7 @@ import {
 import { segmentar } from '../segmentacao/segmentar.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
+import { separarPorChecagem } from '../traducao/glossarioChecavel.js';
 import { varrerCatalogo } from '../traducao/catalogoZhPt.js';
 import { analisarEstilo, type RelatorioEstilo } from '../traducao/estiloViolacoes.js';
 import { analisarCapitulo } from '../traducao/qa.js';
@@ -395,9 +396,12 @@ export function rotasCapitulos(db: BancoDados): Hono {
     const id = Number(c.req.param('id'));
     const capitulo = reposCapitulos.obter(db, id);
     if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
+    // Termo `ambiguo` sai da varredura direta — ela erraria a maioria das
+    // vezes (小心: "cuidado" em 7 de 8 ocorrências da obra 1; doc da Task 7).
+    const { checaveis } = separarPorChecagem(reposGlossario.listar(db, capitulo.obra_id));
     const resultado = varrerConsistencia(
       reposFrases.listarPorCapitulo(db, id),
-      reposGlossario.listar(db, capitulo.obra_id),
+      checaveis,
       reposConsistencia.ignoradasDoCapitulo(db, id),
     );
     // Mantém o badge da lista em dia quando a varredura é disparada à mão.

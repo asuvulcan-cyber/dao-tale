@@ -8,6 +8,7 @@ import type {
 import type { BancoDados } from '../db/index.js';
 import { reposCapitulos, reposConsistencia, reposFrases, reposGlossario } from '../db/repos.js';
 import { varrerConsistencia } from './consistencia.js';
+import { separarPorChecagem } from './glossarioChecavel.js';
 
 // Checkpoint de estabilidade (doc 09 §4): decide, por taxas medidas nos dados
 // reais, se a obra pode entrar em cruzeiro — nunca por número fixo de capítulos.
@@ -157,12 +158,14 @@ export function checkpointDaObra(db: BancoDados, obraId: number, fase: FaseTradu
   const alvo = Math.max(1, config.checkpoint_janela);
   const naJanela = new Set(janela(caps, PRONTO, alvo).map((c) => c.id));
   if (naJanela.size > 0) {
-    const glossario = reposGlossario.listar(db, obraId);
+    // Termo `ambiguo` sai da varredura direta — ela erraria a maioria das
+    // vezes (小心: "cuidado" em 7 de 8 ocorrências da obra 1; doc da Task 7).
+    const { checaveis } = separarPorChecagem(reposGlossario.listar(db, obraId));
     for (const c of caps) {
       if (!naJanela.has(c.id)) continue;
       c.violacoes = varrerConsistencia(
         reposFrases.listarPorCapitulo(db, c.id),
-        glossario,
+        checaveis,
         reposConsistencia.ignoradasDoCapitulo(db, c.id),
       ).violacoes.length;
     }

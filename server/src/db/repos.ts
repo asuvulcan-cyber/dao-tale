@@ -42,6 +42,7 @@ import {
 } from '@dao-tale/shared';
 import { comporOmega } from './promptPadraoInicial.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
+import { separarPorChecagem } from '../traducao/glossarioChecavel.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
     letra/número (fronteira Unicode, então acentos contam como letra). Evita trocar
@@ -537,7 +538,9 @@ export const reposCapitulos = {
  */
 export function recalcularConsistenciaDaObra(db: BancoDados, obraId: number): void {
   const frases = reposFrases.listarPorObra(db, obraId);
-  const glossario = reposGlossario.listar(db, obraId);
+  // Termo `ambiguo` (小心: "cuidado" em 7 de 8 ocorrências da obra 1) sai da
+  // varredura direta — ela erraria a maioria das vezes (doc da Task 7).
+  const { checaveis } = separarPorChecagem(reposGlossario.listar(db, obraId));
   const ignoradas = reposConsistencia.ignoradasDaObra(db, obraId);
   // `push` no array já guardado no Map — o spread `[...(porCapitulo.get(id) ?? []), f]`
   // copiava o acumulado inteiro a cada frase (O(k²) na obra).
@@ -556,7 +559,7 @@ export function recalcularConsistenciaDaObra(db: BancoDados, obraId: number): vo
       // o próprio argumento do spec, "zero calculado cedo demais parece resposta",
       // no sentido inverso).
       if (!doCapitulo.some((f) => f.status_traducao === 'traduzida')) continue;
-      const r = varrerConsistencia(doCapitulo, glossario, ignoradas);
+      const r = varrerConsistencia(doCapitulo, checaveis, ignoradas);
       reposCapitulos.definirConsistencia(db, capituloId, r.violacoes.length);
     }
   })();
