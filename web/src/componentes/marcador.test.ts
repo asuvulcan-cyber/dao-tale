@@ -10,13 +10,11 @@ const GLOSSARIO = [
   entrada(2, '刀手', 'Homem de Sabre'),
   entrada(3, '刀', 'sabre'),
   entrada(4, '主子', 'senhor'),
+  entrada(5, '中原', 'Planícies Centrais'),
+  entrada(6, '飞鹰', 'Águia Voadora'),
 ];
 
-/** Os trechos que o grifo marcaria no texto. */
-function grifados(texto: string): string[] {
-  const m = montarMarcadorGlossario(GLOSSARIO)!;
-  return [...texto.matchAll(m.regexPt!)].map((x) => x[1]);
-}
+const grifados = (texto: string) => montarMarcadorGlossario(GLOSSARIO)!.acharPt(texto).map((o) => o.trecho);
 
 describe('grifo do glossário', () => {
   it('grifa o plural — era o buraco do relato', () => {
@@ -33,22 +31,62 @@ describe('grifo do glossário', () => {
   });
 
   it('o termo composto vence o termo contido nele', () => {
-    // Hoje "Dois Homens de Sabre" grifa só "Sabre" e a glosa aponta para 刀 —
-    // a entrada ERRADA. Este é o caso que prova que afrouxar a fronteira não
-    // basta: o composto precisa ganhar do contido.
+    // Antes desta entrega "Dois Homens de Sabre" grifava só "Sabre", e a glosa
+    // apontava para 刀 — a entrada ERRADA. Grifo no lugar errado é pior que
+    // grifo nenhum.
     expect(grifados('Dois Homens de Sabre entraram.')).toEqual(['Homens de Sabre']);
   });
 
   it('palavra curta não invade palavra maior', () => {
-    const m = montarMarcadorGlossario([entrada(5, '王', 'rei')])!;
-    expect([...'o reino caiu'.matchAll(m.regexPt!)]).toHaveLength(0);
-    expect([...'os reis caíram'.matchAll(m.regexPt!)].map((x) => x[1])).toEqual(['reis']);
+    const m = montarMarcadorGlossario([entrada(9, '王', 'rei')])!;
+    expect(m.acharPt('o reino caiu')).toHaveLength(0);
+    expect(m.acharPt('os reis caíram').map((o) => o.trecho)).toEqual(['reis']);
   });
 
-  it('a glosa do trecho flexionado ainda encontra a entrada', () => {
-    // A glosa é indexada pelo termo canônico; com o trecho flexionado o
-    // `Map.get` direto falha, e o revisor vê grifo sem explicação no title.
-    const m = montarMarcadorGlossario(GLOSSARIO)!;
-    expect(m.glosaDoTrecho('Assassinos')).toContain('杀手');
+  // O padrão é normalizado (sem acento) e o texto exibido não é. Casar um contra
+  // o outro fazia "planici…" não bater em "Planícies" — e 30 dos 116 termos da
+  // obra real têm acento, incluindo "Águia Voadora" e "Máscara Negra". Antes da
+  // extração para shared o casamento era literal e funcionava: é regressão.
+  describe('termo com acento', () => {
+    it('é grifado', () => {
+      expect(grifados('as Planícies Centrais ardiam')).toEqual(['Planícies Centrais']);
+      expect(grifados('a Águia Voadora sumiu')).toEqual(['Águia Voadora']);
+    });
+
+    it('o trecho devolvido é o do texto ORIGINAL, com acento e caixa', () => {
+      // Recortar do texto normalizado mostraria "planicies centrais" na tela.
+      const [o] = montarMarcadorGlossario(GLOSSARIO)!.acharPt('as Planícies Centrais ardiam');
+      expect(o.trecho).toBe('Planícies Centrais');
+    });
+
+    it('acento e flexão juntos', () => {
+      expect(grifados('duas Águias Voadoras')).toEqual(['Águias Voadoras']);
+    });
+
+    it('acento FORA do termo não desloca o grifo', () => {
+      // Regressão do RECORTE: o trecho tem de sair do texto original, na posição
+      // certa, mesmo com acento antes dele.
+      //
+      // NÃO prova o mapa de índices: medido, a normalização preserva comprimento
+      // para todo caractere que este app vê, então trocar o mapa por índices
+      // diretos passa verde aqui. Ver o comentário de `normalizarComMapa`.
+      const texto = 'o coração da órfã doía, e a Águia Voadora partiu';
+      const [o] = montarMarcadorGlossario(GLOSSARIO)!.acharPt(texto);
+      expect(o.trecho).toBe('Águia Voadora');
+      expect(texto.slice(o.inicio, o.fim)).toBe('Águia Voadora');
+    });
+  });
+
+  it('no chinês, o termo composto também vence o contido', () => {
+    // 刀 é prefixo LITERAL de 刀手 — o mesmo defeito do "Homem de Sabre", do outro
+    // lado. É a ordenação por tamanho que segura isto, e ela não tinha teste aqui.
+    expect(montarMarcadorGlossario(GLOSSARIO)!.acharZh('两个刀手来了').map((o) => o.trecho)).toEqual(['刀手']);
+  });
+
+  it('a glosa acompanha a ocorrência, já resolvida', () => {
+    // A glosa era indexada pelo termo canônico; com o trecho flexionado o
+    // `Map.get` direto falhava e o revisor via grifo sem explicação no title.
+    const [o] = montarMarcadorGlossario(GLOSSARIO)!.acharPt('Os Assassinos atacaram.');
+    expect(o.glosa).toContain('杀手');
   });
 });
