@@ -426,8 +426,15 @@ function LinhaTermo({
           )}
         </td>
         <td className="whitespace-nowrap px-2 py-2">
+          {/* A espécie fica VISÍVEL na leitura, e não só dentro do modo de edição:
+              sem isto não havia como saber o que falta classificar — nem que o
+              campo existe. Com 139 termos, invisível é o mesmo que inexistente. */}
           <span className="inline-flex items-center gap-1.5">
             <Etiqueta>{entrada.categoria}</Etiqueta>
+            {entrada.especie === 'identidade' && <Etiqueta cor="jade">identidade</Etiqueta>}
+            {entrada.especie === 'lexical' && <Etiqueta cor="indigo">palavra</Etiqueta>}
+            {entrada.especie == null && <Etiqueta cor="ocre">sem espécie</Etiqueta>}
+            {entrada.ambiguo && <Etiqueta cor="selo">ambíguo</Etiqueta>}
             {entrada.origem === 'sugerido-ia' && <Etiqueta cor="indigo">IA</Etiqueta>}
           </span>
         </td>
