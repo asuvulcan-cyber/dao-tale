@@ -992,6 +992,13 @@ export const reposGlossario = {
     // Solta as variantes antes de apagar (redundante com ON DELETE SET NULL, mas
     // vale mesmo se a checagem de FK estiver desligada em algum caminho).
     db.prepare('UPDATE glossario SET principal_id = NULL WHERE principal_id = ?').run(id);
+    // E solta os filhos. Aqui NÃO é redundante: `termo_pai_id` foi criado sem
+    // `ON DELETE`, então com foreign_keys ligado o SQLite RECUSA o DELETE
+    // enquanto houver filho — o erro subia cru e virava 500 sem explicação ao
+    // apagar um termo que por acaso é pai. Soltar é o mesmo tratamento das
+    // variantes: o filho continua existindo, só perde o vínculo.
+    db.prepare('UPDATE glossario SET termo_pai_id = NULL WHERE termo_pai_id = ?').run(id);
+
     return db.prepare('DELETE FROM glossario WHERE id = ?').run(id).changes > 0;
   },
 

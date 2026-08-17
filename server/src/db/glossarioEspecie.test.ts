@@ -81,33 +81,30 @@ describe('glossário — espécie, nota_uso, ambiguo e termo_pai_id (migração 
   });
 
   // `termo_pai_id` é `REFERENCES glossario(id)` SEM `ON DELETE CASCADE` (e sem
-  // `ON DELETE SET NULL`, ao contrário de `principal_id`). Com `foreign_keys =
-  // ON` (ligado em abrirBanco), o comportamento REAL observado é que o SQLite
-  // RECUSA o DELETE do pai enquanto existir filho apontando para ele — não
-  // apaga em cascata, não solta o filho: lança SQLITE_CONSTRAINT_FOREIGNKEY, e
-  // `reposGlossario.excluir` não captura esse erro, então ele sobe para quem
-  // chamou. Registrado aqui como comportamento observado, não desejado — não é
-  // desta task decidir se `excluir` deveria soltar `termo_pai_id` antes de
-  // apagar (como já faz com `principal_id`).
-  it('termo_pai_id: apagar o pai com filho pendurado é recusado pelo banco (comportamento observado, não desejado)', () => {
+  // `termo_pai_id` nasceu sem `ON DELETE` (ao contrário de `principal_id`), e com
+  // foreign_keys ligado o SQLite RECUSA o DELETE do pai enquanto houver filho —
+  // o erro subia cru de `excluir` e virava 500 ao apagar um termo que por acaso
+  // era pai de outro. `excluir` solta os filhos antes, como já fazia com as
+  // variantes.
+  it('apagar um termo que é pai solta os filhos, em vez de estourar', () => {
     const db = abrirBanco(':memory:');
     const obra = reposObras.criar(db, { titulo: 'Obra' });
     const pai = reposGlossario.criar(db, obra.id, { termo_zh: '金鹏堡', termo_pt: 'Fortaleza do Peng Dourado' });
-    expect(pai).not.toBe('duplicado');
     const paiId = (pai as any).id;
     const filho = reposGlossario.criar(db, obra.id, {
       termo_zh: '西堡',
       termo_pt: 'Fortaleza Oeste',
       termo_pai_id: paiId,
     });
-    expect(filho).not.toBe('duplicado');
     const filhoId = (filho as any).id;
 
-    expect(() => reposGlossario.excluir(db, paiId)).toThrowError(/FOREIGN KEY constraint failed/);
+    expect(reposGlossario.excluir(db, paiId)).toBe(true);
+    expect(reposGlossario.obter(db, paiId)).toBeUndefined();
 
-    // Nada foi apagado: o pai continua lá e o filho ainda aponta para ele.
-    expect(reposGlossario.obter(db, paiId)).toBeDefined();
-    expect(reposGlossario.obter(db, filhoId)!.termo_pai_id).toBe(paiId);
+    // O filho sobrevive — perder o pai não é perder o termo.
+    const restante = reposGlossario.obter(db, filhoId)!;
+    expect(restante.termo_pt).toBe('Fortaleza Oeste');
+    expect(restante.termo_pai_id).toBeNull();
   });
 
   it('espécie inválida ("qualquer") é recusada pelo schema da rota com 400', async () => {
