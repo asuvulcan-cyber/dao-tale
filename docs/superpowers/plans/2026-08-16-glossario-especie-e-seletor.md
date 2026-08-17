@@ -499,7 +499,11 @@ Crie `server/src/ia/glossarioNoPrompt.test.ts` cobrindo:
    modelo que a nota delimita quando o termo se aplica, sem prescrever o resto. Fixe a
    frase da instrução. (O porquê: "senão é 'cuidado'" fixaria uma palavra para o sentido
    comum e viraria glossário clandestino — ver spec §2b.)
-5. **`nota_uso` em `identidade` é ignorada**: gravada ali, não é emitida.
+5. **`nota_uso` vale nas DUAS espécies**: um termo `identidade` e ambíguo (`小心 → Xiao Xin`
+   é `personagem`) emite a nota. Ela diz QUANDO o termo se aplica, não como escrevê-lo, e a
+   forma continuar sendo lei não a torna dispensável. (Este item contradizia o spec §6 até
+   2026-08-16: o spec foi atualizado ao incorporar o caso do homógrafo e o plano ficou para
+   trás. O spec manda.)
 6. **Variante continua funcionando**: `principal_id` segue rendendo "· variante de X", em qualquer das duas espécies.
 
 - [ ] **Step 2: Rode e veja falhar**
