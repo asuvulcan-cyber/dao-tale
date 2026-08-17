@@ -6,10 +6,17 @@ Nenhum texto, prompt ou código foi alterado por esta revisão.
 
 **Critério de julgamento.** O texto traduzido **não** é a referência. Cada ocorrência foi
 julgada contra (a) a regra do **Delta ativo da obra** e (b) a **norma do português brasileiro**
-— nesta ordem, com a contradição entre as duas registrada no §3 quando existiu. Tomar o texto
-como referência seria circular: ele é internamente inconsistente, e um critério extraído dele
-herdaria a inconsistência em vez de resolvê-la. As contagens abaixo dizem **quantas ocorrências
-estão erradas**, não o que a obra vem fazendo.
+— com as contradições entre as duas registradas no §3, não resolvidas em silêncio. Tomar o
+texto como referência seria circular: ele é internamente inconsistente, e um critério extraído
+dele herdaria a inconsistência em vez de resolvê-la. As contagens abaixo dizem **quantas
+ocorrências estão erradas**, não o que a obra vem fazendo.
+
+**O glossário não decide caixa.** Durante esta revisão, o commit `f03f0ee` (17/08, 04:22)
+mudou a semântica do mecanismo: `identidade` passou a significar que o termo **designa um
+referente**, não que a forma catalogada seja lei, e entrou um aviso dizendo ao modelo que a
+caixa e o número da lista são convenção de verbete. O critério abaixo foi refeito para
+respeitar isso — a caixa vem da norma e da chave de estilo, e o glossário entra só onde a
+expressão catalogada **é** um nome próprio ou epíteto de portador único.
 
 Método: extração completa de `frases`, `glossario`, `prompt_padrao` e `prompts`; classificação
 de cada ocorrência pela cláusula do critério que a decide; contagem de erros por termo e por
@@ -51,7 +58,12 @@ Some-se o Alfa v3.0, Seção 2, que decide o mesmo tema numa terceira direção:
 > **Títulos e cargos exclusivos:** sempre capitalizados.
 
 E o glossário, declarado lei suprema pelos cabeçalhos das duas camadas, que guarda 杀手 →
-**"Assassino"**, com maiúscula, "inclusive nas flexões".
+**"Assassino"** — com maiúscula, e o Alfa dizendo "o glossário é lei, **inclusive nas
+flexões**". As 139 entradas são cadastradas em caixa alta por convenção de verbete, e o modelo
+lia essa convenção como instrução.
+
+(Esta quarta voz foi calada pelo commit `f03f0ee`, durante a revisão: o glossário agora diz
+explicitamente que caixa e número da lista são convenção, não instrução. Restam três.)
 
 **Quatro instruções sobre a mesma palavra, cada uma correta sozinha, incompatíveis juntas.** É
 a assinatura que a skill `revisar-capitulo` descreve: saída que oscila sem motivo aparente. O
@@ -85,24 +97,24 @@ porque o v1.8 acrescenta a quarta voz em vez de calar as outras três.
 Contados contra o critério do §3 (Delta + norma), sobre as 354 ocorrências de títulos e formas
 de tratamento em `texto_pt`.
 
-### 1.1 Capitalização — 59 erros em 354 ocorrências (17%)
+### 1.1 Capitalização — 66 erros em 354 ocorrências (19%)
 
-**32 ocorrências deveriam estar em maiúscula e estão em minúscula; 27 o contrário.**
+**21 ocorrências deveriam estar em maiúscula e estão em minúscula; 45 o contrário.**
 
 | termo | erros | onde |
 |---|---|---|
 | assassino(s) | 31 | caps. 0, 6, 7, 10, 12, 13, 14, 15 |
-| chefe menor | 7 | cap. 8 |
+| mestre | 10 | caps. 1, 2, 3, 4 |
 | patriarca | 6 | caps. 1, 11, 13 |
-| administrador | 4 | caps. 12, 13 |
+| marechal | 4 | caps. 3, 4 |
 | senhorita | 3 | caps. 8, 12 |
-| senhor(a) | 3 | caps. 9, 13, 14 |
+| administrador | 3 | caps. 12, 13 |
 | homem/ns de sabre | 2 | cap. 10 |
 | espectro | 2 | cap. 10 |
-| espadachim | 1 | cap. 6 |
+| senhor(a) | 2 | caps. 9, 13 |
 
-Erros por capítulo: 6 (8), 8 (8), 10 (7), 13 (7), 14 (7), 12 (6), 0 (4), 1 (4), 11 (3), 7 (2),
-9 (1), 5 (1), 15 (1). Capítulos 2, 3, 4 e 16 estão limpos.
+Erros por capítulo: 6 (9), 10 (8), 3 (7), 12 (6), 14 (6), 1 (5), 13 (5), 0 (4), 2 (4), 11 (4),
+7 (2), 16 (2), 4 (1), 5 (1), 8 (1), 15 (1). Capítulo 9 é o único limpo.
 
 As evidências mais duras não são as somas, são as colisões internas:
 
@@ -113,9 +125,8 @@ As evidências mais duras não são as somas, são as colisões internas:
   Peng Dourado; os Homens de Sabre eram mercenários da Fortaleza."* Duas categorias
   coordenadas, uma minúscula e a outra maiúscula, a três palavras de distância. Ocorre 3× no
   prólogo.
-- **Forma catalogada ignorada.** "Chefe Menor" está no glossário; sai **7× em minúscula** no
-  cap. 8, todas elas. O glossário é lei acima das três camadas, e não foi aplicado uma vez
-  sequer.
+- **O mesmo título, nas duas caixas, no mesmo capítulo.** "Patriarca Gu Lun" sai 5× maiúsculo
+  (caps. 1, 11, 13) e 5× minúsculo (caps. 1, 2, 6) — duas vezes no mesmo cap. 1.
 
 ### 1.2 O contraexemplo que mostra onde está o buraco
 
@@ -126,12 +137,17 @@ Grande Montanha Nevada" estão maiúsculas (uma escapou, cap. 6) e as 9 do subst
 O mesmo vale para "Mestre Yang" (12/12), "Deus Cabeçudo" (70/0), "Pequeno Senhor" (27/0),
 "Jovem Mestre" (13/0).
 
+(Contraste útil: "Chefe Menor" também está catalogado e sai 7× em minúscula no cap. 8 — mas
+isso **não é erro**. É cargo de vários portadores, não epíteto de um só, e o glossário não
+impõe a caixa dele. Antes do `f03f0ee`, com a lista mandando "use exatamente esta forma", essas
+7 contariam como violação: a mesma medição dava resposta diferente por causa da regra.)
+
 O que separa esses termos de `assassino` não é frequência nem capítulo — é forma:
 
-> **Quando o glossário cataloga uma expressão que não pode ser confundida com substantivo
-> comum, o erro é raro. Quando o termo catalogado é uma palavra só que também é substantivo
-> comum — 杀手/Assassino, 小姐/Senhorita, 老爷/Patriarca —, nenhuma regra de prosa resolve, porque
-> a regra não tem como saber qual dos dois sentidos está em jogo naquela frase.**
+> **Quando a expressão catalogada é um nome próprio ou um epíteto de portador único, o erro é
+> raro — ela não se confunde com substantivo comum. Quando o termo é uma palavra só que também
+> é substantivo comum — 杀手/Assassino, 小姐/Senhorita, 老爷/Patriarca —, nenhuma regra de prosa
+> resolve, porque a regra não tem como saber qual dos dois sentidos está em jogo na frase.**
 
 É esse buraco que o mecanismo novo (`especie`/`nota_uso`) fecha, e nenhuma redação de prompt
 fecharia. Ver §3.
@@ -208,7 +224,7 @@ Beta escrita como prosa de Delta (§3).
 
 ### Defeito do texto — só depois que as camadas estiverem certas
 
-- as 59 ocorrências de caixa erradas (§1.1), das quais 31 em "assassino" e 7 em "Chefe Menor";
+- as 66 ocorrências de caixa erradas (§1.1), das quais 31 em "assassino";
 - as 21 ausências de glossário (§1.3), das quais 11 são 刀手 → Homem de Sabre;
 - a vírgula de inciso dentro das aspas, cap. 14.
 
@@ -219,67 +235,83 @@ capítulo, medir de novo, e só então decidir se o passivo vale um passe de cor
 
 ## 3. Proposta de capitalização
 
-### O critério
-
-Da norma do português brasileiro vêm três fatos, e é sobre eles que a regra se apoia:
+### O que a norma do português brasileiro fixa
 
 1. **Título e cargo são substantivos comuns e vão em minúscula no uso corrente** — "o jovem
-   mestre entrou", "o patriarca ficou surpreso", e também no predicativo, "foi eleito
-   presidente", "virou assassino".
+   mestre entrou", "o patriarca ficou surpreso" — e também no predicativo, que é função e não
+   pessoa: "foi eleito presidente", "virou assassino", "aprendiz de assassino".
 2. **Sobem para maiúscula na antonomásia**, quando o título substitui o nome e passa a designar
-   uma pessoa determinada: "o Aleijadinho", "o Rei Sol" — e aqui, "o Pequeno Senhor", "o Patriarca".
+   uma pessoa determinada: "o Aleijadinho", "o Rei Sol" — aqui, "o Pequeno Senhor", "o Patriarca".
 3. **Sobem para maiúscula no tratamento direto** (vocativo): "Sim, Senhorita."
+4. **Título antes de nome próprio fica em minúscula:** "o presidente Lula", "o papa Francisco",
+   "o general Silva". Logo: "o patriarca Gu Lun", "a senhorita Luo Ningcha".
 
-E um quarto, que decide o caso mais frequente: **título antes de nome próprio fica em
-minúscula** — "o presidente Lula", "o papa Francisco", "o general Silva". Logo: "o patriarca
-Gu Lun", "a senhorita Luo Ningcha".
+### O critério
 
-Daí o critério, em cinco cláusulas, na ordem, parando na primeira que responder:
+Cinco cláusulas, na ordem, parando na primeira que responder:
 
 | # | caso | caixa | exemplo |
 |---|---|---|---|
-| **R0** | a ocorrência faz parte de uma **forma catalogada no glossário** | a do glossário | "o **Espadachim da Grande Montanha Nevada**", "o **Chefe Menor**", "**Mestre Yang**" |
-| **R1** | **vocativo** — dirigindo-se à pessoa | maiúscula | "Sim, **Senhorita**." |
+| **G1** | **nome próprio ou epíteto de portador único** — a expressão catalogada *é* a designação de um referente | maiúscula | "o **Espadachim da Grande Montanha Nevada**", "**Deus Cabeçudo**", "o **Rei Incomparável**" |
+| **R1** | **vocativo** — dirigindo-se à pessoa | maiúscula | "**Mestre Yang**!", "Sim, **Senhorita**." |
 | **R2** | **antonomásia** — o título sozinho, com artigo definido, no lugar do nome de uma pessoa determinada | maiúscula | "o **Pequeno Senhor**", "o **Patriarca**" |
 | **R3** | **categoria nomeada da Fortaleza** (Homens de Sabre, Assassinos, Espectros) quando é o posto, e não a profissão em geral | maiúscula | "os vinte **Assassinos**", "um **Assassino** da Fortaleza do Peng Dourado" |
-| **R4** | todo o resto | minúscula | "um **assassino** não é um ator", "virar **assassino**", "o **patriarca** Gu Lun" |
+| **R4** | todo o resto | minúscula | "um **assassino** não é um ator", "virar **assassino**", "o **mestre** Yang disse" |
 
-R0 vem primeiro porque o glossário é lei acima das três camadas — é o que mantém "Mestre Yang"
-e "Senhor Han" em maiúscula sem abrir exceção na regra do título+nome. R3 exige que a Fortaleza
-esteja em jogo na frase, porque é assim que a Regra A separa "categoria de membros" de
-"profissão ou conceito em geral": os aforismos do prólogo ("o assassino não é general",
-"primeiro preceito do assassino") são a profissão, e ficam em minúscula.
+Duas notas sobre o desenho:
+
+- **G1 não é "o glossário manda a caixa".** Depois do commit `f03f0ee`, o glossário diz qual
+  palavra, não como escrevê-la. G1 cobre só as entradas que **são** nome próprio ou epíteto de
+  um portador único — "Espadachim da Grande Montanha Nevada" (Long Feidu), "Rei Incomparável"
+  (Shangguan Fa), "Senhorita da Montanha de Ferro". Cargo de vários portadores — "Chefe Menor",
+  "Homem de Sabre", "Senhora da Casa" — **não** entra em G1: é substantivo comum e segue R2–R4.
+- **R3 exige a Fortaleza em jogo na frase**, porque é assim que a Regra A separa "categoria de
+  membros" de "profissão ou conceito em geral". Os aforismos do prólogo — "o assassino não é
+  general", "primeiro preceito do assassino" — são a profissão, e ficam em minúscula.
 
 ### As contradições, e qual eu segui
 
 **Delta Regra A × Delta Regra B**, nos usos coletivos ("os vinte Assassinos"). **Segui a Regra
-A** (maiúscula): é a regra mais específica, é a que o glossário respalda — 杀手, 刀手 e 刺客 estão
-catalogados com maiúscula —, e a leitura contrária esvazia a Regra A por completo, já que uma
-categoria quase nunca designa uma pessoa específica. Recomendo reescrever a Regra B para dizer
-que não vale sobre os termos catalogados como categoria.
+A** (maiúscula): é a mais específica, é a que o glossário respalda — 杀手, 刀手 e 刺客 estão
+catalogados como categorias —, e a leitura contrária esvazia a Regra A por completo, já que uma
+categoria quase nunca designa uma pessoa específica. Recomendo reescrever a Regra B dizendo que
+ela não vale sobre os termos catalogados como categoria.
 
-**Delta Regra B × norma pt-BR**, no título antes de nome próprio ("o patriarca Gu Lun"). A
-Regra B lista "Patriarca" entre os que sobem para maiúscula ao designar pessoa específica, e
-"Patriarca Gu Lun" designa Gu Lun. **Segui a norma** (minúscula), por três motivos: a norma
-brasileira é firme nesse ponto ("o general Silva"); o próprio exemplo da Regra B — "o patriarca
-da família" em minúscula — mostra que a regra não pretendia capturar este caso, e sim o
-oposto; e não se perde nada, porque as designações que precisam permanecer maiúsculas já estão
-catalogadas no glossário e entram por R0. **Esta é a decisão que mais muda ocorrências e a que
-vale confirmar antes de aplicar** — é ela que mantém as 10 ocorrências de "senhorita Luo
-Ningcha" em minúscula e transforma os 5 "Patriarca Gu Lun" em erro.
+**Delta Regra B × norma pt-BR**, no título antes de nome próprio. A Regra B lista "Patriarca",
+"Senhorita", "Senhor" e "Madame" entre os que sobem para maiúscula quando são "forma de
+tratamento", e "mestre Yang" é forma de tratamento. A norma manda minúscula ("o general
+Silva"). **As duas leituras são defensáveis, então medi as duas:**
+
+| leitura | título+nome | erros no texto vigente | erros na saída crua da IA |
+|---|---|---|---|
+| **N — norma pt-BR** | minúscula ("o mestre Yang") | **66 de 354 (19%)** | **84 de 311 (27%)** |
+| **D — letra do Delta** | maiúscula ("o Mestre Yang") | 64 de 354 (18%) | 99 de 311 (32%) |
+
+**Recomendo a Leitura N**, por três razões: no texto vigente as duas empatam (66 × 64), mas na
+saída crua da IA — que é onde se mede prompt — **N erra bem menos (27% × 32%)**, ou seja, está
+mais perto do que o modelo já faz espontaneamente e sai mais barato de impor; os vocativos
+continuam maiúsculos pela R1, de modo que "Mestre Yang!" no chamado permanece como está e só a
+menção narrativa ("o mestre Yang só disse para seguir para oeste") desce; e o próprio exemplo da
+Regra B — "o patriarca da família" em minúscula — aponta para esse lado.
+
+**É a decisão que mais muda ocorrências, e vale confirmar antes de aplicar.** Ela mantém em
+minúscula as 10 ocorrências de "senhorita Luo Ningcha" e rebaixa "Mestre Yang" (10), "Patriarca
+Gu Lun" (5) e "Marechal Yang" (4). Escolher D inverte exatamente esses dois grupos.
 
 ### Quanto está errado
 
+Pela Leitura N, sobre 354 ocorrências de títulos e formas de tratamento:
+
 | medida | ocorrências | corretas | **erradas** |
 |---|---|---|---|
-| `texto_pt` — o conserto pendente | 354 | 295 (83%) | **59 (17%)** |
-| `texto_pt_original_ia` — a falha do prompt | 311 | 231 (74%) | **80 (26%)** |
+| `texto_pt` — o conserto pendente | 354 | 288 (81%) | **66 (19%)** |
+| `texto_pt_original_ia` — a falha das camadas | 311 | 227 (73%) | **84 (27%)** |
 
-No texto vigente: 32 deveriam ser maiúsculas e não são; 27 são maiúsculas e não deveriam ser.
+No texto vigente, 21 deveriam ser maiúsculas e não são; 45 são maiúsculas e não deveriam ser.
 Detalhamento por termo e capítulo no §1.1.
 
-Os dois números medem coisas diferentes e ambos importam: **26% de erro na saída crua** é o
-tamanho da falha das camadas, e é o número a refazer depois de consertá-las; **17% no texto
+Os dois números medem coisas diferentes e ambos importam: **27% de erro na saída crua** é o
+tamanho da falha das camadas, e é o número a refazer depois de consertá-las; **19% no texto
 vigente** é o passivo que sobra hoje.
 
 ### A que camada pertence
@@ -294,8 +326,9 @@ Pelas três perguntas da skill `camadas-do-prompt`:
    se configura.**
 
 **Proposta concreta:** chave `capitalizacao_titulos` em `PreferenciasEstilo`, com duas opções —
-`norma-pt` (padrão, as cláusulas R1–R4 acima) e `titulos-maiusculos` (toda forma de tratamento
-em maiúscula, a convenção de gênero). Acompanham, sem os quais a chave é ignorada em silêncio:
+`norma-pt` (padrão, as cláusulas acima na Leitura N) e `titulos-maiusculos` (toda forma de
+tratamento em maiúscula, a convenção de gênero, que é a Leitura D levada ao limite). Acompanham,
+sem os quais a chave é ignorada em silêncio:
 
 - **Alfa v4.0:** trocar "Títulos e cargos exclusivos: sempre capitalizados" pela remissão à
   Seção 5, no molde da linha dos locais. Núcleos são imutáveis: corte uma versão, não edite a v3.0.
@@ -309,7 +342,8 @@ em maiúscula, a convenção de gênero). Acompanham, sem os quais a chave é ig
 
 A chave decide a política. Ela não decide, e nunca vai decidir, **se um "assassino" naquela
 frase é o posto da Fortaleza ou o substantivo comum** — o buraco do §1.2, e a origem dos 31
-erros do termo. Para os termos de uma palavra que colidem com substantivo comum:
+erros do termo, quase metade de todos os erros do livro. Para os termos de uma palavra que
+colidem com substantivo comum:
 
 | termo | `especie` | `ambiguo` | `nota_uso` sugerida |
 |---|---|---|---|
@@ -319,9 +353,12 @@ erros do termo. Para os termos de uma palavra que colidem com substantivo comum:
 | 老爷 → Patriarca | `identidade` | 1 | "Só quando designar Gu Lun, senhor da casa." |
 | 小心 → Xiao Xin | `identidade` | 1 | "Só quando for a personagem." |
 
-`identidade`, e não `lexical`, porque nestes cinco a **forma** é a resposta — a maiúscula faz
-parte do que se está mandando. `lexical` fica para os casos em que a palavra é lei e a
-superfície flexiona livre (刀 → sabre).
+`identidade` porque, na semântica que o `f03f0ee` fixou, esses termos **designam um referente**
+— o posto da Fortaleza, a personagem — e não devem ser trocados por sinônimo. Note que
+`identidade` **não** carrega mais a maiúscula: a caixa desses cinco continua vindo da chave de
+Beta e das cláusulas acima. O que a classificação entrega é a outra metade do problema — dizer
+ao modelo *quando aquela palavra é o termo catalogado*, que é o que a caixa depende para ser
+decidível.
 
 Atenção ao contrato do `nota_uso`, que `server/src/ia/prompts.ts` documenta e é fácil de
 violar: a nota diz **só quando o termo se aplica**. Escrever "...; nos demais casos use
@@ -331,9 +368,9 @@ chave de Beta.
 
 Detalhe operacional: o banco de produção ainda não tem essas colunas — a migração 026 está no
 branch, não deployada — e os 139 termos estão com `especie: null`. Enquanto nenhum termo for
-marcado `lexical`, `formatarGlossario` não emite os cabeçalhos de bloco e a distinção não chega
-ao modelo. Classificar os cinco acima **e pelo menos um `lexical`** é o mínimo para ligar o
-mecanismo.
+marcado `lexical`, `formatarGlossario` não emite os cabeçalhos de bloco; o aviso de caixa do
+`f03f0ee` já sai mesmo assim, mas a distinção entre as duas espécies não. Classificar os cinco
+acima **e pelo menos um `lexical`** é o mínimo para ligar o mecanismo inteiro.
 
 ---
 
@@ -343,8 +380,8 @@ mecanismo.
 prólogo (37). Os 1465 trechos alterados se dividem em: palavra/expressão trocada (1043),
 reescrita de trecho (262), **caixa (84)** e pontuação (76).
 
-**Em capitalização, o trabalho manual levou a conformidade de 74% para 83%** — 80 erros na
-saída crua contra 59 no texto vigente. São 84 recaixamentos à mão, 57 de minúscula para
+**Em capitalização, o trabalho manual levou a conformidade de 73% para 81%** — 84 erros na
+saída crua contra 66 no texto vigente. São 84 recaixamentos à mão, 57 de minúscula para
 maiúscula e 27 no sentido inverso, nas palavras `assassino/assassinos` (24×), `senhor` (8×),
 `qi` (8×), `divina` (6×), `jovem` (5×), `homens de sabre` e `sabre` (6×), `mestre` (3×),
 `soberano` (2×).
@@ -411,17 +448,19 @@ e a regra nunca rodou. Meça depois de retraduzir um capítulo, não agora.
 
 1. O Delta tem **duas** regras de capitalização que se contradizem sobre os usos coletivos das
    categorias da Fortaleza, e o exemplo de uma delas ("o patriarca da família") cai do lado
-   errado da fronteira que ela pretende ensinar. Somadas ao Alfa §2 e ao glossário, são quatro
+   errado da fronteira que ela pretende ensinar. Somadas ao Alfa §2 e ao glossário, eram quatro
    instruções sobre a mesma palavra — e a saída crua da IA é uma moeda ao ar: 46 maiúsculas
-   contra 49 minúsculas em "assassino".
+   contra 49 minúsculas em "assassino". O commit `f03f0ee` calou a quarta durante esta revisão;
+   restam três.
 2. A regra que responderia à pergunta (Delta v1.8) **nunca traduziu um capítulo**. Ela não
-   basta: acrescenta a quarta voz em vez de calar as outras três.
-3. Contra o critério proposto, **59 de 354 ocorrências estão erradas no texto vigente (17%)** e
-   **80 de 311 na saída crua (26%)**. Pior termo: "assassino" (31 erros); pior capítulo: 6 e 8
-   (8 cada).
+   basta: acrescentava a quarta voz em vez de calar as outras.
+3. Contra o critério proposto, **66 de 354 ocorrências estão erradas no texto vigente (19%)** e
+   **84 de 311 na saída crua (27%)**. Pior termo: "assassino" (31 erros, quase metade do total);
+   pior capítulo: 6 (9) e 10 (8).
 4. O critério é **chave de Beta** (`capitalizacao_titulos`), com tema novo no registro e Alfa
-   v4.0 remetendo à Seção 5. A decisão que mais muda ocorrências — título antes de nome próprio
-   em minúscula, "o patriarca Gu Lun", seguindo a norma contra a letra do Delta — está
-   registrada no §3 e vale confirmar antes de aplicar.
+   v4.0 remetendo à Seção 5. Onde o Delta e a norma se contradizem — título antes de nome
+   próprio — **medi as duas leituras** e recomendo a da norma ("o mestre Yang"), que erra 27%
+   contra 32% na saída crua; a escolha está registrada no §3 e vale confirmar antes de aplicar.
 5. O que nenhuma chave resolve — se aquele "assassino" é o posto ou o substantivo comum — é
-   `especie: identidade` + `ambiguo` + `nota_uso` nos cinco termos que colidem.
+   `especie: identidade` + `ambiguo` + `nota_uso` nos cinco termos que colidem. E `identidade`
+   já não impõe caixa: entrega o *quando*, e a caixa vem da chave.
