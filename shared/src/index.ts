@@ -357,7 +357,7 @@ export interface Frase {
 
 /** Que tipo de lei o termo tem.
  *
- *  `identidade` — a FORMA é a resposta, maiúsculas inclusive (金鹏堡 → Fortaleza
+ *  `identidade` — o termo DESIGNA um referente específico (金鹏堡 → Fortaleza
  *  do Peng Dourado). `lexical` — a PALAVRA é a resposta e a forma flexiona à
  *  vontade (刀 → sabre; "sabres" e "Sabre" são o mesmo acerto).
  *

@@ -22,19 +22,35 @@ const entrada = (termo_zh: string, termo_pt: string, over: Partial<EntradaGlossa
   ...over,
 });
 
-// Teste 1 (brief Step 1): com todo mundo `especie: null` — os 116 termos da obra real
-// hoje —, a saída tem de ser IDÊNTICA à de antes desta task. String fixada, não só
-// "não contém cabeçalho": é o que garante que ninguém que nunca usou o recurso vê o
-// prompt mudar de uma hora para outra.
+// Com todo mundo `especie: null` — os 139 termos da obra real hoje — a saída não
+// ganha cabeçalho de bloco: sem um lexical para contrastar, a distinção não tem o
+// que ensinar. Mas ganha o AVISO DE CAIXA, e de propósito.
+//
+// A versão anterior deste teste exigia byte-identidade com o prompt de antes. Ela
+// foi afrouxada CONSCIENTEMENTE: o glossário é cadastrado em caixa alta como
+// convenção de verbete, e uma lista de 139 linhas todas capitalizadas ensinava o
+// modelo a capitalizar — medido, 杀手 saiu 57 vezes em minúscula e 25 em maiúscula.
+// O aviso corrige isso e vale mesmo para quem nunca classificou nada; o custo é
+// invalidar o cache do prompt uma vez.
 describe('formatarGlossario — ninguém classificou nada (especie: null em todos)', () => {
-  it('sai como a lista única de sempre, sem cabeçalho de bloco', () => {
+  it('sai sem cabeçalho de bloco, mas com o aviso de caixa', () => {
     const glossario = [
       entrada('齐夏', 'Qi Xia', { categoria: 'personagem' }),
       entrada('终焉', 'Fim', { categoria: 'termo', nota: 'o evento central da obra' }),
     ];
-    expect(formatarGlossario(glossario)).toBe(
-      '齐夏 → Qi Xia [personagem]\n终焉 → Fim [termo] — o evento central da obra',
-    );
+    const saida = formatarGlossario(glossario);
+    expect(saida).not.toContain('###');
+    expect(saida).toContain('convenção de verbete, não instrução');
+    // A lista em si segue byte a byte a de sempre — o que mudou é a moldura.
+    expect(saida).toContain('齐夏 → Qi Xia [personagem]\n终焉 → Fim [termo] — o evento central da obra');
+  });
+
+  it('o aviso diz que a CAIXA da lista não é instrução — é o defeito que ele existe para tapar', () => {
+    // Sem esta linha o modelo lê 139 verbetes capitalizados e conclui que deve
+    // capitalizar. O glossário define QUAL PALAVRA, nunca como escrevê-la.
+    const saida = formatarGlossario([entrada('杀手', 'Assassino', { categoria: 'titulo-cargo' })]);
+    expect(saida).toMatch(/CAIXA.*conven[çc][ãa]o de verbete/s);
+    expect(saida).toMatch(/norma do portugu[êe]s/);
   });
 
   it('glossário vazio mantém a mensagem de sempre', () => {
@@ -49,7 +65,7 @@ describe('formatarGlossario — dois blocos quando há espécie mista', () => {
       entrada('刀', 'sabre', { especie: 'lexical' }),
     ];
     const saida = formatarGlossario(glossario);
-    const idxCabecIdentidade = saida.indexOf('### Nomes e termos fixos');
+    const idxCabecIdentidade = saida.indexOf('### Nomes próprios');
     const idxCabecLexical = saida.indexOf('### Escolhas de palavra');
     const idxFortaleza = saida.indexOf('金鹏堡 → Fortaleza do Peng Dourado');
     const idxSabre = saida.indexOf('刀 → sabre');
@@ -72,10 +88,12 @@ describe('formatarGlossario — instrução oposta por espécie', () => {
       entrada('刀', 'sabre', { especie: 'lexical' }),
     ];
     const saida = formatarGlossario(glossario);
-    expect(saida).toContain('### Nomes e termos fixos (use exatamente esta forma, maiúsculas inclusive)');
-    expect(saida).toContain(
-      '### Escolhas de palavra (use esta palavra; flexione número, gênero e caixa como o português pedir)',
-    );
+    // Nenhum dos dois cabeçalhos manda capitalizar: a espécie diz se o termo
+    // DESIGNA alguém (nome próprio) ou se é escolha de palavra — a caixa sai
+    // daí pela norma, não da tipografia do verbete.
+    expect(saida).toContain('### Nomes próprios');
+    expect(saida).toContain('### Escolhas de palavra');
+    expect(saida).not.toMatch(/mai[úu]sculas inclusive/);
   });
 });
 
@@ -93,7 +111,7 @@ describe('formatarGlossario — nota_uso na linha do termo', () => {
     // inteiras — prova que 刀 (sem nota_uso) não ganhou sufixo nem linha em branco.
     const blocoLexical = saida.slice(saida.indexOf('### Escolhas de palavra')).split('\n\n')[0];
     expect(blocoLexical.split('\n')).toEqual([
-      '### Escolhas de palavra (use esta palavra; flexione número, gênero e caixa como o português pedir)',
+      '### Escolhas de palavra (use esta palavra; a forma flexiona como o português pedir)',
       '刀 → sabre [termo]',
       '杀手 → Assassino [termo] · nota de uso: Maiúscula só quando for o posto na Fortaleza do Peng Dourado.',
     ]);
@@ -146,7 +164,7 @@ describe('formatarGlossario — nota_uso vale nas duas espécies (identidade inc
       }),
     ];
     const saida = formatarGlossario(glossario);
-    const blocoIdentidade = saida.slice(saida.indexOf('### Nomes e termos fixos'), saida.indexOf('### Escolhas de palavra'));
+    const blocoIdentidade = saida.slice(saida.indexOf('### Nomes próprios'), saida.indexOf('### Escolhas de palavra'));
     expect(blocoIdentidade).toContain(
       '小心 → Xiao Xin [termo] · nota de uso: Só é a criada Xiao Xin quando for nome de pessoa; nos demais usos é substantivo comum.',
     );

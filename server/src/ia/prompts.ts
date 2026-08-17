@@ -16,8 +16,22 @@ import { PROMPT_CONTRACAPA } from './promptContracapa.js';
 // As duas leis opostas do glossário (spec 2026-08-16 §2): identidade é forma fixa,
 // lexical é palavra fixa com superfície livre. Medido na obra real, 杀手 saía 57 vezes
 // em minúscula e 25 em maiúscula porque nada dizia qual das duas leis valia para ele.
-const CABECALHO_IDENTIDADE = '### Nomes e termos fixos (use exatamente esta forma, maiúsculas inclusive)';
-const CABECALHO_LEXICAL = '### Escolhas de palavra (use esta palavra; flexione número, gênero e caixa como o português pedir)';
+const CABECALHO_IDENTIDADE =
+  '### Nomes próprios (designam um referente específico — use esta designação, sem trocar por sinônimo)';
+const CABECALHO_LEXICAL =
+  '### Escolhas de palavra (use esta palavra; a forma flexiona como o português pedir)';
+
+// O glossário diz QUAL PALAVRA, não como escrevê-la.
+//
+// Esta linha existe porque a lista abaixo mente por construção: as entradas são
+// cadastradas em caixa alta como convenção de verbete, e um modelo que lê 139
+// linhas todas capitalizadas conclui que deve capitalizar. Foi o que se mediu —
+// 杀手 saiu 57 vezes em minúscula e 25 em maiúscula, sem correlação com o chinês.
+// Caixa, número e gênero são norma do português e chave de estilo da obra; o
+// glossário nunca decidiu isso e não pode parecer decidir.
+const AVISO_CAIXA =
+  'A CAIXA e o número em que os termos aparecem nesta lista são convenção de verbete, não instrução: ' +
+  'maiúscula ou minúscula, singular ou plural seguem a norma do português e as regras de estilo desta obra.';
 
 // A nota nunca é regra de tradução para o sentido comum da palavra — só diz QUANDO
 // aquele termo específico se aplica (spec §2b). "Só é 'cuidado' quando..." seria mais
@@ -48,15 +62,17 @@ export function formatarGlossario(glossario: EntradaGlossario[]): string {
 
   const lexicais = glossario.filter((e) => e.especie === 'lexical');
   if (lexicais.length === 0) {
+    // Sem lexical não há dois blocos para contrastar, mas o aviso de caixa vale
+    // igual: ele fala da LISTA, e a lista existe nos dois casos.
     // Ninguém marcou nenhum termo como lexical — inclusive quem nunca abriu a
     // classificação (especie: null em todos, o estado dos 116 termos da obra real
     // hoje). Sem um lexical para contrastar, a distinção não tem o que ensinar, e a
     // saída fica idêntica à lista única de antes desta task: sem cabeçalho de bloco.
-    return glossario.map(linha).join('\n');
+    return [AVISO_CAIXA, '', ...glossario.map(linha)].join('\n');
   }
 
   const identidades = glossario.filter((e) => e.especie !== 'lexical');
-  const blocos: string[] = [];
+  const blocos: string[] = [AVISO_CAIXA];
   if (identidades.length > 0) blocos.push([CABECALHO_IDENTIDADE, ...identidades.map(linha)].join('\n'));
   blocos.push([CABECALHO_LEXICAL, ...lexicais.map(linha)].join('\n'));
   // Só entra se alguma nota_uso existir de fato — glossário sem nenhuma não paga o token.

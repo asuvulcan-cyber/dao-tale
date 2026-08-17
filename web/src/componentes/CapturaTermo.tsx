@@ -18,7 +18,7 @@ import type { Captura } from '../util/captura';
 // Mesmo texto de Glossario.tsx (Task 5) — o revisor não deve reaprender o
 // vocabulário ao trocar de tela.
 const DESCRICAO_ESPECIE: Record<EspecieTermo, string> = {
-  identidade: 'a forma é a resposta, maiúsculas inclusive (金鹏堡 → Fortaleza do Peng Dourado).',
+  identidade: 'designa um referente específico — a palavra é essa, e a caixa segue a norma (金鹏堡 → Fortaleza do Peng Dourado).',
   lexical: 'a palavra é a resposta e a forma flexiona à vontade (刀 → sabre; "sabres" conta).',
 };
 
