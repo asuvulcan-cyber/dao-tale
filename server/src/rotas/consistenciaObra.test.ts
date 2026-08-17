@@ -120,6 +120,68 @@ describe('GET /obras/:id/consistencia', () => {
     await traduzirEEsperar(capLimpo.capitulo.id);
   });
 
+  // 小心 → Xiao Xin: na obra real o gatilho aparece em 8 frases traduzidas e só 1
+  // é a personagem — as outras 7 são a expressão comum. A varredura direta erra
+  // a maioria das vezes, então o termo marcado `ambiguo` sai da CONTAGEM e vai
+  // para uma lista de conferência. Estes testes cobrem `por_termo_ambiguo`, que
+  // é a metade visível da Task 7.
+  describe('termo ambíguo', () => {
+    async function comTermoAmbiguo(ambiguo: boolean) {
+      const termos = reposGlossario.listar(db, obraId);
+      const alvo = termos.find((t) => t.termo_zh === '金鹏堡')!;
+      reposGlossario.atualizar(db, alvo.id, { ambiguo });
+      return await json(await chamar('GET', `/api/obras/${obraId}/consistencia`));
+    }
+
+    it('sai da contagem de violações quando marcado', async () => {
+      const antes = await comTermoAmbiguo(false);
+      expect(antes.por_termo).toHaveLength(1);
+
+      const depois = await comTermoAmbiguo(true);
+      expect(depois.por_termo).toHaveLength(0);
+    });
+
+    it('mas NÃO some da tela — reaparece para conferência caso a caso', async () => {
+      // Silenciar de vez seria trocar ruído por cegueira: o revisor ainda
+      // precisa conferir se escreveu o nome certo quando ele É o nome.
+      const { por_termo_ambiguo } = await comTermoAmbiguo(true);
+      expect(por_termo_ambiguo).toHaveLength(1);
+      expect(por_termo_ambiguo[0].termo_zh).toBe('金鹏堡');
+      expect(por_termo_ambiguo[0].ocorrencias.length).toBeGreaterThan(0);
+    });
+
+    it('lista TODAS as ocorrências do gatilho, não só as que seriam violação', async () => {
+      // A pergunta ali não é "acertou ou errou" — o gatilho nem sempre é o
+      // termo. Então a frase que CONTÉM a tradução canônica também entra, e a
+      // lista é maior que a de violações. É isso que a distingue de uma
+      // varredura que só mudou de nome.
+      const comoViolacao = await comTermoAmbiguo(false);
+      const violacoes = comoViolacao.por_termo[0].violacoes.length;
+
+      const { por_termo_ambiguo } = await comTermoAmbiguo(true);
+      const ocorrencias = por_termo_ambiguo[0].ocorrencias.length;
+      expect(ocorrencias).toBeGreaterThan(violacoes);
+      // Todas as frases traduzidas cujo CHINÊS traz o gatilho — inclusive a que
+      // já usa o termo canônico.
+      expect(ocorrencias).toBe(3);
+      expect(violacoes).toBe(2);
+    });
+
+    it('leva a nota de uso junto, que é o que explica a ambiguidade', async () => {
+      const termos = reposGlossario.listar(db, obraId);
+      const alvo = termos.find((t) => t.termo_zh === '金鹏堡')!;
+      reposGlossario.atualizar(db, alvo.id, { ambiguo: true, nota_uso: 'Só é o forte quando for lugar.' });
+      const { por_termo_ambiguo } = await json(await chamar('GET', `/api/obras/${obraId}/consistencia`));
+      expect(por_termo_ambiguo[0].nota_uso).toBe('Só é o forte quando for lugar.');
+    });
+
+    it('sem termo ambíguo, a lista sai vazia e nada muda', async () => {
+      const { por_termo, por_termo_ambiguo } = await comTermoAmbiguo(false);
+      expect(por_termo_ambiguo).toEqual([]);
+      expect(por_termo).toHaveLength(1);
+    });
+  });
+
   it('agrupa por termo, não por frase', async () => {
     const r = await app.request(`/api/obras/${obraId}/consistencia`);
     expect(r.status).toBe(200);
