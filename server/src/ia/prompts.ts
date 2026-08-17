@@ -13,21 +13,55 @@ import { PROMPT_CONTRACAPA } from './promptContracapa.js';
 // Montagem dos textos de sistema e usuário — compartilhada por todos os provedores.
 // O bloco de sistema é idêntico em todas as chamadas de um capítulo (pré-requisito do prompt caching).
 
-function formatarGlossario(glossario: EntradaGlossario[]): string {
+// As duas leis opostas do glossário (spec 2026-08-16 §2): identidade é forma fixa,
+// lexical é palavra fixa com superfície livre. Medido na obra real, 杀手 saía 57 vezes
+// em minúscula e 25 em maiúscula porque nada dizia qual das duas leis valia para ele.
+const CABECALHO_IDENTIDADE = '### Nomes e termos fixos (use exatamente esta forma, maiúsculas inclusive)';
+const CABECALHO_LEXICAL = '### Escolhas de palavra (use esta palavra; flexione número, gênero e caixa como o português pedir)';
+
+// A nota nunca é regra de tradução para o sentido comum da palavra — só diz QUANDO
+// aquele termo específico se aplica (spec §2b). "Só é 'cuidado' quando..." seria mais
+// tentador de escrever, mas fixaria uma palavra fora do glossário: viraria um glossário
+// clandestino, sem passar por `especie` nem pela varredura de consistência.
+const INSTRUCAO_NOTA_USO =
+  'A nota de um termo delimita SÓ QUANDO ele se aplica — não é tradução do sentido comum da palavra nos demais casos; esses ficam livres.';
+
+function linhaGlossario(e: EntradaGlossario, porId: Map<number, EntradaGlossario>): string {
+  let linha = `${e.termo_zh} → ${e.termo_pt} [${e.categoria}]${e.nota ? ` — ${e.nota}` : ''}`;
+  // nota_uso vale nas DUAS espécies: mesmo em identidade, a forma continuar sendo lei
+  // não dispensa dizer quando ela se aplica (小心 é identidade E ambíguo ao mesmo tempo —
+  // 7 das 8 ocorrências do gatilho chinês não são a personagem Xiao Xin).
+  if (e.nota_uso) linha += ` · nota de uso: ${e.nota_uso}`;
+  // Variante: diz ao modelo que aponta para o mesmo referente da canônica,
+  // ajudando a resolver referências (ex.: apelido/forma curta do nome).
+  if (e.principal_id != null) {
+    const p = porId.get(e.principal_id);
+    linha += p ? ` · variante de ${p.termo_pt} (${p.termo_zh})` : ' · variante';
+  }
+  return linha;
+}
+
+export function formatarGlossario(glossario: EntradaGlossario[]): string {
   if (glossario.length === 0) return '(glossário ainda vazio)';
   const porId = new Map(glossario.map((e) => [e.id, e]));
-  return glossario
-    .map((e) => {
-      let linha = `${e.termo_zh} → ${e.termo_pt} [${e.categoria}]${e.nota ? ` — ${e.nota}` : ''}`;
-      // Variante: diz ao modelo que aponta para o mesmo referente da canônica,
-      // ajudando a resolver referências (ex.: apelido/forma curta do nome).
-      if (e.principal_id != null) {
-        const p = porId.get(e.principal_id);
-        linha += p ? ` · variante de ${p.termo_pt} (${p.termo_zh})` : ' · variante';
-      }
-      return linha;
-    })
-    .join('\n');
+  const linha = (e: EntradaGlossario) => linhaGlossario(e, porId);
+
+  const lexicais = glossario.filter((e) => e.especie === 'lexical');
+  if (lexicais.length === 0) {
+    // Ninguém marcou nenhum termo como lexical — inclusive quem nunca abriu a
+    // classificação (especie: null em todos, o estado dos 116 termos da obra real
+    // hoje). Sem um lexical para contrastar, a distinção não tem o que ensinar, e a
+    // saída fica idêntica à lista única de antes desta task: sem cabeçalho de bloco.
+    return glossario.map(linha).join('\n');
+  }
+
+  const identidades = glossario.filter((e) => e.especie !== 'lexical');
+  const blocos: string[] = [];
+  if (identidades.length > 0) blocos.push([CABECALHO_IDENTIDADE, ...identidades.map(linha)].join('\n'));
+  blocos.push([CABECALHO_LEXICAL, ...lexicais.map(linha)].join('\n'));
+  // Só entra se alguma nota_uso existir de fato — glossário sem nenhuma não paga o token.
+  if (glossario.some((e) => e.nota_uso)) blocos.push(INSTRUCAO_NOTA_USO);
+  return blocos.join('\n\n');
 }
 
 /** Garante que a canônica de cada variante selecionada esteja no conjunto — assim,
