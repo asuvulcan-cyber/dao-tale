@@ -15,6 +15,7 @@ import type {
 import { api } from '../api';
 import { Aviso, Botao, MenuMais, REGRA_ESTILO_ROTULO, STATUS_CAPITULO_ROTULO } from '../App';
 import { orientacaoDaRegra } from '../util/rotuloRegra';
+import { CapturaTermo } from '../componentes/CapturaTermo';
 import { GavetaRevisao } from '../componentes/GavetaRevisao';
 import { IndicadorCota } from '../componentes/IndicadorCota';
 import {
@@ -23,8 +24,32 @@ import {
   TextoTraduzido,
   type MarcadorGlossario,
 } from '../componentes/TextoRico';
+import { capturaDaSelecao, type Captura } from '../util/captura';
 import { extrairTroca } from '../util/troca';
 import type { ViolacaoEstilo } from '../util/passeEstilo';
+
+// Seleção de texto → oferta de captura pro glossário (mesmo motivo do
+// BannerTroca: cadastrar hoje custa sair do editor, ler a frase de memória e
+// digitar os dois lados na aba Glossário). Um handler só, por delegação, no
+// contêiner que envolve as duas visualizações (LinhaFrase e FraseSpan) — não um
+// listener por frase, que o capítulo pode ter centenas.
+function ladoDaSelecao(selecao: Selection): 'zh' | 'pt' | null {
+  const no = selecao.anchorNode;
+  const elemento = no instanceof Element ? no : no?.parentElement;
+  const lado = elemento?.closest<HTMLElement>('[data-lado]')?.dataset.lado;
+  return lado === 'zh' || lado === 'pt' ? lado : null;
+}
+
+// Soltar uma seleção de texto dispara um "click" sintético no mesmo elemento
+// (mousedown+mouseup sem arrastar o suficiente para virar drag nativo). Sem
+// esta guarda, capturar um termo TAMBÉM alternaria a linha (zh) ou entraria no
+// modo de edição (pt) por baixo do painel que acabou de abrir.
+function seSemSelecao(fn: () => void) {
+  return () => {
+    if (window.getSelection()?.toString()) return;
+    fn();
+  };
+}
 
 interface DetalheCapitulo {
   capitulo: Capitulo;
@@ -115,6 +140,19 @@ export function EditorCapitulo() {
   const aoEditarTexto = (antes: string, depois: string, fraseId: number) => {
     const t = extrairTroca(antes, depois);
     if (t) setTroca({ ...t, fraseId });
+  };
+  // Captura de termo pela seleção (spec da task 6): o painel só nasce se a
+  // seleção passar pela mesma trava da correção rápida — vazio/curto demais/
+  // frase inteira não vira oferta.
+  const [captura, setCaptura] = useState<Captura | null>(null);
+  const aoSoltarSelecao = () => {
+    const selecao = window.getSelection();
+    const texto = selecao?.toString() ?? '';
+    if (!texto.trim() || !selecao) return;
+    const lado = ladoDaSelecao(selecao);
+    if (!lado) return;
+    const c = capturaDaSelecao(lado, texto);
+    if (c) setCaptura(c);
   };
   const [modo, setModo] = useState<ModoEditor>(() => {
     const salvo = localStorage.getItem(CHAVE_MODO);
@@ -540,7 +578,9 @@ export function EditorCapitulo() {
       />
 
       <div>
-        <div>
+        {/* onMouseUp aqui em vez de por frase: delegação — soltar uma seleção em
+            qualquer LinhaFrase/FraseSpan (marcadas com data-lado) borbulha até aqui. */}
+        <div onMouseUp={aoSoltarSelecao}>
           {modo === 'segmentado' ? (
             /* Folha contínua: uma única superfície; parágrafos separados por
                respiro, não por molduras. */
@@ -664,6 +704,19 @@ export function EditorCapitulo() {
         )}
         </div>
       </div>
+
+      {captura && (
+        // key força remontar ao trocar de seleção: sem isto, capturar um trecho
+        // novo enquanto o painel de outro ainda está aberto herdaria o estado
+        // (categoria/espécie já escolhidas) do anterior em vez de abrir limpo.
+        <CapturaTermo
+          key={`${captura.lado}:${captura.trecho}`}
+          captura={captura}
+          obraId={obraId!}
+          glossario={glossario}
+          aoFechar={() => setCaptura(null)}
+        />
+      )}
 
       {troca && (
         <BannerTroca
@@ -1002,8 +1055,9 @@ function LinhaFrase({
       }`}
     >
       <div
+        data-lado="zh"
         className="texto-zh cursor-pointer select-text break-words border-r border-linha/50 py-1 pr-4 text-tinta-2"
-        onClick={aoSelecionar}
+        onClick={seSemSelecao(aoSelecionar)}
         title="Clique para revisar esta frase"
       >
         <TextoMarcadoZh texto={frase.texto_zh} marcador={marcador} />
@@ -1032,7 +1086,8 @@ function LinhaFrase({
         ) : (
           // Markdown renderizado (itálico/negrito visíveis); clique para editar o texto cru.
           <div
-            onClick={() => setEditando(true)}
+            data-lado="pt"
+            onClick={seSemSelecao(() => setEditando(true))}
             title="Clique para editar"
             className="min-h-6 cursor-text break-words text-sm leading-relaxed"
           >
@@ -1076,7 +1131,8 @@ function FraseSpan({
     <>
       <span
         id={lado === 'pt' ? `frase-${frase.id}` : undefined}
-        onClick={aoSelecionar}
+        data-lado={lado}
+        onClick={seSemSelecao(aoSelecionar)}
         title="Clique para revisar esta frase"
         className={`cursor-pointer rounded-xs decoration-linha underline-offset-4 hover:underline ${
           selecionada ? 'bg-jade-tint' : ''
