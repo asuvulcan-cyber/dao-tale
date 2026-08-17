@@ -276,7 +276,7 @@ O glossário da obra é lei, inclusive nas flexões. Termo ausente: adote uma tr
 - **Locais, seitas e organizações:** capitalizados. Traduzir ou transliterar é decidido na Seção 5 (Nomes próprios) — aqui só a capitalização.
 - **Poderes e habilidades:** traduzidos pelo efeito ou elemento, capitalizados.
 - **Entidades divinas ou malignas:** sem artigo de familiaridade — "Nüwa", não "a Nüwa". Exceção: quando o termo funciona como cargo ou título dentro da história.
-- **Títulos e cargos exclusivos:** sempre capitalizados.
+- **Títulos, cargos e formas de tratamento:** a capitalização é decidida na Seção 5 (preferências da obra).
 
 ---
 
