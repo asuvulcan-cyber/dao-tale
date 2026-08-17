@@ -31,6 +31,7 @@ export type PoliticaMaisQuePerfeito = 'evitar' | 'permitir';
 export type PoliticaNotas = 'permitir' | 'proibir';
 export type PoliticaOnomatopeia = 'adaptar' | 'manter';
 export type PoliticaNomes = 'mesclar' | 'traduzir' | 'pinyin';
+export type PoliticaCapitalizacao = 'norma-pt' | 'titulos-maiusculos';
 
 export interface PreferenciasEstilo {
   /** Aspas duplas (padrão editorial do app) ou travessão. */
@@ -48,6 +49,12 @@ export interface PreferenciasEstilo {
   /** Nome próprio: traduzir por sentido, transliterar, ou decidir caso a caso
    *  pelo critério sentido/som (o padrão, e o único que serve a wuxia). */
   nomes_proprios: PoliticaNomes;
+  /** Capitalização de título, cargo e forma de tratamento: decidir por QUEM a
+   *  palavra aponta vs O QUE ela diz (a norma do português), ou capitalizar
+   *  sempre (convenção comum em wuxia traduzido). Ver o comentário do padrão
+   *  em `PREFERENCIAS_PADRAO` — é a única chave desta obra cujo default não
+   *  reproduz o comportamento antigo. */
+  capitalizacao_titulos: PoliticaCapitalizacao;
   /** Chave de REGISTROS_PREDEFINIDOS ou texto livre descrevendo o público-alvo. */
   registro: string;
 }
@@ -78,6 +85,16 @@ export const PREFERENCIAS_PADRAO: PreferenciasEstilo = {
   notas_tradutor: 'permitir',
   onomatopeia: 'adaptar',
   nomes_proprios: 'mesclar',
+  // EXCEÇÃO DELIBERADA à regra 1 do topo deste arquivo (default = comportamento
+  // de hoje). O núcleo mandava "títulos e cargos exclusivos: sempre
+  // capitalizados" — regra fixa, sem distinguir se a palavra aponta QUEM ou diz
+  // O QUÊ — e a medição na obra real deu 46 maiúsculas contra 49 minúsculas
+  // para a MESMA palavra, sem nenhuma correlação com o chinês: é ruído de
+  // aplicação, não uma convenção que alguém escolheu. Manter isso como padrão
+  // preservaria o defeito medido, não um comportamento de casa. Por isso
+  // `norma-pt` é o padrão aqui, e não `titulos-maiusculos` (que reproduziria a
+  // regra antiga); quem quer o "sempre maiúscula" do wuxia pede por ele.
+  capitalizacao_titulos: 'norma-pt',
   registro: 'jovem-adulto',
 };
 
@@ -89,6 +106,7 @@ const OPCOES = {
   notas_tradutor: ['permitir', 'proibir'],
   onomatopeia: ['adaptar', 'manter'],
   nomes_proprios: ['mesclar', 'traduzir', 'pinyin'],
+  capitalizacao_titulos: ['norma-pt', 'titulos-maiusculos'],
 } as const;
 
 /** JSON guardado no banco (ou vindo de um export antigo) → preferências completas.
@@ -260,6 +278,24 @@ const NOMES: Record<PoliticaNomes, string[]> = {
   ],
 };
 
+// Capitalização de título/cargo/tratamento: o eixo é se a palavra aponta QUEM
+// ou diz O QUÊ, não "é título, logo maiúscula" — esse padrão fixo foi
+// justamente o defeito medido (ver o comentário do default em
+// `PREFERENCIAS_PADRAO`). A convenção de verbete do glossário é outra coisa e
+// não decide nada aqui: um termo pode entrar catalogado com maiúscula e ainda
+// assim ir minúsculo numa ocorrência predicativa ("virou assassino").
+const CAPITALIZACAO: Record<PoliticaCapitalizacao, string> = {
+  'norma-pt': [
+    '**Capitalização de títulos, cargos e formas de tratamento:** a pergunta é se a palavra aponta QUEM ou diz O QUÊ.',
+    '1. **Maiúscula no chamado direto:** "Sim, Jovem Mestre.", "Mestre Yang!".',
+    '2. **Maiúscula quando o termo substitui o nome de uma pessoa determinada**, como se fosse nome próprio: "o Patriarca ergueu a mão", "a Senhorita mandou chamar".',
+    '3. **Minúscula em todo o resto** — antes de nome próprio ("o mestre Yang"), no predicativo ("virou assassino", "aprendiz de assassino") e no uso genérico ("uma organização de assassinos").',
+    'A caixa em que um termo aparece no glossário é convenção de verbete e não decide nada aqui.',
+  ].join('\n'),
+  'titulos-maiusculos':
+    '**Capitalização de títulos, cargos e formas de tratamento:** capitalize toda forma de tratamento e todo título de cargo, sempre — "o Jovem Mestre", "o Patriarca da família", "uma Senhorita qualquer". É a convenção de parte do wuxia traduzido, e nesta obra ela vale acima da norma do português.',
+};
+
 /** Título da seção que o núcleo reserva para as preferências (o delta é a 6). */
 export const TITULO_SECAO_PREFERENCIAS = '## 5. PREFERÊNCIAS DE ESTILO DESTA OBRA';
 
@@ -304,6 +340,8 @@ export function renderizarPreferencias(prefs: PreferenciasEstilo): string {
     ONOMATOPEIA[prefs.onomatopeia],
     '',
     ...NOMES[prefs.nomes_proprios],
+    '',
+    CAPITALIZACAO[prefs.capitalizacao_titulos],
   ].join('\n');
 }
 
@@ -318,6 +356,10 @@ export const ROTULOS_PREFERENCIAS: Record<keyof PreferenciasEstilo, { titulo: st
   nomes_proprios: {
     titulo: 'Nomes próprios',
     opcoes: { mesclar: 'mesclar (sentido ou som)', traduzir: 'traduzir o que tem sentido', pinyin: 'manter em pinyin' },
+  },
+  capitalizacao_titulos: {
+    titulo: 'Capitalização de títulos',
+    opcoes: { 'norma-pt': 'norma do português (quem vs. o quê)', 'titulos-maiusculos': 'sempre maiúscula' },
   },
   registro: {
     titulo: 'Registro / público-alvo',

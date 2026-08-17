@@ -11,11 +11,12 @@ import {
 const com = (o: Partial<PreferenciasEstilo>): PreferenciasEstilo => ({ ...PREFERENCIAS_PADRAO, ...o });
 
 describe('registro de temas', () => {
-  it('cobre as 8 chaves de Beta — inclusive as duas que faltavam', () => {
+  it('cobre as 9 chaves de Beta — inclusive as duas que faltavam', () => {
     const deBeta = TEMAS.filter((t) => t.dono === 'beta')
       .map((t) => t.id)
       .sort();
     expect(deBeta).toEqual([
+      'capitalizacao_titulos',
       'dialogo',
       'mais_que_perfeito',
       'nomes_proprios',
@@ -75,6 +76,7 @@ describe('registro de temas', () => {
       ['notas_tradutor', { notas_tradutor: 'proibir' }],
       ['onomatopeia', { onomatopeia: 'manter' }],
       ['nomes_proprios', { nomes_proprios: 'pinyin' }],
+      ['capitalizacao_titulos', { capitalizacao_titulos: 'titulos-maiusculos' }],
       ['registro', { registro: 'juvenil' }],
     ];
     for (const [esperado, over] of variantes) {
@@ -99,6 +101,17 @@ describe('preferenciaQueCobre — o filtro, mais conservador que o aviso', () =>
   it('NÃO filtra nomes próprios, mas o AVISO enxerga o tema', () => {
     expect(preferenciaQueCobre('3.2-nomes-proprios')).toBeNull();
     expect(temasNoTexto('Nomes próprios: mantenha em pinyin.').map((a) => a.tema.id)).toContain('nomes_proprios');
+  });
+
+  // Mesma assimetria de nomes_proprios, e pelo mesmo motivo: a política (maiúscula
+  // sempre ou pela norma) é de Beta, mas se UM termo capitaliza numa frase e não
+  // noutra é nota_uso do glossário. Filtrar aqui descartaria candidato legítimo.
+  it('NÃO filtra capitalização de títulos, mas o AVISO enxerga o tema', () => {
+    expect(preferenciaQueCobre('5-capitalizacao-titulos')).toBeNull();
+    expect(preferenciaQueCobre('titulos-maiusculos')).toBeNull();
+    expect(
+      temasNoTexto('Capitalização de títulos: sempre em maiúscula nesta obra.').map((a) => a.tema.id),
+    ).toContain('capitalizacao_titulos');
   });
 
   it('não filtra tema de Alfa', () => {

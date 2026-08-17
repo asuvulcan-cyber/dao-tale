@@ -430,6 +430,7 @@ function PainelPreferencias({
     'notas_tradutor',
     'onomatopeia',
     'nomes_proprios',
+    'capitalizacao_titulos',
   ];
 
   return (

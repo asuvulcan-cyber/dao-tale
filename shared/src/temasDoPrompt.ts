@@ -56,17 +56,22 @@ export interface Ocorrencia {
  * Uma linha que ENTREGA o tema a outra camada, ou que CEDE a ela, não está decidindo
  * nada — está fazendo a partição funcionar à vista, e é o oposto de sobreposição.
  *
- * Duas formas, e as duas apareceram no texto real:
+ * Três formas, e as três apareceram no texto real:
  *
  *   remissão  "Traduzir ou transliterar é decidido na Seção 5 (Nomes próprios)"
  *   ressalva  "…valem estas — exceto o glossário, que é lei acima de todas as camadas"
+ *   ressalva  "…no glossário é convenção de verbete e não decide nada aqui" (capitalizacao_titulos)
  *
  * A segunda é a linha que o conserto da hierarquia (doc 15 §6) pôs nos cabeçalhos de
  * Beta e Delta. Sem esta isenção ela acusaria sobreposição de `glossario` em TODA obra —
- * o conserto denunciando a si mesmo.
+ * o conserto denunciando a si mesmo. A terceira é o mesmo problema por outra porta: o
+ * bloco `norma-pt` de `capitalizacao_titulos` cita "glossário" ao dizer que a caixa de
+ * verbete não decide nada — sem esta isenção, o PRÓPRIO default de Beta acusaria
+ * sobreposição de `glossario` contra si mesmo em toda obra que não configurar nada
+ * (achado ao rodar `relatorioOmega.test.ts` com a chave nova).
  */
 const REMISSAO_OU_RESSALVA =
-  /decidid[oa] n[ao] Se[çc][ãa]o \d|ver (?:a )?Se[çc][ãa]o \d|Se[çc][ãa]o \d \(|exceto o gloss[áa]rio/i;
+  /decidid[oa] n[ao] Se[çc][ãa]o \d|ver (?:a )?Se[çc][ãa]o \d|Se[çc][ãa]o \d \(|exceto o gloss[áa]rio|gloss[áa]rio .{0,20}convenç[ãa]o de verbete/i;
 
 export const TEMAS: readonly Tema[] = [
   {
@@ -127,6 +132,36 @@ export const TEMAS: readonly Tema[] = [
     resolucao: 'resolve-se pela chave Onomatopeias',
     padrao: /onomatopeia/i,
     filtravel: true,
+  },
+  {
+    // `filtravel: false` de propósito, pelo MESMO motivo de `nomes_proprios` logo abaixo
+    // (doc 15 §7, e a revisão de 2026-08-17 que achou o defeito): a POLÍTICA — norma do
+    // português ou sempre maiúscula — é de Beta, mas se UM termo específico deve
+    // capitalizar num contexto e não noutro é do glossário (`nota_uso` de um termo
+    // `identidade`, ex.: "杀手 → Assassino: só quando for o posto da Fortaleza"). Filtrar
+    // aqui descartaria esse candidato legítimo em silêncio — o mesmo risco que manteve
+    // `nomes_proprios` fora do filtro.
+    //
+    // `padrao` mira a forma como a POLÍTICA é enunciada — "capitalização de título(s)"
+    // como cabeçalho de regra —, e não qualquer menção solta a "capitalizar"/"maiúscula".
+    // Isso importa aqui mais do que nos outros temas de Beta: o Alfa hoje TEM uma linha
+    // ("Títulos e cargos exclusivos: sempre capitalizados", Seção 2) que decide este
+    // mesmo tema por acidente — é o defeito medido que motivou esta chave — mas ela usa a
+    // forma adjetiva ("capitalizados"), nunca o substantivo "capitalização de título"
+    // que os dois blocos de Beta usam como cabeçalho. `temasNoTexto(NUCLEO_ENXUTO)`
+    // continua limpo enquanto essa linha não muda de forma; o conserto DELA (remeter a
+    // Seção 5, como já faz a linha dos locais duas acima) é uma versão nova de núcleo,
+    // fora do escopo deste registro — núcleos são imutáveis.
+    id: 'capitalizacao_titulos',
+    dono: 'beta',
+    titulo: 'Capitalização de títulos',
+    resolucao: 'a política resolve-se pela chave Capitalização de títulos; o termo específico, pelo glossário (nota_uso)',
+    padrao: /capitaliza[çc][ãa]o de t[íi]tulos?/i,
+    // Sem acento nas alternativas: `normalizarSecaoRegra` já roda NFD e remove
+    // diacríticos antes de testar, então o rótulo normalizado nunca traz í/ú —
+    // mesma convenção de `dialogo`/`registro`/`nomes_proprios` acima.
+    padraoRotulo: /capitaliza|titulos?.*maiuscul|maiuscul.*titulos?/,
+    filtravel: false,
   },
   {
     // `filtravel: false` de propósito. Em `obras.ts` o filtro DERRUBA candidatos a

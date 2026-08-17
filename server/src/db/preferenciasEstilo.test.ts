@@ -27,6 +27,16 @@ describe('normalizarPreferencias', () => {
     expect(p.pensamento_marca).toBe('italico');
   });
 
+  it('capitalização de títulos: ausente ou desconhecida cai no padrão (norma-pt)', () => {
+    expect(normalizarPreferencias({}).capitalizacao_titulos).toBe('norma-pt');
+    expect(normalizarPreferencias({ capitalizacao_titulos: 'sempre-maiuscula' }).capitalizacao_titulos).toBe(
+      'norma-pt',
+    );
+    expect(
+      normalizarPreferencias({ capitalizacao_titulos: 'titulos-maiusculos' }).capitalizacao_titulos,
+    ).toBe('titulos-maiusculos');
+  });
+
   it('registro aceita texto livre (público-alvo próprio da obra)', () => {
     expect(normalizarPreferencias({ registro: '  leitores de wuxia clássico  ' }).registro).toBe(
       'leitores de wuxia clássico',
@@ -42,10 +52,13 @@ describe('renderizarPreferencias', () => {
   });
 
   // O princípio "default = comportamento de hoje" vale para as convenções
-  // (diálogo, pensamento, notas, onomatopeia). O registro é a exceção
-  // deliberada: o texto antigo descrevia a CAUDA do público (30–40) como se
-  // fosse o alvo, e isso puxava a prosa para um registro mais formal do que o
-  // gênero pede. Corrigir um erro de fato não é mudar de comportamento à toa.
+  // (diálogo, pensamento, notas, onomatopeia). O registro e a capitalização de
+  // títulos são as duas exceções deliberadas: o registro porque o texto antigo
+  // descrevia a CAUDA do público (30–40) como se fosse o alvo, e a capitalização
+  // porque o núcleo antigo ("títulos e cargos exclusivos: sempre capitalizados")
+  // não era convenção — era um defeito medido (46×49 na mesma palavra, ver o
+  // describe "capitalização de títulos" abaixo). Corrigir um erro de fato não é
+  // mudar de comportamento à toa.
   it('o padrão reproduz as regras que o núcleo antigo dava', () => {
     const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
     expect(texto).toContain('aspas duplas retas');
@@ -261,6 +274,37 @@ describe('nomes próprios (sentido vs som)', () => {
   });
 });
 
+// O eixo é QUEM a palavra aponta vs O QUE ela diz — não "é título, logo maiúscula".
+// O padrão é `norma-pt`, e não `titulos-maiusculos`, de propósito: o núcleo antigo
+// dizia "títulos e cargos exclusivos: sempre capitalizados" e a medição na obra real
+// deu 46 maiúsculas contra 49 minúsculas para a MESMA palavra, sem correlação com o
+// chinês — preservar aquele comportamento como padrão preservaria o defeito, não uma
+// convenção de casa (ver o comentário em PREFERENCIAS_PADRAO).
+describe('capitalização de títulos (QUEM vs O QUÊ)', () => {
+  it('o padrão é norma-pt, não titulos-maiusculos', () => {
+    expect(PREFERENCIAS_PADRAO.capitalizacao_titulos).toBe('norma-pt');
+  });
+
+  it('norma-pt distingue o chamado direto e a antonomásia do resto', () => {
+    const texto = renderizarPreferencias(PREFERENCIAS_PADRAO);
+    expect(texto).toContain('Jovem Mestre');
+    expect(texto).toContain('o Patriarca ergueu a mão');
+    expect(texto).toContain('o mestre Yang');
+    expect(texto).toContain('virou assassino');
+    expect(texto).not.toContain('capitalize toda forma de tratamento');
+  });
+
+  it('titulos-maiusculos manda capitalizar sempre, e não o eixo QUEM/O QUÊ', () => {
+    const texto = renderizarPreferencias(com({ capitalizacao_titulos: 'titulos-maiusculos' }));
+    expect(texto).toContain('capitalize toda forma de tratamento e todo título de cargo, sempre');
+    expect(texto).not.toContain('a pergunta é se a palavra aponta QUEM ou diz O QUÊ');
+  });
+
+  it('valor desconhecido cai no padrão, como as outras chaves', () => {
+    expect(normalizarPreferencias('{"capitalizacao_titulos":"chute"}').capitalizacao_titulos).toBe('norma-pt');
+  });
+});
+
 describe('descreverMudancas', () => {
   it('resume só o que mudou, para virar nota de versão', () => {
     expect(descreverMudancas(PREFERENCIAS_PADRAO, PREFERENCIAS_PADRAO)).toEqual([]);
@@ -270,6 +314,9 @@ describe('descreverMudancas', () => {
     ]);
     expect(descreverMudancas(PREFERENCIAS_PADRAO, com({ registro: 'quem gosta de xianxia' }))).toEqual([
       'Registro / público-alvo: leitor de webnovel (18–25) → quem gosta de xianxia',
+    ]);
+    expect(descreverMudancas(PREFERENCIAS_PADRAO, com({ capitalizacao_titulos: 'titulos-maiusculos' }))).toEqual([
+      'Capitalização de títulos: norma do português (quem vs. o quê) → sempre maiúscula',
     ]);
   });
 });
