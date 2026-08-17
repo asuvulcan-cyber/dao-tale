@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CategoriaGlossario, EntradaGlossario } from '@dao-tale/shared';
-import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
+import type { CategoriaGlossario, EntradaGlossario, EspecieTermo } from '@dao-tale/shared';
+import { CATEGORIAS_GLOSSARIO, ESPECIES_TERMO } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais, SeletorCategoria } from '../App';
+import { contarNaoClassificados } from '../util/glossario';
+
+/** Texto curto de cada espécie, repetido no seletor e na ajuda da linha —
+ *  "identidade" e "lexical" não bastam sozinhos porque o nome não diz qual dos
+ *  dois flexiona. */
+const DESCRICAO_ESPECIE: Record<EspecieTermo, string> = {
+  identidade: 'a forma é a resposta, maiúsculas inclusive (金鹏堡 → Fortaleza do Peng Dourado).',
+  lexical: 'a palavra é a resposta e a forma flexiona à vontade (刀 → sabre; "sabres" conta).',
+};
 
 interface Aparicao {
   capitulo_id: number;
@@ -23,6 +32,7 @@ export function Glossario() {
   const [mostrarImportar, setMostrarImportar] = useState(false);
   const [csv, setCsv] = useState('');
   const [relatorio, setRelatorio] = useState('');
+  const [soNaoClassificados, setSoNaoClassificados] = useState(false);
 
   const chaveQuery = ['glossario', obraId, busca, categoria];
   const { data: entradas } = useQuery({
@@ -55,6 +65,11 @@ export function Glossario() {
     },
     onError: (e) => setErro((e as Error).message),
   });
+
+  // "Só não classificados" filtra as LINHAS mostradas, não a lista de candidatas
+  // a variante/termo pai (essa continua vindo de `entradas` inteiro, abaixo) —
+  // senão marcar o filtro tiraria do ar as opções que o revisor precisa escolher.
+  const visiveis = soNaoClassificados ? (entradas ?? []).filter((e) => e.especie == null) : (entradas ?? []);
 
   const importar = useMutation({
     mutationFn: () => api<{ inseridos: number; duplicados: number; invalidos: number }>('POST', `/obras/${obraId}/glossario/importar`, { csv }),
@@ -109,6 +124,7 @@ export function Glossario() {
 
       {erro && <Aviso tipo="erro">{erro}</Aviso>}
       {relatorio && <Aviso tipo="ok">{relatorio}</Aviso>}
+      {entradas && entradas.length > 0 && <ContadorClassificacao entradas={entradas} soNaoClassificados={soNaoClassificados} aoMudarFiltro={setSoNaoClassificados} />}
 
       {mostrarImportar && (
         <div className="mb-4 space-y-2 cartao p-4">
@@ -141,9 +157,12 @@ export function Glossario() {
           </tr>
         </thead>
         <tbody>
-          {ordenarComVariantes(entradas ?? []).map((e) => (
+          {ordenarComVariantes(visiveis).map((e) => (
             <LinhaTermo
               key={e.id}
+              // `todas` fica com a lista INTEIRA (não filtrada pelo checkbox): é a
+              // origem das candidatas a variante e a termo pai, que continuam
+              // escolhíveis mesmo com "só não classificados" marcado.
               entrada={e}
               aparicao={aparicoes?.[e.id]}
               todas={entradas ?? []}
@@ -151,16 +170,53 @@ export function Glossario() {
               aoErro={setErro}
             />
           ))}
-          {entradas?.length === 0 && (
+          {visiveis.length === 0 && (
             <tr>
               <td colSpan={6} className="px-2 py-4 text-center text-tinta-2">
-                Nenhum termo encontrado.
+                {soNaoClassificados ? 'Nenhum termo sem classificação.' : 'Nenhum termo encontrado.'}
               </td>
             </tr>
           )}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** O banner do topo (spec §7): "N termos ainda sem classificação", com o
+ *  filtro que isola só eles. Sem número à vista, o campo novo não é preenchido
+ *  — são 116 termos e o padrão preserva o comportamento de hoje, então nada
+ *  além deste contador empurra o revisor a responder. */
+function ContadorClassificacao({
+  entradas,
+  soNaoClassificados,
+  aoMudarFiltro,
+}: {
+  entradas: EntradaGlossario[];
+  soNaoClassificados: boolean;
+  aoMudarFiltro: (v: boolean) => void;
+}) {
+  const n = contarNaoClassificados(entradas);
+  return (
+    <Aviso tipo="info">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span>
+          {n === 0
+            ? 'Todos os termos têm espécie classificada.'
+            : `${n} termo${n === 1 ? '' : 's'} ainda sem classificação — sem espécie, o prompt trata a forma como identidade (o comportamento de hoje).`}
+        </span>
+        {n > 0 && (
+          <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium">
+            <input
+              type="checkbox"
+              checked={soNaoClassificados}
+              onChange={(e) => aoMudarFiltro(e.target.checked)}
+            />
+            Mostrar só os não classificados
+          </label>
+        )}
+      </div>
+    </Aviso>
   );
 }
 
@@ -267,16 +323,37 @@ function LinhaTermo({
   const [cat, setCat] = useState(entrada.categoria);
   const [nota, setNota] = useState(entrada.nota ?? '');
   const [principalSel, setPrincipalSel] = useState<number | null>(entrada.principal_id);
+  // '' representa "não classificado" (especie: null) — estado distinto de já
+  // ter escolhido uma espécie, não um terceiro valor de verdade.
+  const [especie, setEspecie] = useState<EspecieTermo | ''>(entrada.especie ?? '');
+  const [notaUso, setNotaUso] = useState(entrada.nota_uso ?? '');
+  const [termoPaiSel, setTermoPaiSel] = useState<number | null>(entrada.termo_pai_id);
 
   const ehVariante = entrada.principal_id != null;
   const principal = ehVariante ? todas.find((e) => e.id === entrada.principal_id) : undefined;
   const variantes = todas.filter((e) => e.principal_id === entrada.id);
   // Candidatas a canônica: outras entradas que já são canônicas (nível único).
   const candidatasPrincipal = todas.filter((e) => e.id !== entrada.id && e.principal_id == null);
+  // Candidatas a pai: qualquer outro termo da obra. `termo_pai_id` é
+  // PERTENCIMENTO (西堡 dentro de 金鹏堡) — não tem a restrição de nível único
+  // de `principal_id`, que é VARIANTE do mesmo referente; os dois convivem.
+  const candidatasPai = todas.filter((e) => e.id !== entrada.id);
 
   const salvar = useMutation({
     mutationFn: async () => {
-      await api('PATCH', `/glossario/${entrada.id}`, { termo_pt: pt, categoria: cat, nota: nota || null });
+      await api('PATCH', `/glossario/${entrada.id}`, {
+        termo_pt: pt,
+        categoria: cat,
+        nota: nota || null,
+        // O schema do PATCH aceita `especie` só como enum-ou-ausente (não
+        // nullable) — não existe "desclassificar" pela tela, então '' aqui
+        // significa "não mexer", nunca "apagar".
+        ...(especie !== '' ? { especie } : {}),
+        // Também não é nullable no schema; string vazia é o jeito de limpar
+        // sem quebrar a validação (o prompt já trata nota_uso vazia como ausente).
+        nota_uso: notaUso.trim(),
+        termo_pai_id: termoPaiSel,
+      });
       if ((principalSel ?? null) !== (entrada.principal_id ?? null)) {
         await api('POST', `/glossario/${entrada.id}/vincular`, { principal_id: principalSel });
       }
@@ -443,47 +520,117 @@ function LinhaTermo({
   }
 
   return (
-    <tr className="border-b border-linha/60 bg-ocre-tint last:border-b-0">
-      <td className="texto-zh whitespace-nowrap px-2 py-2">{entrada.termo_zh}</td>
-      <td className="px-2 py-1">
-        <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-full entrada" />
-      </td>
-      <td className="px-2 py-1">
-        <SeletorCategoria valor={cat} aoMudar={setCat} className="entrada" />
-      </td>
-      <td className="px-2 py-1 align-top">
-        <input value={nota} onChange={(e) => setNota(e.target.value)} className="w-full entrada" />
-        {variantes.length > 0 ? (
-          <p className="mt-1 text-xs text-tinta-2">Termo principal de {variantes.length} variante(s).</p>
-        ) : (
-          <label className="mt-1 block text-xs text-tinta-2">
-            Variante de:
-            <select
-              value={principalSel ?? ''}
-              onChange={(e) => setPrincipalSel(e.target.value ? Number(e.target.value) : null)}
-              className="entrada mt-0.5 block w-full text-sm"
-            >
-              <option value="">— é um termo principal —</option>
-              {candidatasPrincipal.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.termo_pt} ({c.termo_zh})
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </td>
-      <td className="px-2 py-1 align-top">
-        <CelulaAparicoes obraId={obraId} aparicao={aparicao} />
-      </td>
-      <td className="px-2 py-1 text-right whitespace-nowrap">
-        <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
-          Salvar
-        </Botao>
-        <button onClick={() => setEditando(false)} className="ml-2 text-xs text-tinta-2 underline">
-          cancelar
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr className="border-b border-linha/60 bg-ocre-tint last:border-b-0">
+        <td className="texto-zh whitespace-nowrap px-2 py-2">{entrada.termo_zh}</td>
+        <td className="px-2 py-1">
+          <input value={pt} onChange={(e) => setPt(e.target.value)} className="w-full entrada" />
+        </td>
+        <td className="px-2 py-1">
+          <SeletorCategoria valor={cat} aoMudar={setCat} className="entrada" />
+        </td>
+        <td className="px-2 py-1 align-top">
+          <input value={nota} onChange={(e) => setNota(e.target.value)} className="w-full entrada" />
+          {variantes.length > 0 ? (
+            <p className="mt-1 text-xs text-tinta-2">Termo principal de {variantes.length} variante(s).</p>
+          ) : (
+            <label className="mt-1 block text-xs text-tinta-2">
+              Variante de:
+              <select
+                value={principalSel ?? ''}
+                onChange={(e) => setPrincipalSel(e.target.value ? Number(e.target.value) : null)}
+                className="entrada mt-0.5 block w-full text-sm"
+              >
+                <option value="">— é um termo principal —</option>
+                {candidatasPrincipal.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.termo_pt} ({c.termo_zh})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </td>
+        <td className="px-2 py-1 align-top">
+          <CelulaAparicoes obraId={obraId} aparicao={aparicao} />
+        </td>
+        <td className="px-2 py-1 text-right whitespace-nowrap">
+          <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
+            Salvar
+          </Botao>
+          <button onClick={() => setEditando(false)} className="ml-2 text-xs text-tinta-2 underline">
+            cancelar
+          </button>
+        </td>
+      </tr>
+      {/* Linha própria para a classificação (espécie/nota de uso/termo pai):
+         são os campos que fazem a Task 5 existir, e amontoá-los na linha
+         principal os deixaria fáceis de pular. */}
+      <tr className="border-b border-linha/60 bg-ocre-tint/60 last:border-b-0">
+        <td colSpan={6} className="px-2 py-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs font-medium text-tinta-2" htmlFor={`especie-${entrada.id}`}>
+                Espécie
+              </label>
+              <select
+                id={`especie-${entrada.id}`}
+                value={especie}
+                onChange={(e) => setEspecie(e.target.value as EspecieTermo | '')}
+                className="entrada mt-0.5 block w-full text-sm"
+              >
+                <option value="">Não classificado — hoje se comporta como identidade</option>
+                {ESPECIES_TERMO.map((esp) => (
+                  <option key={esp} value={esp}>
+                    {esp === 'identidade' ? 'Identidade' : 'Escolha de palavra'}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-tinta-2">
+                {DESCRICAO_ESPECIE[especie === 'lexical' ? 'lexical' : 'identidade']}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-tinta-2" htmlFor={`nota-uso-${entrada.id}`}>
+                Nota de uso
+              </label>
+              <input
+                id={`nota-uso-${entrada.id}`}
+                value={notaUso}
+                onChange={(e) => setNotaUso(e.target.value)}
+                maxLength={200}
+                placeholder='Ex.: "Só é a criada Xiao Xin quando for nome de pessoa; nos demais usos é substantivo comum."'
+                className="entrada mt-0.5 block w-full text-sm"
+              />
+              <p className="mt-1 text-xs text-tinta-2">
+                Quando o termo se aplica — vale nas duas espécies. Nunca é a tradução do sentido comum: escrever
+                "senão é 'cuidado'" fixaria essa palavra fora do glossário.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-tinta-2" htmlFor={`termo-pai-${entrada.id}`}>
+                Termo pai
+              </label>
+              <select
+                id={`termo-pai-${entrada.id}`}
+                value={termoPaiSel ?? ''}
+                onChange={(e) => setTermoPaiSel(e.target.value ? Number(e.target.value) : null)}
+                className="entrada mt-0.5 block w-full text-sm"
+              >
+                <option value="">— nenhum —</option>
+                {candidatasPai.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.termo_pt} ({c.termo_zh})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-tinta-2">
+                Pertencimento (西堡 dentro de 金鹏堡), não variante — isso já existe acima, em "Variante de".
+              </p>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
