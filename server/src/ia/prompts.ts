@@ -84,13 +84,36 @@ export function incluirPrincipais(selecionados: EntradaGlossario[], todos: Entra
 }
 
 /** Entradas cujo termo chinês aparece em algum dos textos — o resto do glossário
-    não ajuda a traduzir este trecho e só gastaria tokens. */
+    não ajuda a traduzir este trecho e só gastaria tokens.
+
+    Exceção: o PAI (termo_pai_id) de um termo presente entra junto, mesmo que o
+    chinês dele não apareça no trecho. Sem 金鹏堡 ao lado, um trecho que diz só
+    西堡 não informa que um fica dentro do outro — é a única exceção à regra de
+    "só o que está no texto", e a razão de a coluna existir.
+
+    UM nível, nunca a raiz: dois níveis entregariam a obra inteira num trecho com
+    topônimo aninhado, e o filtro existe para encolher o prompt, não para subir
+    a árvore toda. */
 export function filtrarGlossarioRelevante(
   glossario: EntradaGlossario[],
   textos: (string | undefined | null)[],
 ): EntradaGlossario[] {
   const corpo = textos.filter(Boolean).join('\n');
-  return glossario.filter((e) => corpo.includes(e.termo_zh));
+  const presentes = glossario.filter((e) => corpo.includes(e.termo_zh));
+
+  // Map por id preserva a ordem de inserção: presentes primeiro (ordem original do
+  // glossário), pais acrescentados ao fim. A saída alimenta um prompt cacheado por
+  // prefixo — ordem instável quebra o cache e custa dinheiro real.
+  const porId = new Map(glossario.map((e) => [e.id, e]));
+  const escolhidos = new Map(presentes.map((e) => [e.id, e]));
+  for (const e of presentes) {
+    if (e.termo_pai_id == null) continue;
+    const pai = porId.get(e.termo_pai_id);
+    // `!escolhidos.has` cobre tanto "pai já estava presente no texto" quanto "dois
+    // filhos do mesmo pai" — nos dois casos o pai só pode entrar uma vez.
+    if (pai && !escolhidos.has(pai.id)) escolhidos.set(pai.id, pai);
+  }
+  return [...escolhidos.values()];
 }
 
 // O bloco de sistema é montado em DUAS partes (doc 08 §3): `base` é o prompt mãe

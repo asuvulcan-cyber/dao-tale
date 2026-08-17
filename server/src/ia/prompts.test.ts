@@ -44,7 +44,14 @@ const entrada = (termo_zh: string, termo_pt: string): EntradaGlossario => ({
 
 describe('filtrarGlossarioRelevante', () => {
   it('mantém só os termos presentes em algum dos textos', () => {
-    const glossario = [entrada('齐夏', 'Qi Xia'), entrada('终焉', 'Fim'), entrada('不存在', 'Ausente')];
+    // ids únicos: desde a Task 4 o filtro deduplica por id (para o termo pai não
+    // dobrar), e id 0 repetido em todo mundo — o padrão desta fixture antes de
+    // haver id para distinguir — colapsaria as entradas num Map por engano.
+    const glossario = [
+      { ...entrada('齐夏', 'Qi Xia'), id: 1 },
+      { ...entrada('终焉', 'Fim'), id: 2 },
+      { ...entrada('不存在', 'Ausente'), id: 3 },
+    ];
     const filtrado = filtrarGlossarioRelevante(glossario, ['齐夏睁开了眼睛', undefined, '十日终焉']);
     expect(filtrado.map((e) => e.termo_pt)).toEqual(['Qi Xia', 'Fim']);
   });
