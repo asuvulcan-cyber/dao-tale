@@ -10,6 +10,7 @@ import type {
   CapituloResumo,
   Frase,
   EntradaGlossario,
+  EspecieTermo,
   TermoSugerido,
   CasoTeste,
   Configuracoes,
@@ -60,6 +61,12 @@ function paraPrompt(l: any): VersaoDelta {
 }
 function paraFrase(l: any): Frase {
   return { ...l, editado_manualmente: !!l.editado_manualmente };
+}
+// `ambiguo` é a única coluna booleana do glossário (migração 026); as demais
+// colunas novas (especie, nota_uso, termo_pai_id) já saem como TEXT/INTEGER
+// anuláveis do SQLite e batem direto com o tipo do domínio.
+function paraGlossario(l: any): EntradaGlossario {
+  return { ...l, ambiguo: !!l.ambiguo };
 }
 
 // ── Obras ──────────────────────────────────────────────────────────────────
@@ -899,24 +906,39 @@ export const reposFrases = {
 
 export const reposGlossario = {
   listar(db: BancoDados, obraId: number): EntradaGlossario[] {
-    return db
-      .prepare('SELECT * FROM glossario WHERE obra_id = ? ORDER BY termo_zh')
-      .all(obraId) as EntradaGlossario[];
+    return (
+      db.prepare('SELECT * FROM glossario WHERE obra_id = ? ORDER BY termo_zh').all(obraId) as any[]
+    ).map(paraGlossario);
   },
 
   obter(db: BancoDados, id: number): EntradaGlossario | undefined {
-    return db.prepare('SELECT * FROM glossario WHERE id = ?').get(id) as EntradaGlossario | undefined;
+    const linha = db.prepare('SELECT * FROM glossario WHERE id = ?').get(id) as any;
+    return linha ? paraGlossario(linha) : undefined;
   },
 
   criar(
     db: BancoDados,
     obraId: number,
-    dados: { termo_zh: string; termo_pt: string; categoria?: string; nota?: string; origem?: string },
+    dados: {
+      termo_zh: string;
+      termo_pt: string;
+      categoria?: string;
+      nota?: string;
+      origem?: string;
+      // Espécie/nota_uso/ambiguo/termo_pai_id (migração 026): opcionais aqui —
+      // `especie` nasce NULL quando ausente, e é assim que o termo fica "nunca
+      // classificado" em vez de herdar um palpite.
+      especie?: EspecieTermo;
+      nota_uso?: string;
+      ambiguo?: boolean;
+      termo_pai_id?: number | null;
+    },
   ): EntradaGlossario | 'duplicado' {
     try {
       const info = db
         .prepare(
-          'INSERT INTO glossario (obra_id, termo_zh, termo_pt, categoria, nota, origem) VALUES (?, ?, ?, ?, ?, ?)',
+          `INSERT INTO glossario (obra_id, termo_zh, termo_pt, categoria, nota, origem, especie, nota_uso, ambiguo, termo_pai_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           obraId,
@@ -925,6 +947,10 @@ export const reposGlossario = {
           dados.categoria ?? 'outro',
           dados.nota ?? null,
           dados.origem ?? 'manual',
+          dados.especie ?? null,
+          dados.nota_uso ?? null,
+          dados.ambiguo ? 1 : 0,
+          dados.termo_pai_id ?? null,
         );
       return this.obter(db, Number(info.lastInsertRowid))!;
     } catch (e: any) {
@@ -936,15 +962,27 @@ export const reposGlossario = {
   atualizar(
     db: BancoDados,
     id: number,
-    campos: Partial<Pick<EntradaGlossario, 'termo_zh' | 'termo_pt' | 'categoria' | 'nota'>>,
+    campos: Partial<
+      Pick<
+        EntradaGlossario,
+        'termo_zh' | 'termo_pt' | 'categoria' | 'nota' | 'especie' | 'nota_uso' | 'ambiguo' | 'termo_pai_id'
+      >
+    >,
   ): EntradaGlossario | undefined {
     const atual = this.obter(db, id);
     if (!atual) return undefined;
-    db.prepare('UPDATE glossario SET termo_zh = ?, termo_pt = ?, categoria = ?, nota = ? WHERE id = ?').run(
+    db.prepare(
+      `UPDATE glossario SET termo_zh = ?, termo_pt = ?, categoria = ?, nota = ?,
+       especie = ?, nota_uso = ?, ambiguo = ?, termo_pai_id = ? WHERE id = ?`,
+    ).run(
       campos.termo_zh ?? atual.termo_zh,
       campos.termo_pt ?? atual.termo_pt,
       campos.categoria ?? atual.categoria,
       campos.nota !== undefined ? campos.nota : atual.nota,
+      campos.especie !== undefined ? campos.especie : atual.especie,
+      campos.nota_uso !== undefined ? campos.nota_uso : atual.nota_uso,
+      (campos.ambiguo !== undefined ? campos.ambiguo : atual.ambiguo) ? 1 : 0,
+      campos.termo_pai_id !== undefined ? campos.termo_pai_id : atual.termo_pai_id,
       id,
     );
     return this.obter(db, id);

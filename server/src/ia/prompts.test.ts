@@ -35,6 +35,10 @@ const entrada = (termo_zh: string, termo_pt: string): EntradaGlossario => ({
   nota: null,
   origem: 'manual',
   principal_id: null,
+  especie: null,
+  nota_uso: null,
+  ambiguo: false,
+  termo_pai_id: null,
   criado_em: '',
 });
 

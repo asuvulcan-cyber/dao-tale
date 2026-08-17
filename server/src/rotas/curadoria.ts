@@ -14,11 +14,18 @@ import {
 // que contradizia isso). CATEGORIAS_GLOSSARIO são só as sugestões da tela.
 const categoriaSchema = z.string().trim().min(1).max(30);
 
+// Espécie/nota_uso/ambiguo/termo_pai_id (migração 026). `especie` é enum
+// FECHADO (ao contrário de `categoria`, que é livre) — o prompt ramifica nele,
+// então uma grafia solta viraria uma 3ª espécie silenciosa.
 const criarEntradaSchema = z.object({
   termo_zh: z.string().min(1),
   termo_pt: z.string().min(1),
   categoria: categoriaSchema.optional(),
   nota: z.string().optional(),
+  especie: z.enum(['identidade', 'lexical']).optional(),
+  nota_uso: z.string().trim().max(200).optional(),
+  ambiguo: z.boolean().optional(),
+  termo_pai_id: z.number().int().positive().nullable().optional(),
 });
 
 const atualizarEntradaSchema = z.object({
@@ -26,6 +33,10 @@ const atualizarEntradaSchema = z.object({
   termo_pt: z.string().min(1).optional(),
   categoria: categoriaSchema.optional(),
   nota: z.string().nullable().optional(),
+  especie: z.enum(['identidade', 'lexical']).optional(),
+  nota_uso: z.string().trim().max(200).optional(),
+  ambiguo: z.boolean().optional(),
+  termo_pai_id: z.number().int().positive().nullable().optional(),
 });
 
 // Parser de linha CSV minimalista com suporte a aspas duplas.

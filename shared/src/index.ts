@@ -355,6 +355,17 @@ export interface Frase {
   origem_edicao: string | null;
 }
 
+/** Que tipo de lei o termo tem.
+ *
+ *  `identidade` — a FORMA é a resposta, maiúsculas inclusive (金鹏堡 → Fortaleza
+ *  do Peng Dourado). `lexical` — a PALAVRA é a resposta e a forma flexiona à
+ *  vontade (刀 → sabre; "sabres" e "Sabre" são o mesmo acerto).
+ *
+ *  Enum fechado, e não `CategoriaGlossario` (que é string livre), porque o prompt
+ *  ramifica nele: categoria livre viraria `Identidade`, `identidade `, `id`. */
+export type EspecieTermo = 'identidade' | 'lexical';
+export const ESPECIES_TERMO: readonly EspecieTermo[] = ['identidade', 'lexical'];
+
 export interface EntradaGlossario {
   id: number;
   obra_id: number;
@@ -367,6 +378,19 @@ export interface EntradaGlossario {
    * canônica. Cada variante guarda a própria tradução; o vínculo só diz que
    * apontam para o mesmo referente. */
   principal_id: number | null;
+  /** `null` = nunca classificado; comporta-se como `identidade`, que é o
+   *  comportamento anterior a esta coluna existir. */
+  especie: EspecieTermo | null;
+  /** A regra daquele termo em uma frase — quando capitalizar, ou quando o
+   *  gatilho chinês NÃO é este termo. Entregue na linha dele, no prompt. */
+  nota_uso: string | null;
+  /** O gatilho chinês nem sempre é este termo: 小心 é "cuidado" e também a criada
+   *  Xiao Xin — medido, 7 de 8 ocorrências não são a personagem. Tira o termo da
+   *  varredura direta, que erraria a maioria das vezes. */
+  ambiguo: boolean;
+  /** O termo do qual este faz parte. NÃO é `principal_id`: pai é pertencimento
+   *  (西堡 dentro de 金鹏堡), principal é variante do mesmo referente. */
+  termo_pai_id: number | null;
   criado_em: string;
 }
 
