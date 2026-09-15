@@ -355,6 +355,33 @@ export interface Frase {
   origem_edicao: string | null;
 }
 
+export type StatusRevisaoLiteraria = 'pendente' | 'aprovada' | 'rejeitada' | 'conflito';
+
+/** Candidato editorial isolado do texto publicado. `texto_vigente_base` é o
+ * snapshot usado na comparação e também a trava contra aprovar sobre uma
+ * edição humana mais recente. */
+export interface RevisaoLiteraria {
+  id: number;
+  lote_id: number;
+  lote_rotulo: string;
+  frase_id: number;
+  capitulo_id: number;
+  capitulo_numero: number;
+  ordem: number;
+  paragrafo: number;
+  texto_zh: string;
+  texto_pt_original_ia: string | null;
+  texto_vigente_atual: string;
+  texto_vigente_base: string;
+  texto_revisado: string;
+  justificativa: string | null;
+  categorias: string[];
+  status: StatusRevisaoLiteraria;
+  decidido_em: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
 /** Que tipo de lei o termo tem.
  *
  *  `identidade` — o termo DESIGNA um referente específico (金鹏堡 → Fortaleza
@@ -391,6 +418,58 @@ export interface EntradaGlossario {
   /** O termo do qual este faz parte. NÃO é `principal_id`: pai é pertencimento
    *  (西堡 dentro de 金鹏堡), principal é variante do mesmo referente. */
   termo_pai_id: number | null;
+  /** Fatos narrativos derivados de relacoes_termos para contexto da IA. Não são
+   * persistidos na linha do verbete nem substituem nota/nota_uso. */
+  relacoes?: string[];
+  criado_em: string;
+}
+
+export const TIPOS_RELACAO_TERMO = [
+  'pai-filha', 'pai-filho', 'mae-filha', 'mae-filho',
+  'irmao-irma', 'irmao-irmao', 'irma-irma', 'conjuges',
+  'lidera', 'membro-de', 'serve-a', 'mestre-de', 'irmao-juramentado-de',
+  'aliado-de', 'inimigo-de', 'originario-de', 'localizado-em',
+] as const;
+export type TipoRelacaoTermo = (typeof TIPOS_RELACAO_TERMO)[number];
+
+export interface DefinicaoRelacaoTermo {
+  tipo: TipoRelacaoTermo;
+  grupo: 'genealogia' | 'organizacao' | 'social' | 'geografia';
+  rotulo_direto: string;
+  rotulo_inverso: string;
+  simetrica: boolean;
+}
+
+export const DEFINICOES_RELACOES_TERMO: readonly DefinicaoRelacaoTermo[] = [
+  { tipo: 'pai-filha', grupo: 'genealogia', rotulo_direto: 'pai de', rotulo_inverso: 'filha de', simetrica: false },
+  { tipo: 'pai-filho', grupo: 'genealogia', rotulo_direto: 'pai de', rotulo_inverso: 'filho de', simetrica: false },
+  { tipo: 'mae-filha', grupo: 'genealogia', rotulo_direto: 'mãe de', rotulo_inverso: 'filha de', simetrica: false },
+  { tipo: 'mae-filho', grupo: 'genealogia', rotulo_direto: 'mãe de', rotulo_inverso: 'filho de', simetrica: false },
+  { tipo: 'irmao-irma', grupo: 'genealogia', rotulo_direto: 'irmão de', rotulo_inverso: 'irmã de', simetrica: false },
+  { tipo: 'irmao-irmao', grupo: 'genealogia', rotulo_direto: 'irmão de', rotulo_inverso: 'irmão de', simetrica: true },
+  { tipo: 'irma-irma', grupo: 'genealogia', rotulo_direto: 'irmã de', rotulo_inverso: 'irmã de', simetrica: true },
+  { tipo: 'conjuges', grupo: 'genealogia', rotulo_direto: 'cônjuge de', rotulo_inverso: 'cônjuge de', simetrica: true },
+  { tipo: 'lidera', grupo: 'organizacao', rotulo_direto: 'lidera', rotulo_inverso: 'sob liderança de', simetrica: false },
+  { tipo: 'membro-de', grupo: 'organizacao', rotulo_direto: 'integra', rotulo_inverso: 'tem como integrante', simetrica: false },
+  { tipo: 'serve-a', grupo: 'social', rotulo_direto: 'serve a', rotulo_inverso: 'tem a serviço', simetrica: false },
+  { tipo: 'mestre-de', grupo: 'social', rotulo_direto: 'mestre de', rotulo_inverso: 'discípulo de', simetrica: false },
+  { tipo: 'irmao-juramentado-de', grupo: 'social', rotulo_direto: 'irmão juramentado de', rotulo_inverso: 'irmão juramentado de', simetrica: true },
+  { tipo: 'aliado-de', grupo: 'social', rotulo_direto: 'em aliança com', rotulo_inverso: 'em aliança com', simetrica: true },
+  { tipo: 'inimigo-de', grupo: 'social', rotulo_direto: 'em inimizade com', rotulo_inverso: 'em inimizade com', simetrica: true },
+  { tipo: 'originario-de', grupo: 'geografia', rotulo_direto: 'originário de', rotulo_inverso: 'origem de', simetrica: false },
+  { tipo: 'localizado-em', grupo: 'geografia', rotulo_direto: 'localizado em', rotulo_inverso: 'contém', simetrica: false },
+] as const;
+
+export interface RelacaoTermo {
+  id: number;
+  obra_id: number;
+  origem_termo_id: number;
+  destino_termo_id: number;
+  tipo: TipoRelacaoTermo;
+  nota: string | null;
+  capitulo_inicio: number | null;
+  capitulo_fim: number | null;
+  confirmado_por: 'humano' | 'ia-confirmada' | 'migracao-curada';
   criado_em: string;
 }
 
@@ -683,10 +762,10 @@ export interface Configuracoes {
 export const CONFIG_PADRAO: Configuracoes = {
   provedor_padrao: 'mock',
   modelo_padrao: '',
-  // Bloco grande cobre capítulos típicos em 1–3 chamadas — junto com os termos
-  // adotados realimentados entre blocos, mantém a terminologia consistente sem
-  // arriscar estourar o limite de tokens de saída num capítulo muito longo.
-  tamanho_bloco: 60,
+  // Blocos curtos preservam aderência ao tom local e ao checklist. O contexto
+  // entre blocos mantém continuidade; aumentar este número troca qualidade e
+  // controle por menos chamadas. O cap. 19 confirmou degradação já em 20.
+  tamanho_bloco: 10,
   vizinhas_revisao: 3,
   cauda_contexto: 5,
   parar_no_limite: false,
@@ -875,11 +954,56 @@ export interface ModeloInfo {
   nome: string;
 }
 
-export const CATEGORIAS_GLOSSARIO: CategoriaGlossario[] = [
-  'local',
-  'poder-habilidade',
-  'entidade',
-  'titulo-cargo',
+/** Taxonomia editorial padrão do Gama. Categorias manuais antigas continuam
+ * legíveis, mas toda entrada produzida por IA deve usar exatamente uma destas. */
+export const CATEGORIAS_GLOSSARIO = [
   'personagem',
-  'outro',
-];
+  'grupo',
+  'local',
+  'titulo',
+  'tratamento',
+  'posto-funcao',
+  'arte-marcial',
+  'conceito-marcial',
+  'medicina-tradicional',
+  'objeto',
+  'texto',
+  'idioma',
+  'criatura',
+  'conceito-cultural',
+  'geografia-comum',
+  'lexico-geral',
+] as const satisfies readonly CategoriaGlossario[];
+
+export type CategoriaGlossarioPadrao = (typeof CATEGORIAS_GLOSSARIO)[number];
+
+export const ROTULOS_CATEGORIAS_GLOSSARIO: Record<CategoriaGlossarioPadrao, string> = {
+  personagem: 'Personagem', grupo: 'Grupo ou facção', local: 'Lugar próprio', titulo: 'Título ou epíteto',
+  tratamento: 'Forma de tratamento', 'posto-funcao': 'Posto ou função', 'arte-marcial': 'Arte marcial',
+  'conceito-marcial': 'Conceito marcial', 'medicina-tradicional': 'Medicina tradicional', objeto: 'Objeto',
+  texto: 'Texto ou documento', idioma: 'Idioma ou escrita', criatura: 'Criatura',
+  'conceito-cultural': 'Conceito cultural', 'geografia-comum': 'Geografia comum', 'lexico-geral': 'Léxico geral',
+};
+
+export const DESCRICOES_CATEGORIAS_GLOSSARIO: Record<CategoriaGlossarioPadrao, string> = {
+  personagem: 'pessoa ou personagem individual',
+  grupo: 'família, facção, povo, organização ou coletivo nomeado',
+  local: 'lugar próprio: cidade, fortaleza, pátio, edifício ou região nomeada',
+  titulo: 'título pessoal, honorífico ou epíteto que identifica alguém',
+  tratamento: 'forma de tratamento ou vocativo contextual',
+  'posto-funcao': 'cargo, posto, patente, ofício ou função institucional',
+  'arte-marcial': 'técnica, estilo, método ou arte marcial nomeada',
+  'conceito-marcial': 'energia, estágio, princípio ou conceito próprio da prática marcial',
+  'medicina-tradicional': 'ponto, meridiano, diagnóstico ou conceito médico tradicional',
+  objeto: 'arma, artefato, vestimenta ou objeto relevante/nomeado',
+  texto: 'livro, sutra, poema, inscrição ou documento nomeado',
+  idioma: 'idioma, escrita, fala ou sistema linguístico nomeado',
+  criatura: 'animal, espécie, monstro ou criatura nomeada',
+  'conceito-cultural': 'costume, rito, instituição ou conceito cultural específico',
+  'geografia-comum': 'acidente ou expressão geográfica descritiva, não um lugar próprio',
+  'lexico-geral': 'escolha lexical recorrente que não pertence às categorias especializadas',
+};
+
+export function ehCategoriaGlossarioPadrao(valor: string | null | undefined): valor is CategoriaGlossarioPadrao {
+  return typeof valor === 'string' && (CATEGORIAS_GLOSSARIO as readonly string[]).includes(valor);
+}

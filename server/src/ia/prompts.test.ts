@@ -469,5 +469,8 @@ describe('refinamento — edições manuais', () => {
     const s = sistemaRefinarPrompt({ omega: 'PROMPT', deltaAtual: '' });
     // Sem isto o modelo tem de inventar um secao_regra sem orientação nenhuma.
     expect(s).toMatch(/quando (n[ãa]o houver|só houver|houver apenas)/i);
+    expect(s).toMatch(/Alfa: regra universal/);
+    expect(s).toMatch(/Gama: equivalência individual/);
+    expect(s).toMatch(/não prova de que a solução pertença ao Delta/i);
   });
 });

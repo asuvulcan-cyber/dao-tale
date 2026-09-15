@@ -7,6 +7,13 @@ import { glossarioMarkdown } from './glossarioLivro.js';
 
 export type FormatoMarkdown = 'pt' | 'bilingue';
 
+function retirarNotasDaProsa(texto: string, notas: string[]): string {
+  return texto.replace(/\(\(([\s\S]*?)\)\)/g, (_trecho, nota: string) => {
+    notas.push(nota.trim());
+    return `[^${notas.length}]`;
+  });
+}
+
 export function montarMarkdown(
   obra: ObraEpub,
   capitulos: CapituloEpub[],
@@ -30,15 +37,17 @@ export function montarMarkdown(
   partes.push('---');
 
   for (const cap of [...capitulos].sort((a, b) => a.numero - b.numero)) {
+    const notas: string[] = [];
     partes.push(`## ${cabecalhoPt(cap)}`);
     if (formato === 'bilingue') {
       if (cap.titulo) partes.push(`*${cap.titulo}*`);
       for (const p of cap.paragrafos) {
-        partes.push(`${p.zh}\n\n${p.pt || '*(pendente de tradução)*'}`);
+        partes.push(`${p.zh}\n\n${p.pt ? retirarNotasDaProsa(p.pt, notas) : '*(pendente de tradução)*'}`);
       }
     } else {
-      for (const p of cap.paragrafos) if (p.pt) partes.push(p.pt);
+      for (const p of cap.paragrafos) if (p.pt) partes.push(retirarNotasDaProsa(p.pt, notas));
     }
+    if (notas.length) partes.push(notas.map((nota, i) => `[^${i + 1}]: ${nota}`).join('\n'));
   }
 
   const apendice = glossarioMarkdown(glossario);

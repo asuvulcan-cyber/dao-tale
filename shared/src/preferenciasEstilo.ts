@@ -23,6 +23,15 @@
     Vive aqui, e não no servidor, porque a UI precisa dele para avisar quando as
     chaves não estão valendo. */
 export const MARCADOR_PREFERENCIAS = '{{PREFERENCIAS_OBRA}}';
+/** Marcadores opt-in do Alfa antidiuluição. O marcador legado continua intacto:
+ * versões antigas recompõem os mesmos bytes e preservam a trilha histórica. */
+export const MARCADOR_PREFERENCIAS_COMPACTAS = '{{PREFERENCIAS_OBRA_COMPACTAS}}';
+export const MARCADOR_CHECKLIST_FINAL = '{{CHECKLIST_FINAL}}';
+/** Marcadores versionados: uma nova regra não muda os bytes de Alfas históricos. */
+export const MARCADOR_PREFERENCIAS_COMPACTAS_V2 = '{{PREFERENCIAS_OBRA_COMPACTAS_V2}}';
+export const MARCADOR_CHECKLIST_FINAL_V2 = '{{CHECKLIST_FINAL_V2}}';
+export const MARCADOR_PREFERENCIAS_COMPACTAS_V3 = '{{PREFERENCIAS_OBRA_COMPACTAS_V3}}';
+export const MARCADOR_CHECKLIST_FINAL_V3 = '{{CHECKLIST_FINAL_V3}}';
 
 export type ModoDialogo = 'aspas' | 'travessao';
 export type MarcaPensamento = 'italico' | 'aspas';
@@ -343,6 +352,128 @@ export function renderizarPreferencias(prefs: PreferenciasEstilo): string {
     '',
     CAPITALIZACAO[prefs.capitalizacao_titulos],
   ].join('\n');
+}
+
+/** Beta curta para núcleos novos. Mantém todas as decisões das chaves, mas corta
+ * explicações pedagógicas e exemplos redundantes que já pertencem à interface e
+ * aos testes. O modelo recebe decisão + contraste, não um manual editorial. */
+export function renderizarPreferenciasCompactas(prefs: PreferenciasEstilo): string {
+  const registro = REGISTROS_PREDEFINIDOS[prefs.registro] ?? prefs.registro;
+  const dialogo =
+    prefs.dialogo === 'aspas'
+      ? '**Diálogo:** aspas duplas retas, nunca travessão. Ponto antes de verbo de elocução vira vírgula depois das aspas: `"Fala", disse.`; ? ! … permanecem. Ação independente: `"Fala." Ele saiu.`'
+      : '**Diálogo:** travessão. Verbo de elocução continua em minúscula; ação independente começa em maiúscula e a fala conserva o ponto.';
+  const pensamento = `**Pensamento:** ${PENSAMENTO_MARCA[prefs.pensamento_marca]}${PENSAMENTO_TEMPO[prefs.pensamento_tempo]}.`;
+  const anterioridade =
+    prefs.mais_que_perfeito === 'evitar'
+      ? '**Anterioridade:** prefira perfeito simples quando contexto/advérbio já a marcar; use “tinha/havia + particípio” só quando necessário e sem empilhar auxiliares; nunca o sintético em -ara/-era/-ira.'
+      : '**Anterioridade:** perfeito simples, composto e sintético são permitidos; escolha pelo ritmo sem empilhar a mesma forma.';
+  const notas =
+    prefs.notas_tradutor === 'permitir'
+      ? '**Notas:** `((texto))` apenas para dado linguístico/folclórico intraduzível; nunca para explicar trama ou escolha lexical.'
+      : '**Notas:** proibidas; resolva tudo na prosa.';
+  const onomatopeia =
+    prefs.onomatopeia === 'adaptar'
+      ? '**Onomatopeia:** equivalente natural do PT-BR, sempre em *itálico* e sem aspas.'
+      : '**Onomatopeia:** pinyin sem tons, sempre em *itálico* e sem aspas.';
+  const nomes =
+    prefs.nomes_proprios === 'mesclar'
+      ? '**Nomes:** pessoa em pinyin; apelido/epíteto e nomes descritivos traduzidos; transcrição fonética mantida; termos consagrados do gênero preservados. O Gama decide cada forma catalogada.'
+      : prefs.nomes_proprios === 'traduzir'
+        ? '**Nomes:** traduza o que tiver sentido; pessoa e transcrição puramente fonética ficam em pinyin. O Gama decide cada forma catalogada.'
+        : '**Nomes:** pinyin sem tons, exceto títulos/cargos traduzidos. O Gama decide cada forma catalogada.';
+  const caixa =
+    prefs.capitalizacao_titulos === 'norma-pt'
+      ? '**Títulos/cargos:** maiúscula no chamado direto ou quando substituem o nome de pessoa determinada; minúscula antes do nome, no predicativo e no uso genérico. A caixa do verbete do Gama não decide a frase.'
+      : '**Títulos/cargos:** sempre com inicial maiúscula.';
+
+  return [
+    '## 5. BETA — CONVENÇÕES DESTA OBRA',
+    '',
+    `**Leitor e voz:** ${registro}. Não use flexão verbal de “tu” salvo se o original e a configuração a exigirem.`,
+    dialogo,
+    pensamento,
+    anterioridade,
+    notas,
+    onomatopeia,
+    nomes,
+    caixa,
+  ].join('\n\n');
+}
+
+/** Beta curta v2: explicita a convenção editorial de fala em vários parágrafos. */
+export function renderizarPreferenciasCompactasV2(prefs: PreferenciasEstilo): string {
+  const base = renderizarPreferenciasCompactas(prefs);
+  if (prefs.dialogo !== 'aspas') return base;
+  return base.replace(
+    /^\*\*Diálogo:\*\*.*$/m,
+    '**Diálogo:** aspas duplas retas, nunca travessão. Ponto antes de verbo de elocução vira vírgula depois das aspas: `"Fala", disse.`; ? ! … permanecem. Ação independente: `"Fala." Ele saiu.` Feche as aspas quando a fala terminar ou entrar narração. Se o mesmo falante continuar no parágrafo seguinte, não feche o parágrafo intermediário; abra novas aspas no início do próximo e feche somente no último.',
+  );
+}
+
+/** Beta curta v3: o público-alvo calibra apenas acessibilidade. Tom, ritmo,
+ * densidade e grau de formalidade são inferidos localmente do original. Isso
+ * impede que o rótulo "webnovel" uniformize cenas secas, filosóficas, solenes
+ * ou coloquiais numa voz global que o chinês não escolheu. */
+export function renderizarPreferenciasCompactasV3(prefs: PreferenciasEstilo): string {
+  const base = renderizarPreferenciasCompactasV2(prefs);
+  const acessibilidade =
+    prefs.registro === 'jovem-adulto'
+      ? 'Entre equivalentes igualmente fiéis, prefira a formulação corrente e legível; isso não autoriza encurtar períodos, simplificar ideias nem modernizar a voz.'
+      : prefs.registro === 'adulto-literario'
+        ? 'Vocabulário amplo e períodos longos são permitidos quando o original os sustentar; não os introduza como ornamento.'
+        : prefs.registro === 'juvenil'
+          ? 'Prefira equivalentes acessíveis ao público juvenil, sem censurar conteúdo nem apagar complexidade necessária.'
+          : `Acessibilidade configurada: ${prefs.registro}. Ela não substitui o tom do original.`;
+  return base.replace(
+    /^\*\*Leitor e voz:\*\*.*$/m,
+    [
+      '**Tom e registro local:** antes de redigir, identifique no chinês a voz, oralidade ou formalidade, densidade sintática, ritmo, distância emocional e intenção deste trecho. Reproduza esse efeito em PT-BR natural. Não imponha ao capítulo uma voz global de “webnovel” nem normalize tudo como moderno, simples, formal, rápido ou literário.',
+      `**Acessibilidade:** ${acessibilidade} Não use flexão verbal de “tu” sem evidência no original e decisão editorial específica.`,
+    ].join('\n\n'),
+  );
+}
+
+/** Recência deliberada: este bloco entra no FIM do Alfa novo, depois do Delta.
+ * Ele não ensina regras novas; só força a inspeção das decisões já tomadas. */
+export function renderizarChecklistFinal(prefs: PreferenciasEstilo): string {
+  const dialogo = prefs.dialogo === 'aspas' ? 'aspas duplas retas e balanceadas' : 'travessões consistentes';
+  const pensamento = prefs.pensamento_marca === 'italico' ? 'pensamentos em itálico, sem aspas' : 'pensamentos entre aspas, sem itálico';
+  const anterioridade =
+    prefs.mais_que_perfeito === 'evitar'
+      ? 'nenhum mais-que-perfeito sintético em -ara/-era/-ira e nenhuma pilha de “tinha”'
+      : 'tempos de anterioridade naturais e sem repetição mecânica';
+  const onomatopeia = prefs.onomatopeia === 'adaptar' ? 'onomatopeias em PT-BR e itálico' : 'onomatopeias em pinyin e itálico';
+  return [
+    '## CHECKLIST FINAL — CONFIRA ANTES DE ENTREGAR',
+    '',
+    '1. Todo sentido do chinês está presente, sem invenção, explicação ou intensificação.',
+    '2. Todo termo recebido no Gama foi usado na forma aplicável ao contexto.',
+    `3. Diálogo: ${dialogo}; incisos e pontuação seguem o PT-BR.`,
+    `4. ${pensamento}; ${onomatopeia}.`,
+    `5. Anterioridade: ${anterioridade}.`,
+    '6. Nenhuma unidade chinesa ficou transliterada; nenhum caractere chinês vazou para o português.',
+    '7. Releia só o português: sem decalque, epíteto repetido mecanicamente, eco lexical evitável ou marca tipográfica aberta.',
+  ].join('\n');
+}
+
+/** Checklist v2 correspondente à Beta curta v2. */
+export function renderizarChecklistFinalV2(prefs: PreferenciasEstilo): string {
+  const base = renderizarChecklistFinal(prefs);
+  if (prefs.dialogo !== 'aspas') return base;
+  return base.replace(
+    /^3\. Diálogo:.*$/m,
+    '3. Diálogo: aspas coerentes. Só deixe a aspa sem par no fim de um parágrafo intermediário da mesma fala; reabra no seguinte e feche no último. Incisos e pontuação seguem o PT-BR.',
+  );
+}
+
+/** Checklist v3: torna o tom local uma verificação objetiva no ponto de maior
+ * recência, sem acrescentar uma nova preferência de estilo. */
+export function renderizarChecklistFinalV3(prefs: PreferenciasEstilo): string {
+  return renderizarChecklistFinalV2(prefs).replace(
+    '7. Releia só o português: sem decalque, epíteto repetido mecanicamente, eco lexical evitável ou marca tipográfica aberta.',
+    '7. Compare o efeito local com o chinês: voz, formalidade, densidade e ritmo continuam os deste trecho; depois releia só o português, sem decalque, epíteto mecânico, eco evitável ou marca tipográfica aberta.',
+  );
 }
 
 /** Rótulos curtos para a UI e para as notas de versão ("Diálogo: travessão"). */

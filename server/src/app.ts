@@ -10,11 +10,14 @@ import { rotasFrases } from './rotas/frases.js';
 import { rotasCuradoria } from './rotas/curadoria.js';
 import { rotasComparador } from './rotas/comparador.js';
 import { rotasExportacao } from './rotas/exportacao.js';
+import { rotasRevisaoLiteraria } from './rotas/revisaoLiteraria.js';
 import { protecaoOrigem } from './rotas/protecaoOrigem.js';
 import { rotasPublicas } from './rotas/publico.js';
 import { travaIp, travaIpNoLogin } from './rotas/travaIp.js';
 import { exigirSessao, rotasSessao } from './rotas/sessao.js';
 import type { OpcoesLimite } from './auth/limite.js';
+import { ehHospedado } from './config.js';
+import { ErroPayloadInvalido } from './rotas/json.js';
 
 const dirWebDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 
@@ -83,16 +86,22 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
   app.route('/api', rotasCuradoria(db));
   app.route('/api', rotasComparador(db));
   app.route('/api', rotasExportacao(db));
+  app.route('/api', rotasRevisaoLiteraria(db));
 
   app.onError((erro, c) => {
+    if (erro instanceof ErroPayloadInvalido) {
+      return c.json({ erro: { codigo: 'payload-invalido', mensagem: erro.message } }, 400);
+    }
     console.error('[erro não tratado]', erro);
-    return c.json({ erro: { codigo: 'interno', mensagem: erro.message } }, 500);
+    const mensagem = ehHospedado() ? 'Ocorreu um erro interno.' : erro.message;
+    return c.json({ erro: { codigo: 'interno', mensagem } }, 500);
   });
 
   // Publicar não é o mesmo que indexar (doc 14 §6). A vitrine existe para o dono
   // mandar o link a quem ele quiser; virar resultado de busca é uma decisão
   // separada, e mais difícil de desfazer do que de tomar. Padrão: fora do índice.
-  // Para permitir buscadores, troque o Disallow por "Allow: /".
+  // Para permitir buscadores no futuro, será preciso alterar em conjunto este
+  // robots.txt e o cabeçalho X-Robots-Tag definido acima.
   app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
   // Interface compilada (web/dist), com fallback SPA para index.html.

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { lerJson } from './json.js';
 import { PROVEDORES_IDS, resolverTemperatura, type CasoTeste, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import {
@@ -69,7 +70,7 @@ export function rotasFrases(db: BancoDados): Hono {
   const app = new Hono();
 
   app.patch('/frases/:id', async (c) => {
-    const corpo = editarFraseSchema.safeParse(await c.req.json());
+    const corpo = editarFraseSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const frase = reposFrases.editarTexto(db, Number(c.req.param('id')), corpo.data.texto_pt);
     if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
@@ -101,7 +102,7 @@ export function rotasFrases(db: BancoDados): Hono {
         previa: z.boolean().default(false),
       })
       .refine((d) => d.de !== d.para, { message: 'Os textos "de" e "para" precisam ser diferentes.' })
-      .safeParse(await c.req.json());
+      .safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
     const obraId = Number(c.req.param('obraId'));
@@ -129,7 +130,7 @@ export function rotasFrases(db: BancoDados): Hono {
   app.post('/frases/mesclar', async (c) => {
     const corpo = z
       .object({ frase_ids: z.array(z.number().int()).min(2) })
-      .safeParse(await c.req.json());
+      .safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const resultado = reposFrases.mesclar(db, corpo.data.frase_ids);
     if (resultado === 'invalido') {
@@ -149,7 +150,7 @@ export function rotasFrases(db: BancoDados): Hono {
         texto_pt_1: z.string().default(''),
         texto_pt_2: z.string().default(''),
       })
-      .safeParse(await c.req.json());
+      .safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const resultado = reposFrases.dividir(db, Number(c.req.param('id')), corpo.data);
     if (resultado === undefined) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
@@ -165,7 +166,7 @@ export function rotasFrases(db: BancoDados): Hono {
   // ── Protocolo de Revisão (doc 05 §3) ────────────────────────────────────
 
   app.post('/frases/:id/revisar', async (c) => {
-    const corpo = revisarSchema.safeParse(await c.req.json());
+    const corpo = revisarSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
     const frase = reposFrases.obter(db, Number(c.req.param('id')));
@@ -304,7 +305,7 @@ export function rotasFrases(db: BancoDados): Hono {
   app.post('/frases/:id/sugerir-termos', async (c) => {
     const corpo = z
       .object({ provedor: z.enum(PROVEDORES_IDS).optional(), modelo: z.string().optional() })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
     const frase = reposFrases.obter(db, Number(c.req.param('id')));

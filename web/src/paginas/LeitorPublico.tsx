@@ -5,6 +5,7 @@ import { partirInline, type CapituloPublico, type CapituloPublicoDetalhe, type O
 import { api } from '../api';
 import { BotaoTema, Selo } from '../App';
 import { SumarioVitrine, tituloCapitulo } from '../componentes/SumarioVitrine';
+import { NotaInline } from '../componentes/NotaInline';
 import { guardarUltimoCapitulo } from '../util/leitura';
 
 // Leitor da vitrine pública (doc 14). É primo do `Leitor.tsx` da bancada e
@@ -263,6 +264,8 @@ export function LeitorPublico() {
                         <strong key={j}>{s.texto}</strong>
                       ) : s.tipo === 'italico' ? (
                         <em key={j}>{s.texto}</em>
+                      ) : s.tipo === 'nota' ? (
+                        <NotaInline key={j} texto={s.texto} />
                       ) : (
                         s.texto
                       ),

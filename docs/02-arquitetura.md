@@ -36,7 +36,7 @@
 | Migrações | SQL puro versionado (`server/src/db/migrations/NNN_*.sql`), aplicadas no boot | Sem ORM: o esquema é pequeno e SQL explícito facilita auditar |
 | Interface | **React 18 + Vite + Tailwind CSS** | |
 | Estado/HTTP na interface | TanStack Query (cache e revalidação) + fetch nativo | |
-| Validação de payloads | **Zod** nos dois lados, com tipos compartilhados em `shared/` | O contrato da API é uma fonte única de verdade em TypeScript |
+| Validação de payloads | **Zod** no servidor; tipos e regras reutilizáveis em `shared/` | Os schemas de entrada ficam próximos das rotas; `shared/` concentra somente o que precisa ser consumido por mais de um workspace |
 | SDK Anthropic | `@anthropic-ai/sdk` | Tool use para saída estruturada; prompt caching para o prompt mãe + glossário |
 | SDK Google | `@google/genai` | `responseSchema` para saída estruturada |
 | Chaves de API | `@napi-rs/keyring` (Credential Manager / Secret Service) com fallback em arquivo `0600` | Detalhes em `05-fluxos-ia.md §6` |
@@ -52,35 +52,66 @@ Monorepo com npm workspaces:
 
 ```
 dao-tale/
-├── package.json               # workspaces: server, web, shared
+├── package.json               # workspaces e comandos dev, test, typecheck, build, check
+├── scripts/                   # inicialização, atalho, publicação/deploy
 ├── docs/                      # esta documentação
-├── shared/                    # tipos e schemas Zod do contrato da API
+├── shared/                    # tipos, constantes e regras usadas por server e web
 │   └── src/
-│       ├── api/               # request/response de cada endpoint
-│       └── dominio.ts         # Obra, Capitulo, Frase, EntradaGlossario, CasoTeste…
+│       ├── index.ts           # domínio e respostas públicas da API
+│       ├── publico.ts         # contratos da vitrine pública
+│       ├── livro.ts           # remontagem, cabeçalhos e escopo de exportação
+│       └── *.ts               # estilo, prompt, glossário, erros e formatação inline
 ├── server/
 │   └── src/
 │       ├── index.ts           # boot: migra o banco, sobe o Hono, abre o navegador
+│       ├── app.ts             # composição da aplicação, middleware e erros HTTP
+│       ├── auth/              # senha, sessão, limite e trava de IP
 │       ├── rotas/             # um arquivo por recurso (obras, capitulos, frases…)
 │       ├── db/
 │       │   ├── migrations/    # 001_inicial.sql, 002_…
-│       │   └── repositorios/  # acesso a dados por tabela
-│       ├── segmentacao/       # máquina de estados + testes
+│       │   ├── repos.ts       # repositórios e consultas do domínio
+│       │   └── *.ts           # backup, configuração e portabilidade
+│       ├── segmentacao/       # segmentador e seus testes
 │       ├── ia/
 │       │   ├── provedor.ts    # interface comum ProvedorIA
 │       │   ├── claude.ts
-│       │   ├── gemini.ts      # Fase 2
+│       │   ├── gemini.ts
+│       │   ├── compat.ts      # provedores com API compatível
 │       │   ├── mock.ts        # provedor simulado (dev/testes/sem chave)
 │       │   └── prompts.ts     # montagem de instrução de sistema, protocolo de revisão
 │       ├── traducao/          # orquestração de jobs de tradução em blocos
+│       ├── exportacao/        # texto, Markdown, EPUB, PDF e ZIP
+│       ├── telemetria/        # uso, preços e painel
 │       └── credenciais/       # keyring + fallback arquivo
 └── web/
     └── src/
-        ├── paginas/           # ListaObras, Obra, EditorCapitulo, Glossario,
-        │                      # PromptMae, BancoTestes, Configuracoes
-        ├── componentes/
-        └── api/               # cliente tipado gerado a partir de shared/
+        ├── main.tsx           # entrada React, QueryClient e roteamento
+        ├── App.tsx            # casca, navegação e componentes globais
+        ├── paginas/           # biblioteca, obra, editor, leitura, guia e configuração
+        ├── componentes/       # componentes reutilizados pelas páginas
+        ├── util/              # funções puras da interface
+        ├── api.ts             # cliente HTTP genérico sobre fetch
+        └── sessao.ts          # estado e consulta da sessão hospedada
 ```
+
+Os testes usam o sufixo `*.test.ts`/`*.test.tsx` e ficam ao lado do código que
+protegem. O diretório `shared/` não é um cliente gerado nem uma descrição completa
+de endpoints: ele é a fronteira de compilação para tipos, constantes e funções que
+servidor e interface realmente compartilham. Os schemas Zod de payloads de entrada
+permanecem nas rotas do servidor quando só são necessários ali; respostas e tipos
+consumidos pela interface são publicados por `@dao-tale/shared`. Essa divisão evita
+duplicação sem obrigar detalhes internos de cada endpoint a virarem API pública.
+
+## 3.1. Verificação automatizada
+
+O comando raiz `npm run check` executa lint, conferência de formatação, verificação
+de tipos, testes e build de produção. A CI repete esse comando a partir de uma
+instalação limpa com `npm ci`.
+
+O ESLint cobre o código TypeScript/React da interface, inclusive as regras de hooks.
+O Prettier roda em modo de conferência sobre configurações e testes novos; o código
+legado não foi reformatado em massa, para manter os diffs funcionais legíveis. Os
+testes do frontend usam `jsdom` e Testing Library quando precisam renderizar a UI.
 
 ## 4. Onde ficam os dados do usuário
 

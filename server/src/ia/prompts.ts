@@ -1,4 +1,9 @@
-import type { EntradaGlossario } from '@dao-tale/shared';
+import {
+  CATEGORIAS_GLOSSARIO,
+  DESCRICOES_CATEGORIAS_GLOSSARIO,
+  type CategoriaGlossarioPadrao,
+  type EntradaGlossario,
+} from '@dao-tale/shared';
 import type {
   RequisicaoContracapa,
   RequisicaoExtrairTermos,
@@ -6,9 +11,15 @@ import type {
   RequisicaoQa,
   RequisicaoRefinarPrompt,
   RequisicaoRevisao,
+  RequisicaoRevisaoLiteraria,
+  RequisicaoAdjudicacaoLiteraria,
   RequisicaoTraducaoBloco,
 } from './provedor.js';
 import { PROMPT_CONTRACAPA } from './promptContracapa.js';
+
+const TAXONOMIA_GAMA = CATEGORIAS_GLOSSARIO.map(
+  (categoria) => `- ${categoria}: ${DESCRICOES_CATEGORIAS_GLOSSARIO[categoria as CategoriaGlossarioPadrao]}`,
+).join('\n');
 
 // Montagem dos textos de sistema e usuário — compartilhada por todos os provedores.
 // O bloco de sistema é idêntico em todas as chamadas de um capítulo (pré-requisito do prompt caching).
@@ -52,6 +63,11 @@ function linhaGlossario(e: EntradaGlossario, porId: Map<number, EntradaGlossario
     const p = porId.get(e.principal_id);
     linha += p ? ` · variante de ${p.termo_pt} (${p.termo_zh})` : ' · variante';
   }
+  if (e.termo_pai_id != null) {
+    const pai = porId.get(e.termo_pai_id);
+    linha += pai ? ` · pertence a/fica em ${pai.termo_pt} (${pai.termo_zh})` : ' · possui termo pai';
+  }
+  if (e.relacoes && e.relacoes.length > 0) linha += ` · relações: ${e.relacoes.join('; ')}`;
   return linha;
 }
 
@@ -154,8 +170,12 @@ export function sistemaTraducaoPartes(
 ): PartesSistema {
   const instrucoes = [
     'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
+    'Leia o bloco e os contextos por inteiro antes de redigir. Resolva primeiro continuidade, referentes, progressão lógica e o tom local de cada passagem; só então traduza as frases numeradas.',
+    'Antes de entregar, faça uma segunda leitura silenciosa: compare cada tradução com o chinês para recuperar omissões e intensidade; depois leia a sequência apenas em português e corrija decalques, formalidade sem apoio, fragmentos acidentais e construções mecânicas. Não mostre essa análise.',
     'Traduza cada frase numerada mantendo o número. Não traduza o contexto marcado como "já traduzido" nem o marcado como "contexto futuro".',
     'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
+    'Classifique cada termo novo em exatamente uma categoria da taxonomia abaixo, escolhendo a mais específica; nunca crie categoria nem use “outro”:',
+    TAXONOMIA_GAMA,
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ];
   const operacional = [
@@ -381,6 +401,8 @@ export function sistemaExtrairTermosPartes(
     'Inclua nomes de lugar mantidos em pinyin (ex.: transliterações), que costumam passar despercebidos e precisam de consistência.',
     'NÃO liste: palavras comuns, verbos, adjetivos genéricos, nem termos que já estão no glossário.',
     'Para cada termo devolva: termo_zh (como no original), termo_pt (exatamente como aparece na tradução), categoria e uma descrição curta em PT (o que é/papel na história) para a nota do glossário.',
+    'Use exatamente uma categoria da taxonomia abaixo, sempre a mais específica; nunca invente categoria nem use “outro”:',
+    TAXONOMIA_GAMA,
     'Se não houver nenhum termo novo digno de glossário, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ].join('\n');
@@ -455,20 +477,25 @@ export function usuarioQa(req: RequisicaoQa): string {
 export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'omega' | 'deltaAtual'>): PartesSistema {
   const operacional = [
     '## TAREFA: REFINAR AS DIRETRIZES DA OBRA',
-    'O prompt acima rege a tradução da obra. O revisor registrou casos recorrentes em que a tradução saiu errada ou dúbia — agrupados por seção/regra, eles indicam lacunas sistemáticas das DIRETRIZES ESPECÍFICAS DA OBRA (Seção 6).',
+    'O prompt acima rege a tradução da obra. Casos recorrentes e edições humanas são EVIDÊNCIA de lacuna, não prova de que a solução pertença ao Delta.',
     'As diretrizes atuais da obra são exatamente estas (vazias se nada aparecer):',
     '```',
     req.deltaAtual.trim() || '(nenhuma diretriz específica ainda)',
     '```',
-    'Com base nos casos que virão na mensagem do usuário, proponha regras NOVAS ou AJUSTADAS para essas diretrizes:',
+    'Antes de propor texto, classifique a camada proprietária de cada achado:',
+    '- Alfa: regra universal de tradução chinês → PT-BR ou de prosa natural, aplicável a muitas obras.',
+    '- Beta: escolha configurável da obra (diálogo, pensamento, registro, tempos, notas, onomatopeia, nomes ou capitalização).',
+    '- Gama: equivalência individual de termo, nome, lugar, epíteto, cargo ou conceito.',
+    '- Delta: exceção ou comportamento recorrente realmente específico desta obra e não representável no Gama/Beta.',
+    '- Nenhuma: preferência isolada, evidência insuficiente, regra já existente ou mera desobediência do modelo.',
     '- Uma proposta por lacuna identificada; frase imperativa, curta e testável, no estilo das regras existentes.',
     '- A regra deve prevenir os erros dos casos apresentados sem contradizer as demais seções do prompt.',
-    '- NÃO reescreva regras que já funcionam; NÃO proponha nada genérico que as seções universais já cubram.',
+    '- NÃO reescreva regras que já funcionam. NÃO envie ao Delta nada genérico coberto pelo Alfa, nenhuma escolha de Beta e nenhuma equivalência de Gama.',
     '- NÃO proponha regra sobre aspas/travessão no diálogo, marcação do pensamento, mais-que-perfeito, nota do tradutor, onomatopeia, capitalização de títulos/cargos/formas de tratamento ou público-alvo: isso é configuração da obra (a Seção 5, quando presente), resolvida por uma chave e não por texto de diretriz.',
     'A mensagem do usuário pode trazer casos RECUSADOS pelo revisor. Eles são correção de rumo, não material a generalizar: NÃO proponha regra que reproduza o erro apontado neles.',
     'A mensagem pode trazer CORREÇÕES QUE O REVISOR FEZ À MÃO. São o padrão que ele pratica sem pedir, e portanto o sinal mais forte — mas também o mais bruto: uma correção isolada é gosto, não regra. Só proponha regra quando o mesmo tipo de correção se repetir em casos diferentes.',
     'As fontes podem vir juntas ou separadas: casos recorrentes do banco de testes, casos recusados pelo revisor, e correções que ele fez à mão. Quando NÃO houver casos recorrentes e só vierem correções à mão, proponha um secao_regra NOVO e descritivo do padrão que você observou — não cite um identificador que não foi enviado.',
-    'Para cada proposta devolva: secao_regra (o identificador dos casos que a motivaram), regra_proposta (o texto pronto para entrar nas diretrizes) e justificativa (1 frase ligando aos casos).',
+    'Para cada achado devolva: camada, secao_regra, regra_proposta e justificativa. Em camada=delta, regra_proposta deve estar pronta para o Delta. Nas demais, descreva concisamente a ação correta na camada dona; ela será exibida, mas bloqueada para inclusão no Delta.',
     'Se os casos não sustentarem nenhuma regra nova, devolva a lista vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
   ].join('\n');
@@ -566,6 +593,143 @@ export function usuarioPasseEstilo(req: RequisicaoPasseEstilo): string {
       partes.push(`     violação: ${v.regra} — trecho acusado: "${v.trecho}"`);
       if (v.orientacao) partes.push(`     orientação: ${v.orientacao}`);
     }
+  }
+  return partes.join('\n');
+}
+
+// ── Revisão literária em sombra ───────────────────────────────────────────
+// Tarefa distinta da tradução e do passe cirúrgico. Ela pode reestruturar uma
+// frase, mas só produz candidatos versionados: nunca escreve no texto vigente.
+
+export function sistemaRevisaoLiterariaPartes(req: Pick<RequisicaoRevisaoLiteraria, 'omega' | 'foco'>): PartesSistema {
+  const foco = req.foco ?? 'integral';
+  const instrucaoFoco = foco === 'fidelidade'
+    ? [
+        '## ESCOPO DESTE PASSE: FIDELIDADE',
+        'Corrija somente erro ou perda demonstrável de sentido: omissão, invenção, referente, relação lógica/temporal, intensidade ou aplicação contextual do Gama.',
+        'Não faça polimento estilístico. Se a formulação transmitir corretamente o chinês, devolva null mesmo que você prefira outra redação.',
+      ]
+    : foco === 'tom-naturalidade'
+      ? [
+          '## ESCOPO DESTE PASSE: TOM LOCAL E NATURALIDADE',
+          'Trate o sentido da versão recebida como já verificado. Corrija somente português que soe traduzido ou registro, voz, ritmo e diálogo incompatíveis com o trecho chinês local.',
+          'Não acrescente imagem, intensidade ou explicação; não altere fatos, referentes, relações lógicas, Gama ou conteúdo para obter fluência.',
+          'Prefira vocabulário corrente quando o original não sustentar solenidade, tecnicismo ou rebuscamento. Não uniformize trechos que tenham tons diferentes.',
+        ]
+      : foco === 'seletiva'
+        ? [
+            '## ESCOPO DESTE PASSE: REVISÃO SELETIVA DIAGNOSTICADA',
+            'Cada alvo traz sinais de triagem. Verifique-os contra o chinês e o contexto; eles são suspeitas, não ordens de substituição.',
+            'Corrija somente quando o diagnóstico revelar problema real. Não procure motivos adicionais para reescrever uma frase boa e devolva null diante de falso positivo.',
+            'Quando houver correção, altere o menor trecho suficiente para resolver exatamente o diagnóstico e preserve literalmente todo o restante que continuar correto. Não aproveite a abertura para trocar sinônimos, aspas, pontuação, tempo verbal ou ritmo não acusados.',
+            'Nunca substitua mecanicamente mais-que-perfeito simples por "tinha/havia + particípio". Se a forma simples soar inadequada, reconstrua com o tempo e o aspecto naturais ao contexto; se isso não puder ser feito sem uma reescrita ampla ou perda temporal, devolva null para adjudicação humana.',
+            'Antes de entregar, compare palavra por palavra com o vigente: se alguma mudança não for necessária para sanar uma das razões listadas no DIAGNÓSTICO, desfaça-a.',
+          ]
+        : [];
+  const operacional = [
+    '## TAREFA: REVISÃO LITERÁRIA EM SOMBRA',
+    ...instrucaoFoco,
+    'Compare o chinês, a primeira saída da IA e o texto vigente. O vigente pode conter boas edições humanas: preserve-as.',
+    'Antes de revisar cada alvo, infira do trecho chinês e do contexto o tom LOCAL: voz do narrador ou personagem, grau de oralidade/formalidade, densidade sintática, ritmo, distância emocional e intenção. Não imponha ao capítulo um registro global.',
+    'Proponha mudança somente quando houver ganho concreto de fidelidade, naturalidade brasileira, coesão, ritmo, diálogo, léxico, Gama ou tipografia.',
+    'Naturalize interferências do chinês para que o português não soe traduzido, mas não simplifique, modernize, formalize, embeleze ou intensifique sem evidência no original. Uma frase pode ser coloquial, seca, filosófica, solene ou áspera quando o trecho local assim for.',
+    'Não reescreva para exibir variedade. Não troque palavra corrente por rara, não fragmente a prosa e não explique o que o original apenas sugere. Mudança de registro sem evidência local é regressão.',
+    'Preserve fatos, intensidade, ponto de vista, relações temporais, números e notas ((...)). O chinês é o árbitro semântico; o texto vigente é a base editorial.',
+    'Leia todo o contexto antes de decidir cada alvo. Resolva sujeitos, referentes, falas multiparágrafo e continuidade entre frases.',
+    'Respeite as fronteiras indicadas por §. Se uma fala e sua atribuição estiverem em parágrafos diferentes, não inicie o novo parágrafo com dicendi dependente ("disse ele", "gritou alguém"). Construa uma oração autônoma com sujeito explícito ("Ele disse aquilo", "O grito partiu de alguém"). Só use `"...", disse ele` quando fala e atribuição pertencerem ao mesmo parágrafo.',
+    'Para texto já bom, devolva null. Uma revisão conservadora com poucos acertos é melhor que muitas paráfrases indiferentes.',
+    'Checklist por alvo: (1) sentido/omissões; (2) Gama contextual; (3) referentes/tempo; (4) tom local preservado; (5) PT-BR natural e fluido; (6) ritmo, parágrafo, diálogo e notas; (7) ganho demonstrável, não preferência.',
+    'A saída será submetida a validadores e aprovação humana; nada será publicado automaticamente.',
+    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+  ].join('\n');
+  return { base: req.omega.trim(), operacional };
+}
+
+export function sistemaRevisaoLiteraria(req: Pick<RequisicaoRevisaoLiteraria, 'omega' | 'foco'>): string {
+  return juntarPartes(sistemaRevisaoLiterariaPartes(req));
+}
+
+function linhaRevisaoLiteraria(f: RequisicaoRevisaoLiteraria['alvos'][number]): string[] {
+  const linhas = [
+    `[${f.ordem} §${f.paragrafo}${f.inicio_paragrafo ? ' início' : ''}] ZH: ${f.texto_zh}`,
+    `     IA original: ${f.texto_pt_original_ia ?? '(indisponível)'}`,
+    `     Vigente: ${f.texto_pt}`,
+  ];
+  if (f.diagnostico) {
+    linhas.push(`     DIAGNÓSTICO: ${f.diagnostico.fenomenos.join(', ')}`);
+    for (const razao of f.diagnostico.razoes) linhas.push(`       - ${razao}`);
+  }
+  return linhas;
+}
+
+function linhaContextoLiterario(f: RequisicaoRevisaoLiteraria['alvos'][number]): string[] {
+  // O contexto serve para continuidade, não para comparar versões. Repetir ali
+  // a primeira saída da IA dobra ruído e compete com as frases realmente alvo.
+  return [`[${f.ordem} §${f.paragrafo}${f.inicio_paragrafo ? ' início' : ''}] ZH: ${f.texto_zh}`, `     Vigente: ${f.texto_pt}`];
+}
+
+export function usuarioRevisaoLiteraria(req: RequisicaoRevisaoLiteraria): string {
+  const partes: string[] = [];
+  if (req.glossario.length) partes.push('### Gama relevante — equivalências e usos aplicáveis aos alvos', formatarGlossario(req.glossario), '');
+  if (req.exemplosContrastivos?.length) {
+    partes.push('### Memória contrastiva recuperada — imite o critério, não a redação');
+    for (const exemplo of req.exemplosContrastivos) {
+      partes.push(`[cap. ${exemplo.capitulo}, frase ${exemplo.ordem}] ZH: ${exemplo.texto_zh}`);
+      partes.push(`     REJEITADO: ${exemplo.texto_rejeitado}`);
+      partes.push(`     APROVADO: ${exemplo.texto_aprovado}`);
+      if (exemplo.justificativa) partes.push(`     RAZÃO: ${exemplo.justificativa}`);
+      if (exemplo.categorias.length) partes.push(`     CATEGORIAS: ${exemplo.categorias.join(', ')}`);
+    }
+    partes.push('');
+  }
+  if (req.contextoAntes.length) {
+    partes.push('### Contexto anterior — não propor mudanças');
+    for (const f of req.contextoAntes) partes.push(...linhaContextoLiterario(f));
+    partes.push('');
+  }
+  partes.push('### Frases-alvo');
+  for (const f of req.alvos) partes.push(...linhaRevisaoLiteraria(f));
+  if (req.contextoDepois.length) {
+    partes.push('', '### Contexto posterior — não propor mudanças');
+    for (const f of req.contextoDepois) partes.push(...linhaContextoLiterario(f));
+  }
+  return partes.join('\n');
+}
+
+export function sistemaAdjudicacaoLiterariaPartes(req: Pick<RequisicaoAdjudicacaoLiteraria, 'omega'>): PartesSistema {
+  const operacional = [
+    '## TAREFA: ADJUDICAÇÃO LITERÁRIA INDEPENDENTE',
+    'Para cada item, compare TEXTO VIGENTE e CANDIDATO contra o CHINÊS e o contexto.',
+    'Julgue melhora apenas quando o candidato for simultaneamente fiel, natural em português brasileiro e superior sem mudar o tom local evidenciado pelo original.',
+    'Avalie explicitamente voz, oralidade/formalidade, densidade sintática, ritmo, distância emocional e intensidade. Naturalidade não autoriza simplificar, modernizar, formalizar, ornamentar ou uniformizar o texto.',
+    'Use equivalente quando só houver preferência pessoal ou variação sem ganho; use regressao diante de perda, invenção, normalização de tom, palavra desnecessariamente rara, frase truncada ou piora de ritmo; use incerto quando o contexto não permitir decidir.',
+    'Não favoreça o candidato por ser mais novo. Não reescreva nenhum texto. Identifique concretamente o que ganhou ou perdeu.',
+    'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
+  ].join('\n');
+  return { base: req.omega.trim(), operacional };
+}
+
+export function sistemaAdjudicacaoLiteraria(req: Pick<RequisicaoAdjudicacaoLiteraria, 'omega'>): string {
+  return juntarPartes(sistemaAdjudicacaoLiterariaPartes(req));
+}
+
+export function usuarioAdjudicacaoLiteraria(req: RequisicaoAdjudicacaoLiteraria): string {
+  const partes: string[] = [];
+  if (req.glossario.length) partes.push(formatarGlossario(req.glossario), '');
+  if (req.contextoAntes.length) {
+    partes.push('### Contexto anterior');
+    for (const f of req.contextoAntes) partes.push(`[${f.ordem}] ${f.texto_pt}`);
+    partes.push('');
+  }
+  partes.push('### Comparações');
+  for (const f of req.comparacoes) {
+    partes.push(`[${f.ordem}] ZH: ${f.texto_zh}`);
+    partes.push(`     VIGENTE: ${f.texto_vigente}`);
+    partes.push(`     CANDIDATO: ${f.texto_candidato}`);
+  }
+  if (req.contextoDepois.length) {
+    partes.push('', '### Contexto posterior');
+    for (const f of req.contextoDepois) partes.push(`[${f.ordem}] ${f.texto_pt}`);
   }
   return partes.join('\n');
 }

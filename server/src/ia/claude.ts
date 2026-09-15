@@ -10,6 +10,8 @@ import {
   type RequisicaoQa,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
+  type RequisicaoRevisaoLiteraria,
+  type RequisicaoAdjudicacaoLiteraria,
   type RequisicaoTraducaoBloco,
   type RespostaContracapa,
   type RespostaExtrairTermos,
@@ -17,6 +19,8 @@ import {
   type RespostaQa,
   type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
+  type RespostaRevisaoLiteraria,
+  type RespostaAdjudicacaoLiteraria,
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
@@ -26,6 +30,8 @@ import {
   sistemaQaPartes,
   sistemaRefinarPromptPartes,
   sistemaRevisaoPartes,
+  sistemaRevisaoLiterariaPartes,
+  sistemaAdjudicacaoLiterariaPartes,
   sistemaTraducaoPartes,
   usuarioContracapa,
   usuarioExtrairTermos,
@@ -33,6 +39,8 @@ import {
   usuarioQa,
   usuarioRefinarPrompt,
   usuarioRevisao,
+  usuarioRevisaoLiteraria,
+  usuarioAdjudicacaoLiteraria,
   usuarioTraducao,
   type PartesSistema,
 } from './prompts.js';
@@ -43,6 +51,8 @@ import {
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
+  CONTRATO_REVISAO_LITERARIA,
+  CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_TRADUCAO,
   type Contrato,
 } from './contratos.js';
@@ -310,6 +320,48 @@ export const provedorClaude: ProvedorIA = {
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato do passe de estilo.', 'transitorio');
       }
+      throw classificarErro(e);
+    }
+  },
+
+  async revisarLiterariamente(chave, req: RequisicaoRevisaoLiteraria): Promise<RespostaRevisaoLiteraria> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo,
+        max_tokens: 8192,
+        ...amostragem(req),
+        system: sistemaEmBlocos(sistemaRevisaoLiterariaPartes(req)),
+        messages: [{ role: 'user', content: usuarioRevisaoLiteraria(req) }],
+        ...ferramenta(CONTRATO_REVISAO_LITERARIA),
+      });
+      if (resposta.stop_reason === 'max_tokens') throw new ErroProvedor('A revisão literária foi truncada.', 'truncado');
+      const bruto = extrairToolUse(resposta, CONTRATO_REVISAO_LITERARIA.ferramenta);
+      const dados = CONTRATO_REVISAO_LITERARIA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da revisão literária.', 'transitorio');
+      throw classificarErro(e);
+    }
+  },
+
+  async adjudicarRevisaoLiteraria(chave, req: RequisicaoAdjudicacaoLiteraria): Promise<RespostaAdjudicacaoLiteraria> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo, max_tokens: 8192, ...amostragem(req),
+        system: sistemaEmBlocos(sistemaAdjudicacaoLiterariaPartes(req)),
+        messages: [{ role: 'user', content: usuarioAdjudicacaoLiteraria(req) }],
+        ...ferramenta(CONTRATO_ADJUDICACAO_LITERARIA),
+      });
+      if (resposta.stop_reason === 'max_tokens') throw new ErroProvedor('A adjudicação literária foi truncada.', 'truncado');
+      const bruto = extrairToolUse(resposta, CONTRATO_ADJUDICACAO_LITERARIA.ferramenta);
+      const dados = CONTRATO_ADJUDICACAO_LITERARIA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da adjudicação literária.', 'transitorio');
       throw classificarErro(e);
     }
   },

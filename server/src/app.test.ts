@@ -270,6 +270,52 @@ describe('fluxo completo com provedor mock', () => {
     expect(aindaVariante.principal_id).toBeNull();
   });
 
+  it('termo pai aceita pertencimento na mesma obra e recusa ciclo ou outra obra', async () => {
+    const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Árvore Gama' }));
+    const outraObra = await json(await chamar('POST', '/api/obras', { titulo: 'Outra árvore' }));
+    const raiz = await json(await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '堡', termo_pt: 'Fortaleza', categoria: 'local' }));
+    const filho = await json(await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '院', termo_pt: 'Pátio', categoria: 'local' }));
+    const alheio = await json(await chamar('POST', `/api/obras/${outraObra.id}/glossario`, { termo_zh: '城', termo_pt: 'Cidade', categoria: 'local' }));
+
+    const ligado = await chamar('PATCH', `/api/glossario/${filho.id}`, { termo_pai_id: raiz.id });
+    expect(ligado.status).toBe(200);
+    expect((await json(ligado)).termo_pai_id).toBe(raiz.id);
+
+    const ciclo = await chamar('PATCH', `/api/glossario/${raiz.id}`, { termo_pai_id: filho.id });
+    expect(ciclo.status).toBe(400);
+    expect((await json(ciclo)).erro.codigo).toBe('termo-pai-invalido');
+
+    const cruzado = await chamar('PATCH', `/api/glossario/${filho.id}`, { termo_pai_id: alheio.id });
+    expect(cruzado.status).toBe(400);
+  });
+
+  it('relações narrativas guardam um fato, normalizam variantes e impedem duplicata simétrica', async () => {
+    const obra = await json(await chamar('POST', '/api/obras', { titulo: 'Grafo narrativo' }));
+    const pai = await json(await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '父', termo_pt: 'Pai', categoria: 'personagem' }));
+    const filha = await json(await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '女', termo_pt: 'Filha', categoria: 'personagem' }));
+    const apelido = await json(await chamar('POST', `/api/obras/${obra.id}/glossario`, { termo_zh: '姑娘', termo_pt: 'Moça', categoria: 'titulo' }));
+    await chamar('POST', `/api/glossario/${apelido.id}/vincular`, { principal_id: filha.id });
+
+    const criada = await chamar('POST', `/api/obras/${obra.id}/glossario/relacoes`, {
+      origem_termo_id: pai.id, destino_termo_id: apelido.id, tipo: 'pai-filha', capitulo_inicio: 2,
+    });
+    expect(criada.status).toBe(201);
+    expect((await json(criada)).destino_termo_id).toBe(filha.id);
+
+    const alianca = await chamar('POST', `/api/obras/${obra.id}/glossario/relacoes`, {
+      origem_termo_id: filha.id, destino_termo_id: pai.id, tipo: 'aliado-de',
+    });
+    expect(alianca.status).toBe(201);
+    const duplicada = await chamar('POST', `/api/obras/${obra.id}/glossario/relacoes`, {
+      origem_termo_id: pai.id, destino_termo_id: filha.id, tipo: 'aliado-de',
+    });
+    expect(duplicada.status).toBe(409);
+
+    const listadas = await json(await chamar('GET', `/api/obras/${obra.id}/glossario/relacoes`));
+    expect(listadas).toHaveLength(2);
+    expect((await chamar('DELETE', `/api/glossario/relacoes/${listadas[0].id}`)).status).toBe(200);
+  });
+
   it('aparições do glossário: primeira e última no texto, por capítulo', async () => {
     const obra = await json(
       await chamar('POST', '/api/obras', {

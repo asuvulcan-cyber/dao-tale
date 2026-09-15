@@ -8,6 +8,8 @@ import {
   respostaQaSchema,
   respostaRefinarPromptSchema,
   respostaRevisaoSchema,
+  respostaRevisaoLiterariaSchema,
+  respostaAdjudicacaoLiterariaSchema,
   respostaTraducaoSchema,
 } from './respostas.js';
 
@@ -116,14 +118,18 @@ const TERMO_NOVO: EsquemaJson = {
   properties: {
     termo_zh: { type: 'string', description: 'termo em chinês, como no original' },
     termo_pt: { type: 'string', description: 'tradução adotada' },
-    categoria: { type: 'string', enum: [...CATEGORIAS_GLOSSARIO] },
+    categoria: {
+      type: 'string',
+      enum: [...CATEGORIAS_GLOSSARIO],
+      description: 'categoria semântica mais específica da taxonomia fechada do Gama; não invente categorias',
+    },
     contexto: {
       type: 'string',
       description:
         'descrição curta do termo em português (1 frase) para lembrança no glossário — o que é, papel na história; NÃO copie o trecho chinês',
     },
   },
-  required: ['termo_zh', 'termo_pt'],
+  required: ['termo_zh', 'termo_pt', 'categoria'],
 };
 
 export const CONTRATO_TRADUCAO: Contrato<typeof respostaTraducaoSchema> = {
@@ -293,6 +299,63 @@ export const CONTRATO_PASSE_ESTILO: Contrato<typeof respostaPasseEstiloSchema> =
   ],
 };
 
+export const CONTRATO_REVISAO_LITERARIA: Contrato<typeof respostaRevisaoLiterariaSchema> = {
+  ferramenta: 'entregar_revisao_literaria',
+  descricao: 'Entrega propostas literárias por frase, sem aplicar nenhuma alteração.',
+  zod: respostaRevisaoLiterariaSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      propostas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ordem: { type: 'integer', description: 'número da frase exatamente como recebido' },
+            texto_revisado: { type: ['string', 'null'], description: 'frase completa revisada; null se o texto vigente já estiver bom' },
+            justificativa: { type: 'string', description: 'problema concreto e efeito da correção, em uma frase curta' },
+            categorias: { type: 'array', items: { type: 'string', enum: ['fidelidade', 'naturalidade', 'coesao', 'ritmo', 'dialogo', 'lexico', 'gama', 'tipografia'] } },
+            confianca: { type: 'string', enum: ['alta', 'media', 'baixa'] },
+          },
+          required: ['ordem', 'texto_revisado', 'justificativa', 'categorias', 'confianca'],
+        },
+      },
+    },
+    required: ['propostas'],
+  },
+  notasInstrucao: [
+    'Devolva exatamente uma decisão para cada frase-alvo.',
+    'Use texto_revisado: null quando não houver ganho claro; não reescreva só para variar.',
+    'Não inclua frases marcadas como contexto.',
+  ],
+};
+
+export const CONTRATO_ADJUDICACAO_LITERARIA: Contrato<typeof respostaAdjudicacaoLiterariaSchema> = {
+  ferramenta: 'entregar_adjudicacao_literaria',
+  descricao: 'Compara texto vigente e candidato contra o chinês e julga se houve ganho real.',
+  zod: respostaAdjudicacaoLiterariaSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      julgamentos: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            ordem: { type: 'integer', description: 'número da frase exatamente como recebido' },
+            veredito: { type: 'string', enum: ['melhora', 'equivalente', 'regressao', 'incerto'] },
+            justificativa: { type: 'string', description: 'comparação concreta entre vigente e candidato, ancorada no chinês' },
+            riscos: { type: 'array', items: { type: 'string', enum: ['omissao', 'invencao', 'gama', 'registro', 'truncamento', 'dialogo', 'ritmo', 'nenhum'] } },
+          },
+          required: ['ordem', 'veredito', 'justificativa', 'riscos'],
+        },
+      },
+    },
+    required: ['julgamentos'],
+  },
+  notasInstrucao: ['Devolva exatamente um julgamento para cada comparação.', 'Use equivalente quando a mudança apenas troca uma formulação boa por outra igualmente boa.'],
+};
+
 export const CONTRATO_REFINAR_PROMPT: Contrato<typeof respostaRefinarPromptSchema> = {
   ferramenta: 'entregar_propostas',
   descricao: 'Entrega as propostas de refinamento das diretrizes da obra.',
@@ -305,11 +368,16 @@ export const CONTRATO_REFINAR_PROMPT: Contrato<typeof respostaRefinarPromptSchem
         items: {
           type: 'object',
           properties: {
+            camada: {
+              type: 'string',
+              enum: ['alfa', 'beta', 'gama', 'delta', 'nenhuma'],
+              description: 'camada proprietária da correção; só delta entra nas diretrizes da obra',
+            },
             secao_regra: { type: 'string', description: 'identificador dos casos que motivaram a proposta' },
             regra_proposta: { type: 'string', description: 'texto pronto para entrar nas diretrizes da obra' },
             justificativa: { type: 'string', description: 'uma frase ligando a regra aos casos' },
           },
-          required: ['secao_regra', 'regra_proposta', 'justificativa'],
+          required: ['camada', 'secao_regra', 'regra_proposta', 'justificativa'],
         },
       },
     },

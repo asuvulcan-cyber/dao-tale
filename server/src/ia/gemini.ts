@@ -9,6 +9,8 @@ import {
   type RequisicaoPasseEstilo,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
+  type RequisicaoRevisaoLiteraria,
+  type RequisicaoAdjudicacaoLiteraria,
   type RequisicaoTraducaoBloco,
   type RequisicaoQa,
   type RespostaContracapa,
@@ -17,6 +19,8 @@ import {
   type RespostaQa,
   type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
+  type RespostaRevisaoLiteraria,
+  type RespostaAdjudicacaoLiteraria,
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
@@ -26,6 +30,8 @@ import {
   sistemaQa,
   sistemaRefinarPrompt,
   sistemaRevisao,
+  sistemaRevisaoLiteraria,
+  sistemaAdjudicacaoLiteraria,
   sistemaTraducao,
   usuarioContracapa,
   usuarioExtrairTermos,
@@ -33,6 +39,8 @@ import {
   usuarioQa,
   usuarioRefinarPrompt,
   usuarioRevisao,
+  usuarioRevisaoLiteraria,
+  usuarioAdjudicacaoLiteraria,
   usuarioTraducao,
 } from './prompts.js';
 import {
@@ -42,6 +50,8 @@ import {
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
+  CONTRATO_REVISAO_LITERARIA,
+  CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_TRADUCAO,
   paraGemini,
 } from './contratos.js';
@@ -57,6 +67,8 @@ const SCHEMA_REVISAO_GEMINI = paraGemini(CONTRATO_REVISAO.schema);
 const SCHEMA_REFINAR_GEMINI = paraGemini(CONTRATO_REFINAR_PROMPT.schema);
 const SCHEMA_QA_GEMINI = paraGemini(CONTRATO_QA.schema);
 const SCHEMA_PASSE_ESTILO_GEMINI = paraGemini(CONTRATO_PASSE_ESTILO.schema);
+const SCHEMA_REVISAO_LITERARIA_GEMINI = paraGemini(CONTRATO_REVISAO_LITERARIA.schema);
+const SCHEMA_ADJUDICACAO_LITERARIA_GEMINI = paraGemini(CONTRATO_ADJUDICACAO_LITERARIA.schema);
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof ApiError) {
@@ -325,6 +337,44 @@ export const provedorGemini: ProvedorIA = {
       if (e instanceof z.ZodError) {
         throw new ErroProvedor('Resposta do modelo fora do contrato do passe de estilo.', 'transitorio');
       }
+      throw classificarErro(e);
+    }
+  },
+
+  async revisarLiterariamente(chave, req: RequisicaoRevisaoLiteraria): Promise<RespostaRevisaoLiteraria> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await gerar(cliente, req.modelo, usuarioRevisaoLiteraria(req), {
+        systemInstruction: sistemaRevisaoLiteraria(req),
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA_REVISAO_LITERARIA_GEMINI,
+        ...amostragem(req),
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new ErroProvedor('A revisão literária foi truncada.', 'truncado');
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_REVISAO_LITERARIA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata, resposta.modelVersion) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da revisão literária.', 'transitorio');
+      throw classificarErro(e);
+    }
+  },
+
+  async adjudicarRevisaoLiteraria(chave, req: RequisicaoAdjudicacaoLiteraria): Promise<RespostaAdjudicacaoLiteraria> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await gerar(cliente, req.modelo, usuarioAdjudicacaoLiteraria(req), {
+        systemInstruction: sistemaAdjudicacaoLiteraria(req), responseMimeType: 'application/json',
+        responseSchema: SCHEMA_ADJUDICACAO_LITERARIA_GEMINI, ...amostragem(req),
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new ErroProvedor('A adjudicação literária foi truncada.', 'truncado');
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_ADJUDICACAO_LITERARIA.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata, resposta.modelVersion) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da adjudicação literária.', 'transitorio');
       throw classificarErro(e);
     }
   },

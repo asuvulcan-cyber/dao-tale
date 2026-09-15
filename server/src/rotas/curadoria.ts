@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { camadaDoRotulo } from '@dao-tale/shared';
+import { lerJson } from './json.js';
+import { camadaDoRotulo, TIPOS_RELACAO_TERMO } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import {
   reposFrases,
@@ -9,6 +10,7 @@ import {
   reposTestes,
   recalcularConsistenciaDaObra,
 } from '../db/repos.js';
+import { reposRelacoesTermos } from '../db/repos/relacoesTermos.js';
 
 // Categoria é texto livre: o usuário cria as suas (migração 016 derrubou o CHECK
 // que contradizia isso). CATEGORIAS_GLOSSARIO são só as sugestões da tela.
@@ -97,8 +99,37 @@ export function rotasCuradoria(db: BancoDados): Hono {
     c.json(reposGlossario.aparicoes(db, Number(c.req.param('obraId')))),
   );
 
+  app.get('/obras/:obraId/glossario/relacoes', (c) =>
+    c.json(reposRelacoesTermos.listar(db, Number(c.req.param('obraId')))),
+  );
+
+  app.post('/obras/:obraId/glossario/relacoes', async (c) => {
+    const corpo = z.object({
+      origem_termo_id: z.number().int().positive(),
+      destino_termo_id: z.number().int().positive(),
+      tipo: z.enum(TIPOS_RELACAO_TERMO),
+      nota: z.string().trim().max(300).nullable().optional(),
+      capitulo_inicio: z.number().int().nonnegative().nullable().optional(),
+      capitulo_fim: z.number().int().nonnegative().nullable().optional(),
+    }).refine(
+      (d) => d.capitulo_inicio == null || d.capitulo_fim == null || d.capitulo_fim >= d.capitulo_inicio,
+      { message: 'O capítulo final não pode ser anterior ao inicial.' },
+    ).safeParse(await lerJson(c));
+    if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
+    const r = reposRelacoesTermos.criar(db, Number(c.req.param('obraId')), corpo.data);
+    if (r === 'invalida') return c.json({ erro: { codigo: 'relacao-invalida', mensagem: 'Use dois referentes diferentes da mesma obra e um tipo reconhecido.' } }, 400);
+    if (r === 'duplicada') return c.json({ erro: { codigo: 'relacao-duplicada', mensagem: 'Essa relação já está cadastrada.' } }, 409);
+    return c.json(r, 201);
+  });
+
+  app.delete('/glossario/relacoes/:id', (c) => {
+    const ok = reposRelacoesTermos.excluir(db, Number(c.req.param('id')));
+    if (!ok) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Relação não encontrada.' } }, 404);
+    return c.json({ ok: true });
+  });
+
   app.post('/obras/:obraId/glossario', async (c) => {
-    const corpo = criarEntradaSchema.safeParse(await c.req.json());
+    const corpo = criarEntradaSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const obraId = Number(c.req.param('obraId'));
     const resultado = reposGlossario.criar(db, obraId, corpo.data);
@@ -112,9 +143,24 @@ export function rotasCuradoria(db: BancoDados): Hono {
   });
 
   app.patch('/glossario/:id', async (c) => {
-    const corpo = atualizarEntradaSchema.safeParse(await c.req.json());
+    const corpo = atualizarEntradaSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
-    const entrada = reposGlossario.atualizar(db, Number(c.req.param('id')), corpo.data);
+    const entradaId = Number(c.req.param('id'));
+    if (
+      corpo.data.termo_pai_id !== undefined &&
+      !reposGlossario.termoPaiValido(db, entradaId, corpo.data.termo_pai_id)
+    ) {
+      return c.json(
+        {
+          erro: {
+            codigo: 'termo-pai-invalido',
+            mensagem: 'Termo pai inválido: use outro termo da mesma obra e não crie ciclos de pertencimento.',
+          },
+        },
+        400,
+      );
+    }
+    const entrada = reposGlossario.atualizar(db, entradaId, corpo.data);
     if (!entrada) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
     // Editar termo_zh/termo_pt muda o que a varredura procura — recalcula na obra dona da entrada.
     recalcularConsistenciaDaObra(db, entrada.obra_id);
@@ -137,7 +183,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
   app.post('/glossario/:id/substituir', async (c) => {
     const corpo = z
       .object({ de: z.string().min(1).max(160), previa: z.boolean().default(false) })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const entrada = reposGlossario.obter(db, Number(c.req.param('id')));
     if (!entrada) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
@@ -162,7 +208,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
   app.post('/glossario/:id/vincular', async (c) => {
     const corpo = z
       .object({ principal_id: z.number().int().nullable() })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const r = reposGlossario.vincular(db, Number(c.req.param('id')), corpo.data.principal_id);
     if (r === undefined) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Entrada não encontrada.' } }, 404);
@@ -186,7 +232,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
   });
 
   app.post('/obras/:obraId/glossario/importar', async (c) => {
-    const corpo = z.object({ csv: z.string().min(1) }).safeParse(await c.req.json());
+    const corpo = z.object({ csv: z.string().min(1) }).safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Envie o conteúdo CSV.' } }, 400);
     const obraId = Number(c.req.param('obraId'));
     const linhas = corpo.data.csv.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim());
@@ -205,7 +251,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
       const resultado = reposGlossario.criar(db, obraId, {
         termo_zh,
         termo_pt,
-        categoria: cat.success ? cat.data : 'outro',
+        categoria: cat.success ? cat.data : 'lexico-geral',
         nota: nota || undefined,
       });
       if (resultado === 'duplicado') duplicados++;
@@ -239,7 +285,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
   app.post('/termos-sugeridos/:id/aceitar', async (c) => {
     const corpo = z
       .object({ termo_pt: z.string().min(1).optional(), categoria: categoriaSchema.optional(), nota: z.string().optional() })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const sugestaoId = Number(c.req.param('id'));
     // A sugestão já traz o obra_id — lida antes de aceitar, porque o registro
@@ -290,7 +336,7 @@ export function rotasCuradoria(db: BancoDados): Hono {
         status: z.enum(['confirmado', 'corrigido', 'pendente', 'regra-nova-necessaria', 'rejeitado']),
         motivo_rejeicao: z.string().max(500).nullable().optional(),
       })
-      .safeParse(await c.req.json());
+      .safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const caso = reposTestes.atualizarStatus(db, Number(c.req.param('id')), corpo.data.status, corpo.data.motivo_rejeicao ?? null);
     if (!caso) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Caso não encontrado.' } }, 404);

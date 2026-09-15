@@ -6,19 +6,42 @@ import { cabecalhoPt, remontarParagrafos, type CapituloComTitulo, type Frase } f
 
 export type FormatoTexto = 'txt' | 'md' | 'bilingue';
 
+function separarNotas(textos: string[]): { textos: string[]; notas: string[] } {
+  const notas: string[] = [];
+  return {
+    textos: textos.map((texto) =>
+      texto.replace(/\(\(([\s\S]*?)\)\)/g, (_trecho, nota: string) => {
+        notas.push(nota.trim());
+        return `[${notas.length}]`;
+      }),
+    ),
+    notas,
+  };
+}
+
 export function textoCapitulo(capitulo: CapituloComTitulo, frases: Frase[], formato: FormatoTexto): string {
   const paragrafos = remontarParagrafos(frases);
   const cabecalho = cabecalhoPt(capitulo);
 
   if (formato === 'bilingue') {
     const abertura = capitulo.titulo && capitulo.titulo_pt ? `${capitulo.titulo}\n${cabecalho}` : cabecalho;
-    return `${abertura}\n\n` + paragrafos.map((p) => `${p.zh}\n${p.pt || '(pendente de tradução)'}`).join('\n\n');
+    const separados = separarNotas(paragrafos.map((p) => p.pt));
+    const corpo = paragrafos.map((p, i) => `${p.zh}\n${separados.textos[i] || '(pendente de tradução)'}`).join('\n\n');
+    const rodape = separados.notas.length
+      ? `\n\nNotas\n${separados.notas.map((nota, i) => `[${i + 1}] ${nota}`).join('\n')}`
+      : '';
+    return `${abertura}\n\n${corpo}${rodape}`;
   }
 
   // md preserva a formatação (itálico/negrito) que a tradução usar; txt é texto puro.
-  const corpo = paragrafos
+  const separados = separarNotas(paragrafos
     .map((p) => p.pt)
-    .filter(Boolean)
-    .join('\n\n');
-  return formato === 'md' ? `# ${cabecalho}\n\n${corpo}` : `${cabecalho}\n\n${corpo}`;
+    .filter(Boolean));
+  const corpo = separados.textos.join('\n\n');
+  const rodape = separados.notas.length
+    ? formato === 'md'
+      ? `\n\n${separados.notas.map((nota, i) => `[^${i + 1}]: ${nota}`).join('\n')}`
+      : `\n\nNotas\n${separados.notas.map((nota, i) => `[${i + 1}] ${nota}`).join('\n')}`
+    : '';
+  return formato === 'md' ? `# ${cabecalho}\n\n${corpo}${rodape}` : `${cabecalho}\n\n${corpo}${rodape}`;
 }

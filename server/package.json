@@ -9,6 +9,12 @@
     "restaurar": "tsx src/db/restaurar-cli.ts",
     "senha": "tsx src/auth/senha-cli.ts",
     "ips": "tsx src/auth/ips-cli.ts",
+    "eval:literaria:exportar": "tsx scripts/exportar-eval-literaria.ts",
+    "eval:literaria:executar": "tsx scripts/executar-eval-literaria.ts",
+    "eval:literaria:aferir": "tsx scripts/aferir-eval-literaria.ts",
+    "eval:traducao:executar": "tsx scripts/executar-eval-traducao.ts",
+    "eval:traducao:aferir": "tsx scripts/aferir-eval-traducao.ts",
+    "auditar:qualidade": "node scripts/auditar-qualidade-historica.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

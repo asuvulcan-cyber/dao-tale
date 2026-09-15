@@ -6,7 +6,13 @@
 // aviso descartável, que é o preço certo de reconhecer tema em texto livre.
 
 import { temasNoTexto, type Camada } from '@dao-tale/shared';
-import { MARCADOR_DELTA, MARCADOR_PREFERENCIAS } from '../db/promptPadraoInicial.js';
+import {
+  MARCADOR_DELTA,
+  MARCADOR_PREFERENCIAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V2,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+} from '../db/promptPadraoInicial.js';
 
 export interface AvisoCamada {
   tema: string;
@@ -47,12 +53,17 @@ export function avisosDaCamada(texto: string, camada: Camada): AvisoCamada[] {
  */
 export function avisosDeAlfa(conteudo: string): AvisoCamada[] {
   const avisos = avisosDaCamada(conteudo, 'alfa');
-  if (!conteudo.includes(MARCADOR_PREFERENCIAS)) {
+  if (
+    !conteudo.includes(MARCADOR_PREFERENCIAS) &&
+    !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS) &&
+    !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2) &&
+    !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+  ) {
     avisos.push({
       tema: 'marcador_preferencias',
       titulo: 'Marcador de preferências ausente',
       dono: 'beta',
-      mensagem: `Sem ${MARCADOR_PREFERENCIAS}, as preferências de estilo das obras serão ignoradas em silêncio ao compor o Ômega.`,
+      mensagem: `Sem um marcador de preferências reconhecido, as preferências de estilo das obras serão ignoradas em silêncio ao compor o Ômega.`,
       linha: 0,
       trecho: '',
     });

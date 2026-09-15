@@ -3,10 +3,10 @@
 // leitura e o XHTML do EPUB (doc 12 §3). Parágrafos NÃO entram aqui — eles são
 // as próprias frases agrupadas por `frases.paragrafo`.
 
-const RE_MD_INLINE = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g;
+const RE_MD_INLINE = /(\(\([\s\S]*?\)\)|\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g;
 
 export interface SegmentoInline {
-  tipo: 'texto' | 'italico' | 'negrito';
+  tipo: 'texto' | 'italico' | 'negrito' | 'nota';
   /** Texto já sem os asteriscos. */
   texto: string;
 }
@@ -18,7 +18,9 @@ export function partirInline(texto: string): SegmentoInline[] {
   const segmentos: SegmentoInline[] = [];
   for (const parte of partes) {
     if (parte === '') continue; // split deixa vazios entre marcadores adjacentes
-    if (parte.startsWith('**') && parte.endsWith('**') && parte.length > 4) {
+    if (parte.startsWith('((') && parte.endsWith('))') && parte.length > 4) {
+      segmentos.push({ tipo: 'nota', texto: parte.slice(2, -2).trim() });
+    } else if (parte.startsWith('**') && parte.endsWith('**') && parte.length > 4) {
       segmentos.push({ tipo: 'negrito', texto: parte.slice(2, -2) });
     } else if (parte.startsWith('*') && parte.endsWith('*') && parte.length > 2) {
       segmentos.push({ tipo: 'italico', texto: parte.slice(1, -1) });

@@ -13,6 +13,13 @@ function responderCom(status: number, corpo: unknown): void {
   );
 }
 
+function responderComTexto(status: number, corpo: string, contentType = 'text/plain', statusText = ''): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(corpo, { status, statusText, headers: { 'Content-Type': contentType } })),
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -45,5 +52,36 @@ describe('erro da API até a tela', () => {
   it('deixa passar o que deu certo', async () => {
     responderCom(200, { tamanho_bloco: 120 });
     await expect(api('PUT', '/configuracoes', { tamanho_bloco: 120 })).resolves.toEqual({ tamanho_bloco: 120 });
+  });
+
+  it('preserva status e mensagem curta de uma falha não JSON', async () => {
+    responderComTexto(502, 'upstream indisponível', 'text/plain', 'Bad Gateway');
+
+    const erro = await api('GET', '/saude').catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(ErroApi);
+    expect((erro as ErroApi).status).toBe(502);
+    expect((erro as ErroApi).message).toBe('upstream indisponível');
+  });
+
+  it('não mostra uma página HTML devolvida pelo proxy', async () => {
+    responderComTexto(503, '<html><body>detalhes internos</body></html>', 'text/html', 'Service Unavailable');
+
+    await expect(api('GET', '/saude')).rejects.toMatchObject({
+      name: 'ErroApi',
+      status: 503,
+      message: 'Erro 503: Service Unavailable',
+    });
+  });
+
+  it('transforma JSON inválido em sucesso em ErroApi com contexto HTTP', async () => {
+    responderComTexto(200, 'isto não é json');
+
+    await expect(api('GET', '/saude')).rejects.toMatchObject({
+      name: 'ErroApi',
+      status: 200,
+      codigo: 'resposta-invalida',
+      message: 'A API retornou uma resposta inválida',
+    });
   });
 });

@@ -64,6 +64,9 @@ p {
 
 em { font-style: italic; }
 strong { font-weight: 600; }
+.nota, a[epub\\:type="noteref"] { cursor: help; text-decoration: none; }
+.notas { border-top: 1px solid var(--cor-linha); font-size: 0.82em; margin-top: 2em; }
+.notas h2 { font-size: 1em; margin-bottom: 0.5em; }
 
 /* Chinês como apoio no modo bilíngue e no rosto (docs/tokens-css.md §5). */
 .zh {

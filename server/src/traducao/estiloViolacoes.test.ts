@@ -30,6 +30,14 @@ describe('analisarEstilo', () => {
     expect(r.violacoes).toHaveLength(0);
   });
 
+  it('não confunde fileira, esfera ou carnívora com mais-que-perfeito', () => {
+    const r = analisarEstilo(frases(['A fileira cercava a esfera carnívora.']), {
+      ...PREFERENCIAS_PADRAO,
+      mais_que_perfeito: 'evitar',
+    });
+    expect(r.violacoes).toHaveLength(0);
+  });
+
   it('acusa mais-que-perfeito de verbo com hiato, que o sufixo sem acento deixava passar', () => {
     // Um "saíra" real passou batido no capítulo 3 da 死人经: a alternação exigia
     // as letras "ira" e a forma traz "íra".
@@ -121,5 +129,19 @@ describe('vírgula do inciso', () => {
   it('não se aplica ao modo travessão', () => {
     const r = analisarEstilo(frases(['"algo," disse ele.']), { ...PREFERENCIAS_PADRAO, dialogo: 'travessao' });
     expect(r.violacoes.map((v) => v.regra)).not.toContain('virgula-dentro-da-aspa');
+  });
+});
+
+describe('unidades chinesas literais', () => {
+  it('acusa transliteração e a explicação literal do bastão de incenso', () => {
+    const r = analisarEstilo(
+      frases(['Esperou dois shichen.', 'Só depois do tempo de queimar um bastão de incenso ele acordou.']),
+      PREFERENCIAS_PADRAO,
+    );
+    expect(r.violacoes.filter((v) => v.regra === 'unidade-chinesa')).toHaveLength(2);
+  });
+
+  it('aceita a conversão para duração brasileira', () => {
+    expect(analisarEstilo(frases(['Cerca de meia hora depois, ele acordou.']), PREFERENCIAS_PADRAO).violacoes).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { lerJson } from './json.js';
 import {
   PROVEDORES_IDS,
   STATUS_CAPITULO,
@@ -153,7 +154,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
     if (!reposObras.obter(db, obraId)) {
       return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     }
-    const corpo = criarCapituloSchema.safeParse(await c.req.json());
+    const corpo = criarCapituloSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
     const { frases, avisos } = segmentar(corpo.data.texto_origem);
@@ -299,7 +300,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
   app.post('/frases/:id/estilo/aplicar', async (c) => {
     const corpo = z
       .object({ trecho_pt_errado: z.string().min(1), trecho_pt_corrigido: z.string() })
-      .safeParse(await c.req.json());
+      .safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const frase = reposFrases.obter(db, Number(c.req.param('id')));
     if (!frase) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Frase não encontrada.' } }, 404);
@@ -315,7 +316,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
   app.post('/frases/:id/estilo/dispensar', async (c) => {
     const corpo = z
       .object({ regra: z.string().min(1), trecho: z.string().min(1), desfazer: z.boolean().optional() })
-      .safeParse(await c.req.json());
+      .safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const fraseId = Number(c.req.param('id'));
     if (!reposFrases.obter(db, fraseId))
@@ -329,7 +330,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
   // Dispensar uma ocorrência: "já conferi, aqui está certo". Por PAR
   // (frase, termo) — não desliga o termo na obra inteira.
   app.post('/frases/:id/consistencia/dispensar', async (c) => {
-    const corpo = z.object({ termo_zh: z.string().min(1), desfazer: z.boolean().optional() }).safeParse(await c.req.json());
+    const corpo = z.object({ termo_zh: z.string().min(1), desfazer: z.boolean().optional() }).safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const fraseId = Number(c.req.param('id'));
     const frase = reposFrases.obter(db, fraseId);
@@ -347,7 +348,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
   });
 
   app.put('/capitulos/:id', async (c) => {
-    const corpo = atualizarCapituloSchema.safeParse(await c.req.json());
+    const corpo = atualizarCapituloSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const capitulo = reposCapitulos.atualizar(db, Number(c.req.param('id')), corpo.data);
     if (!capitulo) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Capítulo não encontrado.' } }, 404);
@@ -440,7 +441,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
     const id = Number(c.req.param('id'));
     const corpo = z
       .object({ status: z.enum(['aceito', 'descartado']) })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const a = reposQa.definirStatus(db, id, corpo.data.status);
     if (!a) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Apontamento não encontrado.' } }, 404);
@@ -460,7 +461,7 @@ export function rotasCapitulos(db: BancoDados): Hono {
 
   app.post('/capitulos/:id/traduzir', async (c) => {
     const id = Number(c.req.param('id'));
-    const corpo = traduzirSchema.safeParse(await c.req.json().catch(() => ({})));
+    const corpo = traduzirSchema.safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const resultado = await iniciarTraducao(db, id, corpo.data);
     if (!resultado.ok) {

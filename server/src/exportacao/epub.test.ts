@@ -201,6 +201,12 @@ describe('auxiliares do EPUB', () => {
     expect(paragrafoXhtml('3 * 4 = 12')).toBe('3 * 4 = 12');
   });
 
+  it('retira notas duplamente parentéticas da prosa e entrega uma chamada discreta', () => {
+    expect(paragrafoXhtml('Texto.((explicação cultural))')).toContain('<sup>[nota]</sup>');
+    expect(paragrafoXhtml('Texto.((explicação cultural))')).not.toContain('((explicação');
+    expect(paragrafoXhtml('Texto.((explicação cultural))', () => '<sup>[1]</sup>')).toBe('Texto.<sup>[1]</sup>');
+  });
+
   it('zero-pada o nome do arquivo pela numeração real', () => {
     expect(nomeArquivoCapitulo(7)).toBe('cap-0007.xhtml');
     expect(nomeArquivoCapitulo(118)).toBe('cap-0118.xhtml');

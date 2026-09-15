@@ -49,11 +49,13 @@ const NAO_VERBOS = new Set([
   // "romãzeira" apareceu como violação fantasma no capítulo 3 da 死人经.
   'romãzeira', 'palmeira', 'oliveira', 'figueira', 'videira', 'macieira', 'laranjeira',
   'bananeira', 'mangueira', 'trepadeira', 'roseira', 'amoreira',
+  'fileira', 'esfera',
   // Adjetivos em -ora/-eira que entram em APELIDO traduzido. Epíteto de jianghu é
   // classe produtiva aqui (Seção 5 regra 2 manda traduzi-lo), e o nome repete muito:
   // 飞鹰 → "Águia Voadora" sozinho rendeu 3 falsos positivos no cap. 4 e reaparece 19
   // vezes no 5. Falso positivo em nome próprio é o pior tipo — repete e não some.
   'voadora', 'caçadora', 'matadora', 'errante', 'guerreira', 'feiticeira', 'traiçoeira',
+  'carnívora',
 ]);
 
 // {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então
@@ -101,6 +103,14 @@ function violacaoAspasNaoRetas(texto: string): string | null {
   return m ? m[0] : null;
 }
 
+/** Medidas chinesas que escaparam traduzidas como explicação literal. O caso
+ * real foi 一炷香 → “tempo de queimar um bastão de incenso”, embora o Alfa peça
+ * uma duração compreensível. A lista é conservadora para não acusar “qi”. */
+function violacaoUnidadeChinesa(texto: string): string | null {
+  const m = texto.match(/\b(?:\d+|um|uma|dois|duas|meio|meia)\s+(?:chi|cun|zhang|li|jin|liang|qian|shichen)\b|tempo de (?:queimar|uma) (?:um )?bastão de incenso/iu);
+  return m?.[0] ?? null;
+}
+
 export function analisarEstilo(
   frases: { ordem: number; texto_pt: string | null }[],
   prefs: PreferenciasEstilo,
@@ -123,6 +133,9 @@ export function analisarEstilo(
 
     const virgula = violacaoVirgulaNaAspa(t, prefs.dialogo);
     if (virgula) violacoes.push({ ordem: f.ordem, regra: 'virgula-dentro-da-aspa', trecho: virgula });
+
+    const unidade = violacaoUnidadeChinesa(t);
+    if (unidade) violacoes.push({ ordem: f.ordem, regra: 'unidade-chinesa', trecho: unidade });
   }
 
   // Terços por POSIÇÃO no capítulo, que é o eixo que revela o decaimento.

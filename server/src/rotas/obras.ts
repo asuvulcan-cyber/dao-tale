@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { lerJson } from './json.js';
 import {
   FASES_TRADUCAO,
   PROVEDORES_IDS,
@@ -137,7 +138,7 @@ export function rotasObras(db: BancoDados): Hono {
   app.get('/obras', (c) => c.json(reposObras.listar(db)));
 
   app.post('/obras', async (c) => {
-    const corpo = criarObraSchema.safeParse(await c.req.json());
+    const corpo = criarObraSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     return c.json(reposObras.criar(db, corpo.data), 201);
   });
@@ -149,7 +150,7 @@ export function rotasObras(db: BancoDados): Hono {
   });
 
   app.put('/obras/:id', async (c) => {
-    const corpo = atualizarObraSchema.safeParse(await c.req.json());
+    const corpo = atualizarObraSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const obra = reposObras.atualizar(db, Number(c.req.param('id')), corpo.data);
     if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
@@ -325,7 +326,7 @@ export function rotasObras(db: BancoDados): Hono {
     const id = Number(c.req.param('id'));
     const corpo = z
       .object({ fase: z.enum(FASES_TRADUCAO) })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const obra = reposObras.definirFase(db, id, corpo.data.fase);
     if (!obra) return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
@@ -343,7 +344,7 @@ export function rotasObras(db: BancoDados): Hono {
     const id = Number(c.req.param('id'));
     const corpo = z
       .object({ capitulo_ids: z.array(z.number().int()).optional(), qa_automatica: z.boolean().optional() })
-      .safeParse(await c.req.json().catch(() => ({})));
+      .safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const r = iniciarLote(db, id, { capituloIds: corpo.data.capitulo_ids, qaAutomatica: corpo.data.qa_automatica });
     if (!r.ok) {
@@ -410,7 +411,7 @@ export function rotasObras(db: BancoDados): Hono {
   });
 
   app.post('/obras/importar', async (c) => {
-    const dados = await c.req.json().catch(() => null);
+    const dados = await lerJson(c).catch(() => null);
     if (!dados) return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Envie o JSON exportado.' } }, 400);
     // Snapshot antes de uma escrita em massa (doc 10 §1).
     backupSeArquivo(db, 'pre-import');
@@ -426,7 +427,7 @@ export function rotasObras(db: BancoDados): Hono {
   app.get('/obras/:id/prompts', (c) => c.json(reposPrompts.listar(db, Number(c.req.param('id')))));
 
   app.post('/obras/:id/prompts', async (c) => {
-    const corpo = criarPromptSchema.safeParse(await c.req.json());
+    const corpo = criarPromptSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     const obraId = Number(c.req.param('id'));
     const ativo = reposPrompts.ativo(db, obraId);
@@ -721,7 +722,7 @@ export function rotasObras(db: BancoDados): Hono {
   app.get('/prompt-padrao', (c) => c.json(reposPromptPadrao.listar(db)));
 
   app.post('/prompt-padrao', async (c) => {
-    const corpo = criarPromptPadraoSchema.safeParse(await c.req.json());
+    const corpo = criarPromptPadraoSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
     try {
       // Os dois avisos que teriam evitado o sintoma de 2026-08-05: um Alfa que decide
@@ -757,7 +758,7 @@ export function rotasObras(db: BancoDados): Hono {
     .refine((d) => d.titulo_zh || d.sinopse_zh, { message: 'Envie titulo_zh e/ou sinopse_zh.' });
 
   app.post('/ia/traduzir-detalhes', async (c) => {
-    const corpo = traduzirDetalhesSchema.safeParse(await c.req.json());
+    const corpo = traduzirDetalhesSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
     const obra = corpo.data.obra_id ? reposObras.obter(db, corpo.data.obra_id) : undefined;

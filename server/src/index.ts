@@ -7,7 +7,12 @@ import { adquirirLock } from './instancia.js';
 import { avisosDeHospedagem, problemasDeHospedagem } from './auth/boot.js';
 import { ehHospedado, enderecoBind, hostsPublicos, PORTA, caminhoBanco, diretorioDados } from './config.js';
 import { reposPromptPadrao } from './db/repos.js';
-import { MARCADOR_PREFERENCIAS } from '@dao-tale/shared';
+import {
+  MARCADOR_PREFERENCIAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V2,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+} from '@dao-tale/shared';
 
 // C2 (cinto de segurança): promessa órfã de um job nunca deve derrubar o
 // servidor no meio de uma tradução — loga e segue (o estado durável das
@@ -70,12 +75,19 @@ avisarSeAlfaIgnoraPreferencias(db);
 
 function avisarSeAlfaIgnoraPreferencias(banco: typeof db): void {
   const alfa = reposPromptPadrao.ativo(banco);
-  if (!alfa || alfa.conteudo.includes(MARCADOR_PREFERENCIAS)) return;
+  if (
+    !alfa ||
+    alfa.conteudo.includes(MARCADOR_PREFERENCIAS) ||
+    alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS) ||
+    alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2) ||
+    alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+  )
+    return;
   const obras = banco.prepare('SELECT COUNT(*) n FROM prompts WHERE ativo = 1 AND tipo = ?').get('delta') as {
     n: number;
   };
   console.error(
-    `[dao-tale] ATENÇÃO: o núcleo ativo (v${alfa.versao}) não traz ${MARCADOR_PREFERENCIAS} — ` +
+    `[dao-tale] ATENÇÃO: o núcleo ativo (v${alfa.versao}) não traz marcador de Beta — ` +
       `as preferências de estilo de ${obras.n} obra(s) estão sendo IGNORADAS em silêncio. ` +
       `Ative um núcleo que reserve a Seção 5 na tela "Núcleo universal".`,
   );

@@ -106,12 +106,14 @@ function TurnoFio({
 
 export function GavetaRevisao({
   frase,
+  referencia,
   proxima,
   capituloId,
   aoFechar,
   aoEditarTexto,
 }: {
   frase: Frase;
+  referencia: string;
   proxima: Frase | null;
   capituloId: string;
   aoFechar: () => void;
@@ -265,7 +267,7 @@ export function GavetaRevisao({
       api('POST', `/obras/${obraId}/glossario`, {
         termo_zh: t.termo_zh,
         termo_pt: t.termo_pt,
-        categoria: t.categoria || 'outro',
+        categoria: t.categoria || 'lexico-geral',
         nota: t.contexto || undefined,
       }),
     onSuccess: (_r, t) => {
@@ -393,7 +395,9 @@ export function GavetaRevisao({
           onPointerUp={aoSoltarArrasto}
           title="Arraste para mover a gaveta"
         >
-          <h3 className="font-display font-semibold">Protocolo de Revisão</h3>
+          <h3 className="font-display font-semibold">
+            Protocolo de Revisão <span className="font-mono text-xs font-normal text-tinta-2">[{referencia}]</span>
+          </h3>
           <button onClick={aoFechar} aria-label="Fechar revisão" className="text-tinta-2 hover:text-tinta">
             ✕
           </button>

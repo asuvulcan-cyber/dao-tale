@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
+
+const categoriaGlossarioAutomaticaSchema = z.enum(CATEGORIAS_GLOSSARIO);
 
 // Validação das respostas estruturadas — compartilhada por todos os provedores.
 // Cada provedor garante o formato pelo seu mecanismo (tool use, responseSchema),
@@ -12,7 +15,7 @@ export const respostaTraducaoSchema = z.object({
       z.object({
         termo_zh: z.string(),
         termo_pt: z.string(),
-        categoria: z.string().optional(),
+        categoria: categoriaGlossarioAutomaticaSchema.optional(),
         contexto: z.string().optional(),
       }),
     )
@@ -25,7 +28,7 @@ export const respostaExtrairTermosSchema = z.object({
       z.object({
         termo_zh: z.string(),
         termo_pt: z.string(),
-        categoria: z.string().optional(),
+        categoria: categoriaGlossarioAutomaticaSchema.optional(),
         contexto: z.string().optional(),
       }),
     )
@@ -79,6 +82,7 @@ export const respostaRefinarPromptSchema = z.object({
   propostas: z
     .array(
       z.object({
+        camada: z.enum(['alfa', 'beta', 'gama', 'delta', 'nenhuma']),
         secao_regra: z.string(),
         regra_proposta: z.string(),
         justificativa: z.string(),
@@ -127,4 +131,23 @@ export const respostaPasseEstiloSchema = z.object({
         }),
     )
     .default([]),
+});
+
+export const respostaRevisaoLiterariaSchema = z.object({
+  propostas: z.array(z.object({
+    ordem: z.coerce.number().int(),
+    texto_revisado: z.string().nullable().default(null),
+    justificativa: z.string().default(''),
+    categorias: z.array(z.enum(['fidelidade', 'naturalidade', 'coesao', 'ritmo', 'dialogo', 'lexico', 'gama', 'tipografia'])).default([]),
+    confianca: z.enum(['alta', 'media', 'baixa']).catch('baixa'),
+  })).default([]),
+});
+
+export const respostaAdjudicacaoLiterariaSchema = z.object({
+  julgamentos: z.array(z.object({
+    ordem: z.coerce.number().int(),
+    veredito: z.enum(['melhora', 'equivalente', 'regressao', 'incerto']),
+    justificativa: z.string().min(1),
+    riscos: z.array(z.enum(['omissao', 'invencao', 'gama', 'registro', 'truncamento', 'dialogo', 'ritmo', 'nenhum'])).default([]),
+  })).default([]),
 });

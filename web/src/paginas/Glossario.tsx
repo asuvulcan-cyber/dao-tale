@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, EntradaGlossario, EspecieTermo } from '@dao-tale/shared';
-import { CATEGORIAS_GLOSSARIO, ESPECIES_TERMO } from '@dao-tale/shared';
+import { CATEGORIAS_GLOSSARIO, ESPECIES_TERMO, ROTULOS_CATEGORIAS_GLOSSARIO, ehCategoriaGlossarioPadrao } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais, SeletorCategoria } from '../App';
 import { contarNaoClassificados } from '../util/glossario';
+import { MapaGlossario } from '../componentes/MapaGlossario';
 
 /** Texto curto de cada espécie, repetido no seletor e na ajuda da linha —
  *  "identidade" e "lexical" não bastam sozinhos porque o nome não diz qual dos
@@ -33,6 +34,7 @@ export function Glossario() {
   const [csv, setCsv] = useState('');
   const [relatorio, setRelatorio] = useState('');
   const [soNaoClassificados, setSoNaoClassificados] = useState(false);
+  const [visualizacao, setVisualizacao] = useState<'lista' | 'mapa'>('lista');
 
   const chaveQuery = ['glossario', obraId, busca, categoria];
   const { data: entradas } = useQuery({
@@ -42,6 +44,10 @@ export function Glossario() {
         'GET',
         `/obras/${obraId}/glossario?busca=${encodeURIComponent(busca)}&categoria=${categoria}`,
       ),
+  });
+  const { data: entradasCompletas } = useQuery({
+    queryKey: ['glossario', obraId, 'mapa'],
+    queryFn: () => api<EntradaGlossario[]>('GET', `/obras/${obraId}/glossario`),
   });
 
   // Aparições (primeira/última) por termo — calculadas no servidor, independentes
@@ -90,17 +96,21 @@ export function Glossario() {
           entradas ? `${entradas.length} termo${entradas.length === 1 ? '' : 's'} — a fonte da consistência.` : undefined
         }
       >
+        <div className="flex rounded-md border border-linha p-0.5">
+          <button type="button" onClick={() => setVisualizacao('lista')} className={`rounded px-2.5 py-1 text-sm ${visualizacao === 'lista' ? 'bg-jade text-papel-alto' : 'text-tinta-2'}`}>Lista</button>
+          <button type="button" onClick={() => setVisualizacao('mapa')} className={`rounded px-2.5 py-1 text-sm ${visualizacao === 'mapa' ? 'bg-jade text-papel-alto' : 'text-tinta-2'}`}>Relações</button>
+        </div>
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar termo…"
-          className="entrada text-sm"
+          className="entrada min-w-0 max-w-full flex-1 text-sm sm:flex-none"
         />
-        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="entrada text-sm">
+        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="entrada min-w-0 max-w-full text-sm">
           <option value="">Todas as categorias</option>
           {[...new Set([...CATEGORIAS_GLOSSARIO, ...(entradas?.map((e) => e.categoria) ?? [])])].sort().map((c) => (
             <option key={c} value={c}>
-              {c}
+              {ehCategoriaGlossarioPadrao(c) ? ROTULOS_CATEGORIAS_GLOSSARIO[c] : c}
             </option>
           ))}
         </select>
@@ -143,6 +153,17 @@ export function Glossario() {
         </div>
       )}
 
+      {visualizacao === 'mapa' ? (
+        <MapaGlossario
+          obraId={obraId!}
+          entradas={entradasCompletas ?? []}
+          aoAbrir={(id) => {
+            setVisualizacao('lista');
+            window.setTimeout(() => document.getElementById(`termo-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+          }}
+        />
+      ) : (
+      <>
       <FormularioNovoTermo enviando={criar.isPending} aoEnviar={(d) => criar.mutate(d)} />
 
       <table className="w-full border-collapse overflow-hidden cartao text-sm">
@@ -179,6 +200,8 @@ export function Glossario() {
           )}
         </tbody>
       </table>
+      </>
+      )}
     </div>
   );
 }
@@ -229,7 +252,7 @@ function FormularioNovoTermo({
 }) {
   const [zh, setZh] = useState('');
   const [pt, setPt] = useState('');
-  const [cat, setCat] = useState<CategoriaGlossario>('outro');
+  const [cat, setCat] = useState<CategoriaGlossario>('lexico-geral');
   const [nota, setNota] = useState('');
 
   return (
@@ -414,7 +437,7 @@ function LinhaTermo({
   if (!editando) {
     return (
       <>
-      <tr className="group border-b border-linha/60 last:border-b-0 hover:bg-papel-fundo/40">
+      <tr id={`termo-${entrada.id}`} className="group scroll-mt-24 border-b border-linha/60 last:border-b-0 hover:bg-papel-fundo/40">
         <td className={`texto-zh whitespace-nowrap px-2 py-2 ${ehVariante ? 'pl-6 text-tinta-2' : ''}`}>
           {ehVariante && <span className="mr-1">↳</span>}
           {entrada.termo_zh}

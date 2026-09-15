@@ -105,6 +105,15 @@ describe('remontagem de texto', () => {
       '第一章\nCapítulo 118 — Um\n\n他说：「走。」\nEle disse: «Vamos».\n\n风停了。\n(pendente de tradução)',
     );
   });
+
+  it('move ((nota)) para o rodapé do texto baixado', () => {
+    const cap = { numero: 118, titulo: '第一章', titulo_pt: 'Um' };
+    const comNota = [{ paragrafo: 0, texto_zh: '甲。', texto_pt: 'Texto limpo.((explicação cultural))' }] as any[];
+    const txt = textoCapitulo(cap, comNota, 'txt');
+    expect(txt).toContain('Texto limpo.[1]');
+    expect(txt).toContain('Notas\n[1] explicação cultural');
+    expect(txt).not.toContain('((explicação');
+  });
 });
 
 describe('montarMarkdown', () => {

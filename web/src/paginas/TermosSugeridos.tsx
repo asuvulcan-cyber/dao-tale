@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, TermoSugerido } from '@dao-tale/shared';
-import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
+import { ehCategoriaGlossarioPadrao } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, SeletorCategoria } from '../App';
 
@@ -52,9 +52,9 @@ function CartaoSugestao({
 }) {
   const [pt, setPt] = useState(sugestao.termo_pt);
   const [cat, setCat] = useState<CategoriaGlossario>(
-    (CATEGORIAS_GLOSSARIO as string[]).includes(sugestao.categoria ?? '')
+    ehCategoriaGlossarioPadrao(sugestao.categoria)
       ? (sugestao.categoria as CategoriaGlossario)
-      : 'outro',
+      : 'lexico-geral',
   );
   // Descrição da IA já entra como nota editável — ao aceitar, vira a nota do glossário.
   const [nota, setNota] = useState(sugestao.contexto ?? '');

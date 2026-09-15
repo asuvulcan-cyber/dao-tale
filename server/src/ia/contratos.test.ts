@@ -31,6 +31,9 @@ describe('paraGemini (derivação da fonte única)', () => {
     const categoria = g.properties!.termos_novos.items!.properties!.categoria;
     expect(categoria.type).toBe(Type.STRING);
     expect(categoria.enum).toContain('personagem');
+    expect(categoria.enum).toContain('medicina-tradicional');
+    expect(categoria.enum).not.toContain('outro');
+    expect(g.properties!.termos_novos.items!.required).toContain('categoria');
   });
 
   it("['string','null'] vira STRING nullable (correcao_proposta)", () => {
@@ -88,7 +91,7 @@ describe('coerência schema ⇄ zod (a fonte única não pode divergir da valida
       }),
     ).not.toThrow();
     expect(() =>
-      CONTRATO_REFINAR_PROMPT.zod.parse({ propostas: [{ secao_regra: 'g', regra_proposta: 'r', justificativa: 'j' }] }),
+      CONTRATO_REFINAR_PROMPT.zod.parse({ propostas: [{ camada: 'delta', secao_regra: 'g', regra_proposta: 'r', justificativa: 'j' }] }),
     ).not.toThrow();
     expect(() =>
       CONTRATO_CONTRACAPA.zod.parse({ titulo_pt: 'A Torre de Bronze', sinopse_pt: 'Verso um.\nVerso dois.' }),

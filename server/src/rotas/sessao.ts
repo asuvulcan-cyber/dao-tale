@@ -12,6 +12,7 @@ import {
   verificarToken,
 } from '../auth/sessao.js';
 import { criarLimitador, type OpcoesLimite } from '../auth/limite.js';
+import { lerJson } from './json.js';
 import { ipCliente } from './travaIp.js';
 import { ipPermitido } from '../auth/ips.js';
 
@@ -93,7 +94,7 @@ export function rotasSessao(opcoesLimite: OpcoesLimite = {}): Hono {
       );
     }
 
-    const corpo = (await c.req.json().catch(() => null)) as { senha?: unknown } | null;
+    const corpo = (await lerJson(c)) as { senha?: unknown } | null;
     const senha = typeof corpo?.senha === 'string' ? corpo.senha : '';
     const registro = lerRegistro();
     const ok = registro !== null && senha !== '' && verificarSenha(senha, registro);

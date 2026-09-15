@@ -656,6 +656,7 @@ function FormularioPadroes({
             onChange={(e) => setValores({ ...valores, tamanho_bloco: Number(e.target.value) })}
             className="entrada mt-1 w-full"
           />
+          <span className="mt-1 block text-xs text-tinta-2">Recomendado: 10. Blocos maiores reduzem chamadas, mas aumentam diluição e perda de aderência ao tom local.</span>
         </label>
         <label className="block text-sm">
           Frases vizinhas na revisão (cada lado) <span className="text-tinta-2">(0 a 10)</span>

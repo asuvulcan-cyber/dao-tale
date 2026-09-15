@@ -13,36 +13,29 @@ import type {
   EspecieTermo,
   TermoSugerido,
   CasoTeste,
-  Configuracoes,
   CriarObraPayload,
   StatusCasoTeste,
   StatusCapitulo,
   FaseTraducao,
-  Lote,
-  StatusLote,
-  StatusLoteCapitulo,
-  ParProvedor,
-  ProvedorId,
-  ApontamentoQa,
-  StatusApontamentoQa,
-  PrecoModelo,
-  PrecosModelos,
   PreferenciasEstilo,
-  TemperaturasPapel,
   Camada,
 } from '@dao-tale/shared';
 import {
-  CONFIG_PADRAO,
   aplicarCorrecao,
   camadaDoRotulo,
   normalizarSecaoRegra,
   normalizarPreferencias,
-  normalizarTemperaturas,
   temperaturaValida,
+  ehCategoriaGlossarioPadrao,
+  DEFINICOES_RELACOES_TERMO,
 } from '@dao-tale/shared';
 import { comporOmega } from './promptPadraoInicial.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
 import { separarPorChecagem } from '../traducao/glossarioChecavel.js';
+import { reposConfig } from './repos/config.js';
+import { reposLotes } from './repos/lotes.js';
+import { criarReposQa } from './repos/qa.js';
+import { dataLocalHoje, reposUso } from './repos/uso.js';
 
 /** Substitui `de` por `para` só quando `de` é uma palavra isolada — não colada a
     letra/número (fronteira Unicode, então acentos contam como letra). Evita trocar
@@ -151,7 +144,7 @@ export const reposObras = {
           `INSERT INTO glossario (obra_id, termo_zh, termo_pt, categoria, nota)
            VALUES (?, ?, ?, ?, ?)
            ON CONFLICT (obra_id, termo_zh) DO NOTHING`,
-        ).run(obraId, e.termo_zh, e.termo_pt, e.categoria ?? 'outro', e.nota ?? null);
+        ).run(obraId, e.termo_zh, e.termo_pt, e.categoria ?? 'lexico-geral', e.nota ?? null);
       }
       return this.obter(db, obraId)!;
     })();
@@ -909,14 +902,46 @@ export const reposFrases = {
 
 export const reposGlossario = {
   listar(db: BancoDados, obraId: number): EntradaGlossario[] {
-    return (
+    const entradas = (
       db.prepare('SELECT * FROM glossario WHERE obra_id = ? ORDER BY termo_zh').all(obraId) as any[]
     ).map(paraGlossario);
+    const porId = new Map(entradas.map((e) => [e.id, e]));
+    const fatos = db.prepare('SELECT * FROM relacoes_termos WHERE obra_id=?').all(obraId) as Array<{
+      origem_termo_id: number; destino_termo_id: number; tipo: string;
+    }>;
+    const relacoes = new Map<number, string[]>();
+    const adicionar = (id: number, texto: string) => relacoes.set(id, [...(relacoes.get(id) ?? []), texto]);
+    for (const fato of fatos) {
+      const origem = porId.get(fato.origem_termo_id);
+      const destino = porId.get(fato.destino_termo_id);
+      const definicao = DEFINICOES_RELACOES_TERMO.find((d) => d.tipo === fato.tipo);
+      if (!origem || !destino || !definicao) continue;
+      adicionar(origem.id, `${definicao.rotulo_direto} ${destino.termo_pt}`);
+      adicionar(destino.id, `${definicao.rotulo_inverso} ${origem.termo_pt}`);
+    }
+    return entradas.map((e) => ({ ...e, relacoes: relacoes.get(e.principal_id ?? e.id) ?? [] }));
   },
 
   obter(db: BancoDados, id: number): EntradaGlossario | undefined {
     const linha = db.prepare('SELECT * FROM glossario WHERE id = ?').get(id) as any;
     return linha ? paraGlossario(linha) : undefined;
+  },
+
+  /** Confere pertencimento antes de gravar. O FK sozinho aceita pai de outra
+      obra e não enxerga ciclos, ambos capazes de falsear a árvore visual. */
+  termoPaiValido(db: BancoDados, id: number, termoPaiId: number | null): boolean {
+    if (termoPaiId === null) return true;
+    const entrada = this.obter(db, id);
+    const pai = this.obter(db, termoPaiId);
+    if (!entrada || !pai || entrada.obra_id !== pai.obra_id || id === termoPaiId) return false;
+    const visitados = new Set<number>();
+    let atual: EntradaGlossario | undefined = pai;
+    while (atual?.termo_pai_id != null) {
+      if (atual.id === id || visitados.has(atual.id)) return false;
+      visitados.add(atual.id);
+      atual = this.obter(db, atual.termo_pai_id);
+    }
+    return atual?.id !== id;
   },
 
   criar(
@@ -947,7 +972,7 @@ export const reposGlossario = {
           obraId,
           dados.termo_zh,
           dados.termo_pt,
-          dados.categoria ?? 'outro',
+          dados.categoria ?? 'lexico-geral',
           dados.nota ?? null,
           dados.origem ?? 'manual',
           dados.especie ?? null,
@@ -1125,7 +1150,9 @@ export const reposTermosSugeridos = {
       const resultado = reposGlossario.criar(db, sugestao.obra_id, {
         termo_zh: sugestao.termo_zh,
         termo_pt: ajustes?.termo_pt ?? sugestao.termo_pt,
-        categoria: ajustes?.categoria ?? (ehCategoriaValida(sugestao.categoria) ? sugestao.categoria! : 'outro'),
+        categoria:
+          ajustes?.categoria ??
+          (ehCategoriaGlossarioPadrao(sugestao.categoria) ? sugestao.categoria : 'lexico-geral'),
         // Sem nota editada, aproveita a descrição da IA (contexto) como nota —
         // antes ela era exibida na triagem e descartada ao aceitar.
         nota: ajustes?.nota ?? sugestao.contexto ?? undefined,
@@ -1140,10 +1167,6 @@ export const reposTermosSugeridos = {
     return db.prepare("UPDATE termos_sugeridos SET status = 'rejeitado' WHERE id = ?").run(id).changes > 0;
   },
 };
-
-function ehCategoriaValida(c: string | null): boolean {
-  return !!c && ['local', 'poder-habilidade', 'entidade', 'titulo-cargo', 'personagem', 'outro'].includes(c);
-}
 
 // ── Banco de testes ────────────────────────────────────────────────────────
 
@@ -1459,379 +1482,11 @@ export const reposConsistencia = {
   },
 };
 
-// ── Configurações (chave-valor) ────────────────────────────────────────────
+// ── Repositórios extraídos ─────────────────────────────────────────────────
 
-export const reposConfig = {
-  obterTodas(db: BancoDados): Configuracoes {
-    const linhas = db.prepare('SELECT chave, valor FROM configuracoes').all() as {
-      chave: string;
-      valor: string;
-    }[];
-    const mapa = Object.fromEntries(linhas.map((l) => [l.chave, l.valor]));
-    return {
-      provedor_padrao: (mapa.provedor_padrao as Configuracoes['provedor_padrao']) ?? CONFIG_PADRAO.provedor_padrao,
-      modelo_padrao: mapa.modelo_padrao ?? CONFIG_PADRAO.modelo_padrao,
-      // Mesma guarda de NaN (B9) dos campos abaixo: sem ela um valor corrompido
-      // virava NaN, saía como `null` no JSON da tela e fazia o salvar inteiro
-      // ser recusado pelo schema — calado.
-      tamanho_bloco: numeroConfig(mapa.tamanho_bloco, CONFIG_PADRAO.tamanho_bloco),
-      vizinhas_revisao: numeroConfig(mapa.vizinhas_revisao, CONFIG_PADRAO.vizinhas_revisao),
-      cauda_contexto: numeroConfig(mapa.cauda_contexto, CONFIG_PADRAO.cauda_contexto),
-      parar_no_limite: mapa.parar_no_limite ? mapa.parar_no_limite === 'true' : CONFIG_PADRAO.parar_no_limite,
-      glossario_relevante: mapa.glossario_relevante
-        ? mapa.glossario_relevante === 'true'
-        : CONFIG_PADRAO.glossario_relevante,
-      provedor_revisao: (mapa.provedor_revisao as Configuracoes['provedor_revisao']) ?? CONFIG_PADRAO.provedor_revisao,
-      modelo_revisao: mapa.modelo_revisao ?? CONFIG_PADRAO.modelo_revisao,
-      provedor_detalhes:
-        (mapa.provedor_detalhes as Configuracoes['provedor_detalhes']) ?? CONFIG_PADRAO.provedor_detalhes,
-      modelo_detalhes: mapa.modelo_detalhes ?? CONFIG_PADRAO.modelo_detalhes,
-      temperaturas: lerTemperaturas(mapa),
-      cotas_diarias: lerCotasDiarias(mapa),
-      checkpoint_janela: numeroConfig(mapa.checkpoint_janela, CONFIG_PADRAO.checkpoint_janela),
-      checkpoint_termos_max: numeroConfig(mapa.checkpoint_termos_max, CONFIG_PADRAO.checkpoint_termos_max),
-      checkpoint_edicao_max: numeroConfig(mapa.checkpoint_edicao_max, CONFIG_PADRAO.checkpoint_edicao_max),
-      checkpoint_violacoes_max: numeroConfig(mapa.checkpoint_violacoes_max, CONFIG_PADRAO.checkpoint_violacoes_max),
-      lote_paralelo: numeroConfig(mapa.lote_paralelo, CONFIG_PADRAO.lote_paralelo),
-      failover: lerFailover(mapa),
-      provedor_qa: (mapa.provedor_qa as Configuracoes['provedor_qa']) ?? CONFIG_PADRAO.provedor_qa,
-      modelo_qa: mapa.modelo_qa ?? CONFIG_PADRAO.modelo_qa,
-      qa_automatica: mapa.qa_automatica ? mapa.qa_automatica === 'true' : CONFIG_PADRAO.qa_automatica,
-      precos_modelos: lerPrecos(mapa),
-      taxa_usd_brl: numeroConfig(mapa.taxa_usd_brl, CONFIG_PADRAO.taxa_usd_brl),
-    };
-  },
+export { dataLocalHoje, reposConfig, reposLotes, reposUso };
 
-  definir(db: BancoDados, valores: Partial<Configuracoes>): Configuracoes {
-    const stmt = db.prepare(
-      'INSERT INTO configuracoes (chave, valor) VALUES (?, ?) ON CONFLICT (chave) DO UPDATE SET valor = excluded.valor',
-    );
-    db.transaction(() => {
-      for (const [chave, valor] of Object.entries(valores)) {
-        if (valor === undefined) continue;
-        stmt.run(chave, typeof valor === 'object' ? JSON.stringify(valor) : String(valor));
-      }
-    })();
-    return this.obterTodas(db);
-  },
-};
-
-/** Config numérica com guarda de NaN (B9): valor corrompido cai no padrão. */
-function numeroConfig(valor: string | undefined, padrao: number): number {
-  if (valor === undefined || valor === '') return padrao; // '' vira 0 no Number(), não é "não configurado"
-  const n = Number(valor);
-  return Number.isFinite(n) ? n : padrao;
-}
-
-/** Cadeia de failover (JSON de pares {provedor, modelo}); valor corrompido = vazia. */
-function lerFailover(mapa: Record<string, string>): ParProvedor[] {
-  if (!mapa.failover) return [...CONFIG_PADRAO.failover];
-  try {
-    const lista = JSON.parse(mapa.failover);
-    if (!Array.isArray(lista)) return [];
-    return lista
-      .filter((p) => p && typeof p.provedor === 'string')
-      .map((p) => ({ provedor: p.provedor as ProvedorId, modelo: typeof p.modelo === 'string' ? p.modelo : '' }));
-  } catch {
-    return [];
-  }
-}
-
-/** Tabela de preços (JSON de `"provedor:modelo"` → USD/1M). Entrada malformada é
- * DESCARTADA em vez de virar 0 — um preço zero silencioso mentiria dizendo que o
- * modelo é grátis (doc 11 §3). Valor corrompido cai nos padrões de fábrica. */
-function lerPrecos(mapa: Record<string, string>): PrecosModelos {
-  if (!mapa.precos_modelos) return { ...CONFIG_PADRAO.precos_modelos };
-  try {
-    const bruto = JSON.parse(mapa.precos_modelos) as Record<string, unknown>;
-    if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return {};
-    const precos: PrecosModelos = {};
-    for (const [chave, valor] of Object.entries(bruto)) {
-      const p = valor as Partial<PrecoModelo> | null;
-      if (!p || typeof p !== 'object') continue;
-      if (!Number.isFinite(p.entrada) || !Number.isFinite(p.saida)) continue;
-      precos[chave] = {
-        entrada: p.entrada!,
-        saida: p.saida!,
-        ...(Number.isFinite(p.cache_leitura) ? { cache_leitura: p.cache_leitura! } : {}),
-        ...(Number.isFinite(p.cache_criacao) ? { cache_criacao: p.cache_criacao! } : {}),
-      };
-    }
-    return precos;
-  } catch {
-    return { ...CONFIG_PADRAO.precos_modelos };
-  }
-}
-
-/** Temperatura por papel (JSON). Chave ausente, fora da faixa ou corrompida cai
- * no padrão dela sozinha — o resto da tabela continua valendo (doc 08 §13). */
-function lerTemperaturas(mapa: Record<string, string>): TemperaturasPapel {
-  if (!mapa.temperaturas) return { ...CONFIG_PADRAO.temperaturas };
-  try {
-    return normalizarTemperaturas(JSON.parse(mapa.temperaturas));
-  } catch {
-    return { ...CONFIG_PADRAO.temperaturas };
-  }
-}
-
-/** Cotas por provedor (JSON) com migração das chaves antigas cota_diaria_gemini/claude. */
-function lerCotasDiarias(mapa: Record<string, string>): Record<string, number> {
-  if (mapa.cotas_diarias) {
-    try {
-      return JSON.parse(mapa.cotas_diarias) as Record<string, number>;
-    } catch {
-      /* valor corrompido: cai para os padrões */
-    }
-  }
-  const cotas = { ...CONFIG_PADRAO.cotas_diarias };
-  if (mapa.cota_diaria_gemini !== undefined) cotas.gemini = Number(mapa.cota_diaria_gemini);
-  if (mapa.cota_diaria_claude !== undefined) cotas.claude = Number(mapa.cota_diaria_claude);
-  return cotas;
-}
-
-// ── Uso de IA (indicador de cota gratuita) ─────────────────────────────────
-
-/** Data local YYYY-MM-DD — cotas diárias dos provedores renovam por dia-calendário.
- * Fonte única da chave de dia: `uso_ia` e `eventos_ia` precisam concordar para o
- * painel comparar tentativas com chamadas faturadas (doc 11 §2). */
-export function dataLocalHoje(): string {
-  return new Date().toLocaleDateString('sv');
-}
-
-export const reposUso = {
-  registrar(db: BancoDados, provedor: string, modelo: string): void {
-    db.prepare(
-      `INSERT INTO uso_ia (data, provedor, modelo, requisicoes) VALUES (?, ?, ?, 1)
-       ON CONFLICT (data, provedor, modelo) DO UPDATE SET requisicoes = requisicoes + 1`,
-    ).run(dataLocalHoje(), provedor, modelo);
-  },
-
-  hoje(db: BancoDados): { provedor: string; modelo: string; requisicoes: number }[] {
-    return db
-      .prepare('SELECT provedor, modelo, requisicoes FROM uso_ia WHERE data = ? ORDER BY requisicoes DESC')
-      .all(dataLocalHoje()) as { provedor: string; modelo: string; requisicoes: number }[];
-  },
-};
-
-// ── Lotes de tradução (fase de cruzeiro, doc 09 §5) ────────────────────────
-
-interface LinhaLote {
-  id: number;
-  obra_id: number;
-  status: StatusLote;
-  qa_automatica: number;
-  criado_em: string;
-  encerrado_em: string | null;
-}
-
-export const reposLotes = {
-  /** Capítulos da obra que em algum momento passaram por um lote — define os dois
-   * grupos da pergunta "o lote compensou em dinheiro?" (doc 11 §5) sem precisar
-   * de coluna nova em capitulos. */
-  capituloIdsEmLote(db: BancoDados, obraId: number): number[] {
-    return (
-      db
-        .prepare(
-          `SELECT DISTINCT lc.capitulo_id FROM lote_capitulos lc
-             JOIN lotes l ON l.id = lc.lote_id
-           WHERE l.obra_id = ?`,
-        )
-        .all(obraId) as { capitulo_id: number }[]
-    ).map((l) => l.capitulo_id);
-  },
-
-  /** Lote atual (executando) ou o último encerrado da obra, com seus capítulos. */
-  atual(db: BancoDados, obraId: number): Lote | undefined {
-    const linha = db
-      .prepare(
-        `SELECT * FROM lotes WHERE obra_id = ?
-         ORDER BY (status = 'executando') DESC, criado_em DESC LIMIT 1`,
-      )
-      .get(obraId) as LinhaLote | undefined;
-    return linha ? this.montar(db, linha) : undefined;
-  },
-
-  obter(db: BancoDados, loteId: number): Lote | undefined {
-    const linha = db.prepare('SELECT * FROM lotes WHERE id = ?').get(loteId) as LinhaLote | undefined;
-    return linha ? this.montar(db, linha) : undefined;
-  },
-
-  ativoDaObra(db: BancoDados, obraId: number): Lote | undefined {
-    const linha = db
-      .prepare("SELECT * FROM lotes WHERE obra_id = ? AND status = 'executando'")
-      .get(obraId) as LinhaLote | undefined;
-    return linha ? this.montar(db, linha) : undefined;
-  },
-
-  montar(db: BancoDados, linha: LinhaLote): Lote {
-    const capitulos = db
-      .prepare(
-        `SELECT lc.capitulo_id, c.numero, c.titulo, lc.posicao, lc.status, lc.provedores_tentados, lc.erro,
-           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id) AS frases_total,
-           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'traduzida') AS frases_traduzidas,
-           (SELECT COUNT(*) FROM frases f WHERE f.capitulo_id = c.id AND f.status_traducao = 'erro') AS frases_erro
-         FROM lote_capitulos lc JOIN capitulos c ON c.id = lc.capitulo_id
-         WHERE lc.lote_id = ? ORDER BY lc.posicao`,
-      )
-      .all(linha.id)
-      .map((r: any) => ({
-        capitulo_id: r.capitulo_id,
-        numero: r.numero,
-        titulo: r.titulo,
-        posicao: r.posicao,
-        status: r.status as StatusLoteCapitulo,
-        provedores_tentados: JSON.parse(r.provedores_tentados) as ParProvedor[],
-        erro: r.erro,
-        frases_total: r.frases_total,
-        frases_traduzidas: r.frases_traduzidas,
-        frases_erro: r.frases_erro,
-      }));
-    return {
-      id: linha.id,
-      obra_id: linha.obra_id,
-      status: linha.status,
-      qa_automatica: !!linha.qa_automatica,
-      criado_em: linha.criado_em,
-      encerrado_em: linha.encerrado_em,
-      capitulos,
-    };
-  },
-
-  /** Cria o lote e enfileira os capítulos na ordem dada. */
-  criar(db: BancoDados, obraId: number, capituloIds: number[], qaAutomatica: boolean): Lote {
-    return db.transaction(() => {
-      const info = db
-        .prepare('INSERT INTO lotes (obra_id, qa_automatica) VALUES (?, ?)')
-        .run(obraId, qaAutomatica ? 1 : 0);
-      const loteId = Number(info.lastInsertRowid);
-      const ins = db.prepare('INSERT INTO lote_capitulos (lote_id, capitulo_id, posicao) VALUES (?, ?, ?)');
-      capituloIds.forEach((cid, i) => ins.run(loteId, cid, i));
-      return this.obter(db, loteId)!;
-    })();
-  },
-
-  definirStatusCapitulo(
-    db: BancoDados,
-    loteId: number,
-    capituloId: number,
-    status: StatusLoteCapitulo,
-    extra?: { erro?: string | null; tentado?: ParProvedor },
-  ): void {
-    db.transaction(() => {
-      if (extra?.tentado) {
-        const atual = db
-          .prepare('SELECT provedores_tentados FROM lote_capitulos WHERE lote_id = ? AND capitulo_id = ?')
-          .get(loteId, capituloId) as { provedores_tentados: string } | undefined;
-        const lista = atual ? (JSON.parse(atual.provedores_tentados) as ParProvedor[]) : [];
-        lista.push(extra.tentado);
-        db.prepare('UPDATE lote_capitulos SET provedores_tentados = ? WHERE lote_id = ? AND capitulo_id = ?').run(
-          JSON.stringify(lista),
-          loteId,
-          capituloId,
-        );
-      }
-      db.prepare('UPDATE lote_capitulos SET status = ?, erro = ? WHERE lote_id = ? AND capitulo_id = ?').run(
-        status,
-        extra?.erro ?? null,
-        loteId,
-        capituloId,
-      );
-    })();
-  },
-
-  encerrar(db: BancoDados, loteId: number, status: Exclude<StatusLote, 'executando'>): void {
-    db.prepare("UPDATE lotes SET status = ?, encerrado_em = datetime('now') WHERE id = ?").run(status, loteId);
-  },
-
-  /** No boot: nenhum job sobrevive ao processo, então lotes 'executando' de uma
-   * sessão anterior estão interrompidos (doc 09 §5). Capítulos que ficaram em
-   * 'traduzindo'/'qa' voltam para 'na_fila' para a retomada reprocessá-los. */
-  marcarInterrompidosNoBoot(db: BancoDados): void {
-    db.transaction(() => {
-      const ativos = db.prepare("SELECT id FROM lotes WHERE status = 'executando'").all() as { id: number }[];
-      for (const { id } of ativos) {
-        db.prepare(
-          "UPDATE lote_capitulos SET status = 'na_fila' WHERE lote_id = ? AND status IN ('traduzindo','qa')",
-        ).run(id);
-        db.prepare("UPDATE lotes SET status = 'interrompido', encerrado_em = datetime('now') WHERE id = ?").run(id);
-      }
-    })();
-  },
-};
-
-// ── Apontamentos de QA (doc 09 §6) ─────────────────────────────────────────
-
-export const reposQa = {
-  listar(db: BancoDados, capituloId: number): ApontamentoQa[] {
-    return db
-      .prepare(
-        `SELECT * FROM qa_apontamentos WHERE capitulo_id = ?
-         ORDER BY CASE severidade WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END,
-                  CASE status WHEN 'pendente' THEN 0 ELSE 1 END, id`,
-      )
-      .all(capituloId) as ApontamentoQa[];
-  },
-
-  obter(db: BancoDados, id: number): ApontamentoQa | undefined {
-    return db.prepare('SELECT * FROM qa_apontamentos WHERE id = ?').get(id) as ApontamentoQa | undefined;
-  },
-
-  /** Substitui os apontamentos PENDENTES do capítulo pelos novos (uma nova
-   * passada de QA re-aponta do zero; os já triados ficam como histórico). */
-  substituirPendentes(
-    db: BancoDados,
-    capituloId: number,
-    provedor: string,
-    modelo: string,
-    apontamentos: Omit<ApontamentoQa, 'id' | 'capitulo_id' | 'status' | 'provedor' | 'modelo' | 'criado_em'>[],
-  ): number {
-    return db.transaction(() => {
-      db.prepare("DELETE FROM qa_apontamentos WHERE capitulo_id = ? AND status = 'pendente'").run(capituloId);
-      const ins = db.prepare(
-        `INSERT INTO qa_apontamentos (capitulo_id, frase_id, tipo, severidade, trecho_zh, observacao, sugestao, provedor, modelo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      );
-      for (const a of apontamentos) {
-        ins.run(capituloId, a.frase_id, a.tipo, a.severidade, a.trecho_zh, a.observacao, a.sugestao, provedor, modelo);
-      }
-      reposCapitulos.definirQaEm(db, capituloId);
-      return apontamentos.length;
-    })();
-  },
-
-  definirStatus(db: BancoDados, id: number, status: StatusApontamentoQa): ApontamentoQa | undefined {
-    db.prepare('UPDATE qa_apontamentos SET status = ? WHERE id = ?').run(status, id);
-    return this.obter(db, id);
-  },
-
-  /** Aplica a sugestão do apontamento na frase (marca editado_manualmente, M3)
-   * e marca o apontamento como aceito. */
-  aplicarSugestao(db: BancoDados, id: number): { apontamento: ApontamentoQa; frase: Frase } | 'sem-sugestao' | undefined {
-    const a = this.obter(db, id);
-    if (!a) return undefined;
-    if (!a.sugestao || !a.frase_id) return 'sem-sugestao';
-    return db.transaction(() => {
-      // origem_edicao = 'qa': aceitar a sugestão pelo botão é decisão registrada no
-      // apontamento, não uma edição digitada — a mineração de edições manuais não
-      // pode recontá-la.
-      db.prepare(
-        "UPDATE frases SET texto_pt = ?, editado_manualmente = 1, origem_edicao = 'qa' WHERE id = ?",
-      ).run(a.sugestao, a.frase_id);
-      db.prepare("UPDATE qa_apontamentos SET status = 'aceito' WHERE id = ?").run(id);
-      return { apontamento: this.obter(db, id)!, frase: reposFrases.obter(db, a.frase_id!)! };
-    })();
-  },
-
-  /** Pendentes por capítulo para os badges da lista. */
-  pendentesPorCapitulo(db: BancoDados, obraId: number): Map<number, { total: number; altas: number }> {
-    const linhas = db
-      .prepare(
-        `SELECT q.capitulo_id, COUNT(*) AS total,
-           SUM(CASE WHEN q.severidade = 'alta' THEN 1 ELSE 0 END) AS altas
-         FROM qa_apontamentos q JOIN capitulos c ON c.id = q.capitulo_id
-         WHERE c.obra_id = ? AND q.status = 'pendente' GROUP BY q.capitulo_id`,
-      )
-      .all(obraId) as { capitulo_id: number; total: number; altas: number }[];
-    return new Map(linhas.map((l) => [l.capitulo_id, { total: l.total, altas: l.altas }]));
-  },
-};
+export const reposQa = criarReposQa({
+  definirQaEm: (db, capituloId) => reposCapitulos.definirQaEm(db, capituloId),
+  obterFrase: (db, fraseId) => reposFrases.obter(db, fraseId),
+});

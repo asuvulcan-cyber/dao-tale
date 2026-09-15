@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CategoriaGlossario, CriarObraPayload, Obra, ObraComContadores } from '@dao-tale/shared';
-import { CATEGORIAS_GLOSSARIO } from '@dao-tale/shared';
+import { ehCategoriaGlossarioPadrao } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais } from '../App';
 
@@ -215,7 +215,7 @@ function FormularioNovaObra({
         .map(([termo_zh, termo_pt, categoria]) => ({
           termo_zh,
           termo_pt,
-          categoria: (CATEGORIAS_GLOSSARIO as string[]).includes(categoria)
+          categoria: ehCategoriaGlossarioPadrao(categoria)
             ? (categoria as CategoriaGlossario)
             : undefined,
         }));

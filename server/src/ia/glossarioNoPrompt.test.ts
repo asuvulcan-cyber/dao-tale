@@ -118,6 +118,20 @@ describe('formatarGlossario — nota_uso na linha do termo', () => {
   });
 });
 
+describe('formatarGlossario — relações narrativas na linha do termo', () => {
+  it('entrega fatos curados como contexto, sem convertê-los em termo pai ou variante', () => {
+    const saida = formatarGlossario([
+      entrada('罗宁茶', 'Luo Ningcha', {
+        especie: 'identidade',
+        relacoes: ['filha de Deus Cabeçudo da Montanha de Ferro', 'cônjuge de Shangguan Nu'],
+      }),
+    ]);
+    expect(saida).toContain('relações: filha de Deus Cabeçudo da Montanha de Ferro; cônjuge de Shangguan Nu');
+    expect(saida).not.toContain('pertence a/fica em');
+    expect(saida).not.toContain('variante de');
+  });
+});
+
 // Teste 4b do brief: a nota NÃO é regra de tradução do sentido comum — ela só diz QUANDO
 // aquele termo se aplica. O usuário rejeitou "senão é 'cuidado'" como exemplo porque
 // fixaria uma palavra fora do glossário (glossário clandestino, sem passar por `especie`
@@ -168,6 +182,16 @@ describe('formatarGlossario — nota_uso vale nas duas espécies (identidade inc
     expect(blocoIdentidade).toContain(
       '小心 → Xiao Xin [termo] · nota de uso: Só é a criada Xiao Xin quando for nome de pessoa; nos demais usos é substantivo comum.',
     );
+  });
+});
+
+describe('formatarGlossario — relação pai-filho explícita', () => {
+  it('informa pertencimento sem confundir com variante', () => {
+    const pai = entrada('金鹏堡', 'Fortaleza do Peng Dourado', { id: 1, especie: 'identidade' });
+    const filho = entrada('东堡', 'Forte Leste', { id: 2, especie: 'identidade', termo_pai_id: 1 });
+    const saida = formatarGlossario([filho, pai]);
+    expect(saida).toContain('东堡 → Forte Leste [termo] · pertence a/fica em Fortaleza do Peng Dourado (金鹏堡)');
+    expect(saida).not.toContain('东堡 → Forte Leste [termo] · variante');
   });
 });
 

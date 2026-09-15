@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   camadaDoRotulo,
   CATEGORIAS_GLOSSARIO,
+  ROTULOS_CATEGORIAS_GLOSSARIO,
+  ehCategoriaGlossarioPadrao,
   type Camada,
   type CategoriaGlossario,
   type EstadoSaude,
@@ -273,7 +275,8 @@ export function MenuMais({
   );
 }
 
-/** Select de categoria do glossário: categorias padrão + as já usadas + criar nova. */
+/** Select de categoria do glossário: taxonomia padrão + categorias históricas
+ * já usadas. Novas entradas automáticas nunca criam categoria livre. */
 export function SeletorCategoria({
   valor,
   aoMudar,
@@ -301,7 +304,7 @@ export function SeletorCategoria({
     >
       {opcoes.map((c) => (
         <option key={c} value={c}>
-          {c}
+          {ehCategoriaGlossarioPadrao(c) ? ROTULOS_CATEGORIAS_GLOSSARIO[c] : c}
         </option>
       ))}
       <option value="__nova">+ nova categoria…</option>
@@ -325,7 +328,7 @@ export function CabecalhoPagina({
         <h2 className="font-display text-lg font-semibold">{titulo}</h2>
         {descricao && <p className="mt-0.5 max-w-[62ch] text-sm text-tinta-2">{descricao}</p>}
       </div>
-      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+      {children && <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">{children}</div>}
     </div>
   );
 }

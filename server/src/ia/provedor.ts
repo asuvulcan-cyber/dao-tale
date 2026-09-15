@@ -190,6 +190,8 @@ export interface RequisicaoRefinarPrompt {
 }
 
 export interface PropostaRefinamento {
+  /** Destino correto da lacuna. Só `delta` pode entrar no rascunho da obra. */
+  camada: 'alfa' | 'beta' | 'gama' | 'delta' | 'nenhuma';
   secao_regra: string;
   /** Texto pronto para entrar no delta (uma regra/linha nova ou ajustada). */
   regra_proposta: string;
@@ -286,6 +288,73 @@ export interface RespostaPasseEstilo {
   uso: UsoChamada;
 }
 
+export interface RequisicaoRevisaoLiteraria {
+  modelo: string;
+  temperatura?: number;
+  /** Escopo estreito do passe. Ausente preserva a revisão integral histórica. */
+  foco?: 'integral' | 'fidelidade' | 'tom-naturalidade' | 'seletiva';
+  omega: string;
+  glossario: EntradaGlossario[];
+  exemplosContrastivos?: ExemploContrastivo[];
+  contextoAntes: AlvoRevisaoLiteraria[];
+  alvos: AlvoRevisaoLiteraria[];
+  contextoDepois: AlvoRevisaoLiteraria[];
+}
+
+export interface ExemploContrastivo {
+  capitulo: number;
+  ordem: number;
+  texto_zh: string;
+  texto_rejeitado: string;
+  texto_aprovado: string;
+  justificativa: string | null;
+  categorias: string[];
+}
+
+export interface AlvoRevisaoLiteraria {
+  ordem: number;
+  paragrafo: number;
+  inicio_paragrafo: boolean;
+  apos_fala_em_outro_paragrafo: boolean;
+  texto_zh: string;
+  texto_pt: string;
+  texto_pt_original_ia: string | null;
+  diagnostico?: { fenomenos: string[]; razoes: string[] };
+}
+
+export interface RespostaRevisaoLiteraria {
+  propostas: {
+    ordem: number;
+    texto_revisado: string | null;
+    justificativa: string;
+    categorias: ('fidelidade' | 'naturalidade' | 'coesao' | 'ritmo' | 'dialogo' | 'lexico' | 'gama' | 'tipografia')[];
+    confianca: 'alta' | 'media' | 'baixa';
+  }[];
+  bruta: string;
+  uso: UsoChamada;
+}
+
+export interface RequisicaoAdjudicacaoLiteraria {
+  modelo: string;
+  temperatura?: number;
+  omega: string;
+  glossario: EntradaGlossario[];
+  contextoAntes: { ordem: number; texto_pt: string }[];
+  comparacoes: { ordem: number; texto_zh: string; texto_vigente: string; texto_candidato: string }[];
+  contextoDepois: { ordem: number; texto_pt: string }[];
+}
+
+export interface RespostaAdjudicacaoLiteraria {
+  julgamentos: {
+    ordem: number;
+    veredito: 'melhora' | 'equivalente' | 'regressao' | 'incerto';
+    justificativa: string;
+    riscos: ('omissao' | 'invencao' | 'gama' | 'registro' | 'truncamento' | 'dialogo' | 'ritmo' | 'nenhum')[];
+  }[];
+  bruta: string;
+  uso: UsoChamada;
+}
+
 // ── Erros classificados (doc 05 §2: transitório vs fatal; 'limite' é o 429 —
 // transitório por natureza, mas com tratamento próprio quando o usuário optou
 // por não passar da cota gratuita; 'truncado' é resposta cortada por
@@ -324,4 +393,6 @@ export interface ProvedorIA {
   refinarPrompt(chave: string | null, req: RequisicaoRefinarPrompt): Promise<RespostaRefinarPrompt>;
   analisarQa(chave: string | null, req: RequisicaoQa): Promise<RespostaQa>;
   passeEstilo(chave: string | null, req: RequisicaoPasseEstilo): Promise<RespostaPasseEstilo>;
+  revisarLiterariamente(chave: string | null, req: RequisicaoRevisaoLiteraria): Promise<RespostaRevisaoLiteraria>;
+  adjudicarRevisaoLiteraria(chave: string | null, req: RequisicaoAdjudicacaoLiteraria): Promise<RespostaAdjudicacaoLiteraria>;
 }

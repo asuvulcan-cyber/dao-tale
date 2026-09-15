@@ -8,6 +8,8 @@ import {
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
   type RequisicaoTraducaoBloco,
+  type RespostaRevisaoLiteraria,
+  type RespostaAdjudicacaoLiteraria,
   type UsoChamada,
 } from './provedor.js';
 import { PROMPT_CONTRACAPA } from './promptContracapa.js';
@@ -122,7 +124,7 @@ export const provedorMock: ProvedorIA = {
             {
               termo_zh: [...maisLonga.texto_zh].slice(0, 2).join(''),
               termo_pt: `Termo Simulado ${maisLonga.ordem}`,
-              categoria: 'outro',
+              categoria: 'lexico-geral',
               contexto: `Descrição simulada do termo da frase ${maisLonga.ordem}.`,
             },
           ]
@@ -165,7 +167,7 @@ export const provedorMock: ProvedorIA = {
       .map((zh) => ({
         termo_zh: zh,
         termo_pt: `Termo Extraído (${zh})`,
-        categoria: 'outro',
+        categoria: 'lexico-geral',
         contexto: 'Descrição simulada para curadoria do glossário.',
       }));
     return { termos, bruta: JSON.stringify({ termos }), uso: usoSimulado('extracao', req, { termos }) };
@@ -176,6 +178,7 @@ export const provedorMock: ProvedorIA = {
     // Uma proposta determinística por seção recorrente — exercita o fluxo inteiro.
     const secoes = [...new Set(req.casos.map((c) => c.secao_regra))];
     const propostas = secoes.map((secao) => ({
+      camada: 'delta' as const,
       secao_regra: secao,
       regra_proposta: `[regra simulada] Ao cair no caso "${secao}", aplique a correção validada pelo revisor.`,
       justificativa: `[simulado] ${req.casos.filter((c) => c.secao_regra === secao).length} casos recorrentes nesta seção.`,
@@ -265,5 +268,31 @@ export const provedorMock: ProvedorIA = {
       }),
     );
     return { correcoes, bruta: JSON.stringify({ correcoes }), uso: usoSimulado('estilo', req, { correcoes }) };
+  },
+
+  async revisarLiterariamente(_chave, req): Promise<RespostaRevisaoLiteraria> {
+    await espera(latenciaMs());
+    const propostas = req.alvos.map((alvo) => {
+      const precisa = /MOCK_REVISAR/.test(alvo.texto_zh);
+      return {
+        ordem: alvo.ordem,
+        texto_revisado: precisa ? `${alvo.texto_pt} [revisado]` : null,
+        justificativa: precisa ? '[simulado] ajuste literário demonstrável' : '',
+        categorias: precisa ? ['naturalidade' as const] : [],
+        confianca: precisa ? ('alta' as const) : ('media' as const),
+      };
+    });
+    return { propostas, bruta: JSON.stringify({ propostas }), uso: usoSimulado('revisao-literaria', req, { propostas }) };
+  },
+
+  async adjudicarRevisaoLiteraria(_chave, req): Promise<RespostaAdjudicacaoLiteraria> {
+    await espera(latenciaMs());
+    const julgamentos = req.comparacoes.map((c) => ({
+      ordem: c.ordem,
+      veredito: (c.texto_candidato.includes('[revisado]') ? 'melhora' : 'equivalente') as 'melhora' | 'equivalente',
+      justificativa: '[simulado] comparação independente entre vigente e candidato.',
+      riscos: ['nenhum' as const],
+    }));
+    return { julgamentos, bruta: JSON.stringify({ julgamentos }), uso: usoSimulado('adjudicacao-literaria', req, { julgamentos }) };
   },
 };

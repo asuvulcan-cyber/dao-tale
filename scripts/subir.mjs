@@ -25,7 +25,9 @@ import { join } from 'node:path';
 const HOST = 'root@103.199.186.52';
 const DESTINO = '/opt/dao-tale/';
 const CHAVE = join(homedir(), '.ssh', 'dao_tale');
-const SSH = `ssh -i ${CHAVE} -o BatchMode=yes`;
+// Ignora configuração global da máquina: um drop-in alheio ao projeto com dono
+// ou permissão incorreta faz o OpenSSH abortar antes mesmo de ler nossa chave.
+const SSH = `ssh -F /dev/null -i ${CHAVE} -o BatchMode=yes`;
 const SECO = process.argv.includes('--seco');
 
 // `node_modules` e `*.db` fora: as dependências são instaladas lá, e o banco é DELE.
@@ -43,7 +45,7 @@ const passo = (t) => console.log(`\n▸ ${t}`);
     (shell local → ssh → shell remoto → JS), e um `<> ''` de SQL vira `<> ""`, que o
     SQLite lê como nome de coluna. Por stdin não há camada nenhuma para escapar. */
 const remotoNode = (js) =>
-  execFileSync('ssh', ['-i', CHAVE, '-o', 'BatchMode=yes', HOST, 'cd /opt/dao-tale && sudo -u daotale node --input-type=module -'], {
+  execFileSync('ssh', ['-F', '/dev/null', '-i', CHAVE, '-o', 'BatchMode=yes', HOST, 'cd /opt/dao-tale && sudo -u daotale node --input-type=module -'], {
     input: js,
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'inherit'],
@@ -136,7 +138,7 @@ console.log(
     import D from 'better-sqlite3';
     const db = new D('/var/lib/dao-tale/dao-tale.db', { readonly: true });
     const alfa = db.prepare('SELECT versao, conteudo FROM prompt_padrao WHERE ativo = 1').get();
-    const reservaSecao5 = !!alfa && alfa.conteudo.includes('{{PREFERENCIAS_OBRA}}');
+    const reservaSecao5 = !!alfa && (alfa.conteudo.includes('{{PREFERENCIAS_OBRA}}') || alfa.conteudo.includes('{{PREFERENCIAS_OBRA_COMPACTAS}}') || alfa.conteudo.includes('{{PREFERENCIAS_OBRA_COMPACTAS_V2}}') || alfa.conteudo.includes('{{PREFERENCIAS_OBRA_COMPACTAS_V3}}'));
     console.log('  núcleo ativo: v' + (alfa ? alfa.versao : 'nenhum') + ' — reserva a Seção 5: ' + (reservaSecao5 ? 'sim' : 'NÃO'));
     console.log('  frases traduzidas: ' + db.prepare(${JSON.stringify(CONTA_FRASES)}).get().n);
     // Sai diferente de zero para o deploy falhar ruidosamente: núcleo sem o marcador

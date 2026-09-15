@@ -155,6 +155,25 @@ export function TextoTraduzido({
       {partirInline(texto).map((segmento, i) => {
         if (segmento.tipo === 'negrito') return <strong key={i}>{decorar(segmento.texto)}</strong>;
         if (segmento.tipo === 'italico') return <em key={i}>{decorar(segmento.texto)}</em>;
+        if (segmento.tipo === 'nota')
+          return (
+            <span
+              key={i}
+              role="note"
+              tabIndex={0}
+              title={segmento.texto}
+              aria-label={`Nota: ${segmento.texto}`}
+              className="group relative mx-0.5 cursor-help align-super text-[0.68em] font-semibold text-jade-forte underline decoration-dotted underline-offset-2 outline-none"
+            >
+              [nota]
+              <span
+                role="tooltip"
+                className="invisible absolute bottom-full left-1/2 z-50 mb-2 w-72 max-w-[80vw] -translate-x-1/2 rounded border border-linha bg-papel px-3 py-2 text-left font-corpo text-xs font-normal leading-relaxed text-tinta opacity-0 shadow-xl transition-opacity group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100"
+              >
+                {segmento.texto}
+              </span>
+            </span>
+          );
         return <Fragment key={i}>{decorar(segmento.texto)}</Fragment>;
       })}
     </>

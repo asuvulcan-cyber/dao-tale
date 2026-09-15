@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { lerJson } from './json.js';
 import { normalizarTemperaturas, type EstadoConfiguracoes, type ProvedorId } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { configSchema, mensagemDeValidacao } from '../db/configuracoes.js';
@@ -61,7 +62,7 @@ export function rotasSistema(db: BancoDados): Hono {
   });
 
   app.put('/configuracoes', async (c) => {
-    const corpo = configSchema.safeParse(await c.req.json());
+    const corpo = configSchema.safeParse(await lerJson(c));
     // Mensagem legível com o campo culpado: a tela de Configurações mostra isto
     // literalmente, e um salvar recusado precisa dizer QUAL campo recusou.
     if (!corpo.success)
@@ -113,7 +114,7 @@ export function rotasSistema(db: BancoDados): Hono {
   });
 
   app.put('/credenciais/:provedor', async (c) => {
-    const corpo = z.object({ chave: z.string().min(1) }).safeParse(await c.req.json());
+    const corpo = z.object({ chave: z.string().min(1) }).safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: 'Chave vazia.' } }, 400);
     await definirChave(c.req.param('provedor'), corpo.data.chave);
     return c.json({ ok: true });

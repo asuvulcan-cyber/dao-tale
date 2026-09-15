@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { lerJson } from './json.js';
 import { PROVEDORES_IDS, resolverTemperatura } from '@dao-tale/shared';
 import type { BancoDados } from '../db/index.js';
 import { reposConfig, reposGlossario, reposObras, reposPrompts, reposUso } from '../db/repos.js';
@@ -49,7 +50,7 @@ export function rotasComparador(db: BancoDados): Hono {
   const app = new Hono();
 
   app.post('/obras/:obraId/comparar', async (c) => {
-    const corpo = compararSchema.safeParse(await c.req.json().catch(() => ({})));
+    const corpo = compararSchema.safeParse(await lerJson(c).catch(() => ({})));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
     const obraId = Number(c.req.param('obraId'));

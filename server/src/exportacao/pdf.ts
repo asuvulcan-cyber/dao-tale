@@ -99,6 +99,10 @@ body {
 }
 
 p { orphans: 2; widows: 2; }
+.chamada-nota { color: var(--cor-jade-forte); font-size: 0.72em; }
+.notas { border-top: 1px solid var(--cor-linha); font-size: 8.5pt; margin-top: 8mm; }
+.notas h2 { font-size: 10pt; margin: 2mm 0; }
+.notas li { margin-bottom: 1mm; }
 
 /* A quebra pertence à SEÇÃO, não ao título. Com break-before no h1, a página
    nomeada do rosto e o avoid brigavam, e o título da obra sumia da folha. */
@@ -156,15 +160,25 @@ h1 {
 
 function capituloHtml(cap: CapituloEpub): string {
   const cabecalho = cabecalhoPt(cap);
+  const notas: string[] = [];
   const paragrafos = cap.paragrafos
     .filter((p) => p.pt)
-    .map((p) => `<p>${paragrafoXhtml(p.pt)}</p>`)
+    .map(
+      (p) =>
+        `<p>${paragrafoXhtml(p.pt, (nota) => {
+          notas.push(nota);
+          return `<sup class="chamada-nota">[${notas.length}]</sup>`;
+        })}</p>`,
+    )
     .join('\n');
+  const rodape = notas.length
+    ? `<section class="notas"><h2>Notas</h2><ol>${notas.map((nota) => `<li>${paragrafoXhtml(nota)}</li>`).join('')}</ol></section>`
+    : '';
   const original = cap.titulo && cap.titulo_pt ? `<p class="zh">${escaparTexto(cap.titulo)}</p>\n` : '';
   return `<section class="capitulo" id="cap-${cap.numero}">
 <h1>${escaparTexto(cabecalho)}</h1>
 <div class="ornamento"></div>
-${original}${paragrafos}
+${original}${paragrafos}${rodape}
 </section>`;
 }
 

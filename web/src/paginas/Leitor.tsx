@@ -14,6 +14,7 @@ import {
 } from '@dao-tale/shared';
 import { api } from '../api';
 import { BotaoTema, MenuMais } from '../App';
+import { NotaInline } from '../componentes/NotaInline';
 
 // Modo leitura (doc 12 §7): o payoff da máquina de tradução. Página read-only,
 // FORA da casca de trabalho — nenhuma aba de bancada, nenhuma ação que escreva no
@@ -271,11 +272,15 @@ function AjustesLeitura({
 /** Texto com a formatação inline da tradução (mesmo conversor do EPUB). Sem
     marcação de glossário: no leitor o texto é o protagonista. */
 function TextoLeitura({ texto }: { texto: string }) {
+  let numeroNota = 0;
   return (
     <>
-      {partirInline(texto).map((s, i) =>
-        s.tipo === 'negrito' ? <strong key={i}>{s.texto}</strong> : s.tipo === 'italico' ? <em key={i}>{s.texto}</em> : s.texto,
-      )}
+      {partirInline(texto).map((s, i) => {
+        if (s.tipo === 'negrito') return <strong key={i}>{s.texto}</strong>;
+        if (s.tipo === 'italico') return <em key={i}>{s.texto}</em>;
+        if (s.tipo === 'nota') return <NotaInline key={i} texto={s.texto} numero={++numeroNota} />;
+        return s.texto;
+      })}
     </>
   );
 }

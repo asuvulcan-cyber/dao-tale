@@ -559,3 +559,35 @@ Leitura dos números:
 - **Desperdício que a Etapa 0 eliminou** (fora da conta por capítulo, cenário da
   auditoria): A1 evitava até 5 chamadas pagas de entrada (~4,8K tokens cada) num
   bloco fadado a truncar; M1 evitava retries de 429 que contavam contra a cota.
+# Revisão literária em sombra
+
+Além do QA e do passe de estilo, há um passe literário deliberadamente separado da
+publicação. `POST /api/capitulos/:id/revisao-literaria/sombra` aceita `inicio`,
+`quantidade` (máximo 12), par opcional de provedor/modelo e `adjudicar` (padrão `true`).
+Ele cria um lote versionado de `revisoes_literarias`; nunca altera a frase vigente.
+
+O fluxo é:
+
+1. tradução por bloco, orientada pelo tom local do chinês e pelo Gama relevante;
+2. QA semântico separado, procurando omissão, invenção, referente, tempo e terminologia;
+3. revisão literária contextual com chinês, IA original, vigente e capítulo completo;
+4. validação determinística de invariantes e alertas de elevação de registro, complexidade e tiques;
+5. adjudicação comparativa (`chinês + vigente + candidato`) por um modelo diferente, obrigada a julgar preservação do tom local;
+6. staging pendente e compare-and-swap somente após aprovação humana.
+
+“Natural” não significa “moderno”, “simples” ou “adequado a webnovel”. A autoridade é
+sempre o trecho local do original: voz, formalidade, densidade, ritmo, distância emocional
+e intensidade podem variar dentro do mesmo capítulo. A revisão remove interferência do
+chinês sem uniformizar essa variação. Mudança estilística sem evidência local é regressão.
+
+O modo sombra é obrigatório nesta fase. Não há configuração que o faça publicar ao fim
+da tradução. Os evals ficam nos scripts `exportar-eval-literaria.ts` e
+`aferir-eval-literaria.ts`; referências pendentes são marcadas como provisórias e não
+podem ser usadas para promover modelo.
+
+O conjunto congelado inclui referências positivas aprovadas e controles negativos
+amostrados deterministicamente em todos os capítulos (`--negativos-por-capitulo=N`). A
+partição é feita por capítulo para impedir vazamento de voz e contexto. Promoção exige,
+no mínimo, cobertura das correções, precisão das propostas, baixa taxa de falso positivo,
+ausência de regressões semânticas e inspeção dos alertas de tom; distância textual isolada
+não decide qualidade literária.

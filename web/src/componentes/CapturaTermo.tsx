@@ -40,7 +40,7 @@ export function CapturaTermo({
   // (autoFocus abaixo) — é o revisor quem escreve o par, olhando a frase.
   const [termoZh, setTermoZh] = useState(captura.lado === 'zh' ? captura.trecho : '');
   const [termoPt, setTermoPt] = useState(captura.lado === 'pt' ? captura.trecho : '');
-  const [categoria, setCategoria] = useState<CategoriaGlossario>('outro');
+  const [categoria, setCategoria] = useState<CategoriaGlossario>('lexico-geral');
   // '' = ainda não escolhida. Sem valor padrão: espécie escolhida na hora é o
   // ponto desta entrega (116 termos ficaram sem classificação por nascerem
   // assim, num formulário que não perguntava).

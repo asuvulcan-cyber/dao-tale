@@ -3,6 +3,9 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PreferenciasEstilo, PromptComposto, PromptPadrao, TipoPrompt } from '@dao-tale/shared';
 import {
+  MARCADOR_PREFERENCIAS_COMPACTAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V2,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V3,
   MARCADOR_PREFERENCIAS,
   PREFERENCIAS_PADRAO,
   ROTULOS_PREFERENCIAS,
@@ -24,6 +27,17 @@ type VersaoPrompt = PromptPadrao & {
   nucleo_id?: number | null;
   preferencias?: PreferenciasEstilo;
 };
+
+/** Todas as gerações válidas do ponto de inserção do Beta. Alfas compactos
+ * continuam aplicando as preferências; muda apenas a forma de renderizá-las. */
+export function nucleoAceitaPreferencias(conteudo: string): boolean {
+  return [
+    MARCADOR_PREFERENCIAS,
+    MARCADOR_PREFERENCIAS_COMPACTAS,
+    MARCADOR_PREFERENCIAS_COMPACTAS_V2,
+    MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  ].some((marcador) => conteudo.includes(marcador));
+}
 
 // ── Partição das camadas (doc 15) ──────────────────────────────────────────
 
@@ -415,7 +429,7 @@ function PainelPreferencias({
     queryKey: ['prompt-composto', obraId],
     queryFn: () => api<PromptComposto>('GET', `/obras/${obraId}/prompt-composto`),
   });
-  const nucleoAceita = composto?.nucleo?.conteudo.includes(MARCADOR_PREFERENCIAS) ?? true;
+  const nucleoAceita = composto?.nucleo ? nucleoAceitaPreferencias(composto.nucleo.conteudo) : true;
 
   const mudancas = descreverMudancas(atuais, prefs);
   const definir = (chave: keyof PreferenciasEstilo, valor: string) =>
@@ -771,13 +785,19 @@ function RefinadorIA({
   const sugerir = useMutation({
     mutationFn: () =>
       api<{
-        propostas: { secao_regra: string; regra_proposta: string; justificativa: string }[];
+        propostas: {
+          camada: 'alfa' | 'beta' | 'gama' | 'delta' | 'nenhuma';
+          secao_regra: string;
+          regra_proposta: string;
+          justificativa: string;
+        }[];
         edicoes_frase_ids?: number[];
         recorrencias: { secao_regra: string; casos: number }[];
         provedor: string;
         modelo: string;
       }>('POST', `/obras/${obraId}/prompts/sugerir-refinamento`),
-    onSuccess: (r) => setSelecionadas(new Set(r.propostas.map((_, i) => i))),
+    onSuccess: (r) =>
+      setSelecionadas(new Set(r.propostas.flatMap((p, i) => (p.camada === 'delta' ? [i] : [])))),
   });
 
   return (
@@ -785,9 +805,9 @@ function RefinadorIA({
       <div>
         <h3 className="font-semibold">Refinar diretrizes com IA</h3>
         <p className="text-sm text-tinta-2">
-          Busca no banco de testes as seções/regras com 2 ou mais casos não-confirmados (lacunas sistemáticas) e
-          pede ao modelo de revisão propostas de regra para o delta. Você escolhe o que entra — nada é gravado
-          sem aprovação.
+          Cruza recorrências do banco de testes com edições humanas e pede ao modelo que classifique cada lacuna
+          em Alfa, Beta, Gama ou Delta. Só particularidades reais da obra podem ser selecionadas para o Delta;
+          nada é gravado sem aprovação.
         </p>
       </div>
       <Botao onClick={() => sugerir.mutate()} disabled={sugerir.isPending}>
@@ -808,6 +828,7 @@ function RefinadorIA({
               <input
                 type="checkbox"
                 className="mt-1"
+                disabled={p.camada !== 'delta'}
                 checked={selecionadas.has(i)}
                 onChange={(e) => {
                   const novo = new Set(selecionadas);
@@ -817,7 +838,12 @@ function RefinadorIA({
                 }}
               />
               <span>
-                <span className="font-medium">{p.regra_proposta}</span>
+                <span className="font-medium">
+                  <Etiqueta cor={p.camada === 'delta' ? 'ocre' : p.camada === 'alfa' ? 'jade' : 'indigo'}>
+                    {p.camada}
+                  </Etiqueta>{' '}
+                  {p.regra_proposta}
+                </span>
                 <span className="mt-0.5 block text-xs text-tinta-2">
                   {p.secao_regra} — {p.justificativa}
                 </span>

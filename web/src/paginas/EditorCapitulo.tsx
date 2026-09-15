@@ -11,6 +11,7 @@ import type {
   ProgressoTraducao,
   ProvedorId,
   StatusCapitulo,
+  RevisaoLiteraria,
 } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, MenuMais, REGRA_ESTILO_ROTULO, STATUS_CAPITULO_ROTULO } from '../App';
@@ -18,6 +19,15 @@ import { orientacaoDaRegra } from '../util/rotuloRegra';
 import { CapturaTermo } from '../componentes/CapturaTermo';
 import { GavetaRevisao } from '../componentes/GavetaRevisao';
 import { IndicadorCota } from '../componentes/IndicadorCota';
+import { ComparacaoRevisaoLiteraria } from '../componentes/ComparacaoRevisaoLiteraria';
+import {
+  LARGURAS,
+  MODOS_EDITOR,
+  PaletaEditor,
+  TAMANHO_PADRAO,
+  type LarguraLeitura,
+  type ModoEditor,
+} from '../componentes/PaletaEditor';
 import {
   montarMarcadorGlossario,
   TextoMarcadoZh,
@@ -67,12 +77,6 @@ interface ViolacaoConsistencia {
 }
 
 // ── Modos de visualização do capítulo (item 9 do backlog) ───────────────────
-const MODOS_EDITOR = [
-  { id: 'segmentado', rotulo: 'Segmentado' },
-  { id: 'bilingue', rotulo: 'Bilíngue' },
-  { id: 'leitura', rotulo: 'Leitura' },
-] as const;
-type ModoEditor = (typeof MODOS_EDITOR)[number]['id'];
 const CHAVE_MODO = 'dao-tale-modo-editor';
 const CHAVE_TERMOS = 'dao-tale-marcar-termos';
 
@@ -81,13 +85,6 @@ const CHAVE_TERMOS = 'dao-tale-marcar-termos';
 // fixos — se fosse em ch, o zoom A+ faria média e cheia colidirem no teto.
 const CHAVE_TAMANHO = 'dao-tale-leitura-tamanho';
 const CHAVE_LARGURA = 'dao-tale-leitura-largura';
-const TAMANHO_PADRAO = 1.06; // rem
-const LARGURAS = {
-  estreita: { rotulo: 'Estreita', css: '42rem' },
-  media: { rotulo: 'Média', css: '56rem' },
-  cheia: { rotulo: 'Cheia', css: '' },
-} as const;
-type LarguraLeitura = keyof typeof LARGURAS;
 
 // ── Estado da frase (item 7 do backlog, opção B aprovada) ───────────────────
 // Lavagem de fundo esmaecendo + filete de pigmento + chip com o nome do estado.
@@ -134,6 +131,7 @@ export function EditorCapitulo() {
   const [mostrarConsistencia, setMostrarConsistencia] = useState(false);
   const [mostrarEstilo, setMostrarEstilo] = useState(false);
   const [mostrarQa, setMostrarQa] = useState(false);
+  const [mostrarRevisaoLiteraria, setMostrarRevisaoLiteraria] = useState(false);
   // Correção rápida (troca de termo detectada numa edição manual) — o banner
   // oferece aplicar a mesma troca nas outras frases do capítulo/obra.
   const [troca, setTroca] = useState<{ de: string; para: string; fraseId: number } | null>(null);
@@ -182,6 +180,11 @@ export function EditorCapitulo() {
   const { data, isLoading } = useQuery({
     queryKey: ['capitulo', capituloId],
     queryFn: () => api<DetalheCapitulo>('GET', `/capitulos/${capituloId}`),
+  });
+
+  const { data: revisoesLiterarias = [] } = useQuery({
+    queryKey: ['revisoes-literarias', capituloId],
+    queryFn: () => api<RevisaoLiteraria[]>('GET', `/capitulos/${capituloId}/revisoes-literarias`),
   });
 
   // Glossário da obra → marcação ocre dos termos no texto (item 13).
@@ -520,6 +523,15 @@ export function EditorCapitulo() {
                     >
                       QA por segunda IA…
                     </button>
+                    {revisoesLiterarias.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMostrarRevisaoLiteraria(true)}
+                        className="rounded px-2 py-1.5 text-left text-sm text-tinta hover:bg-papel-fundo"
+                      >
+                        Revisão literária… ({revisoesLiterarias.filter((r) => r.status === 'pendente' || r.status === 'conflito').length})
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => retraduzirTudo(frases)}
@@ -596,6 +608,7 @@ export function EditorCapitulo() {
                     <LinhaFrase
                       key={frase.id}
                       frase={frase}
+                      capituloNumero={capitulo.numero}
                       estado={estadoDaFrase(frase, casosPorFrase.get(frase.id))}
                       marcador={marcador}
                       selecionada={frase.id === fraseSelecionada}
@@ -696,6 +709,7 @@ export function EditorCapitulo() {
         {selecionada && (
           <GavetaRevisao
             frase={selecionada}
+            referencia={`${capitulo.numero}.${selecionada.ordem}`}
             proxima={frases.find((f) => f.ordem === selecionada.ordem + 1) ?? null}
             capituloId={capituloId!}
             aoFechar={() => setFraseSelecionada(null)}
@@ -768,252 +782,29 @@ export function EditorCapitulo() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ── Paleta do editor: dois trilhos verticais rentes ao papel ────────────────
-// Sem submenus (decisão do usuário): botões diretos com rótulo no hover.
-// Esquerda: modos + ferramentas · Direita: zoom e largura (um botão cíclico).
-// A posição horizontal acompanha a borda do conteúdo (max-w-6xl centrado),
-// não a borda da tela. Em telas < xl vira barra horizontal.
-
-function RotuloHover({ lado, children }: { lado: 'direita' | 'esquerda'; children: React.ReactNode }) {
-  const posicao =
-    lado === 'direita'
-      ? 'left-full ml-2'
-      : 'right-full mr-2';
-  return (
-    <span
-      className={`pointer-events-none absolute top-1/2 z-30 hidden -translate-y-1/2 rounded-md border border-linha bg-papel-alto px-2 py-1 text-xs whitespace-nowrap text-tinta shadow-md group-hover:block ${posicao}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function BotaoTrilho({
-  rotulo,
-  ladoRotulo = 'direita',
-  ativo = false,
-  corAtiva = 'bg-marca text-papel-alto',
-  onClick,
-  children,
-}: {
-  rotulo: string;
-  ladoRotulo?: 'direita' | 'esquerda';
-  ativo?: boolean;
-  corAtiva?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      aria-label={rotulo}
-      className={`group relative grid size-9 place-items-center rounded-lg border ${
-        ativo ? `border-transparent ${corAtiva}` : 'border-transparent text-tinta-2 hover:border-linha hover:text-tinta'
-      }`}
-    >
-      {children}
-      <RotuloHover lado={ladoRotulo}>{rotulo}</RotuloHover>
-    </button>
-  );
-}
-
-const ICONE_MODO: Record<ModoEditor, React.ReactNode> = {
-  segmentado: (
-    // Tela dividida
-    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
-      <line x1="8" y1="2.5" x2="8" y2="13.5" />
-    </svg>
-  ),
-  bilingue: (
-    // Tradução
-    <span className="texto-zh text-[11px] leading-none">文A</span>
-  ),
-  leitura: (
-    // Olho
-    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" />
-      <circle cx="8" cy="8" r="2" />
-    </svg>
-  ),
-};
-
-// Ícone de largura: barras horizontais de extensão crescente (0=estreita…2=cheia).
-function IconeLargura({ nivel }: { nivel: number }) {
-  const meia = 4 + nivel * 2.2;
-  return (
-    <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
-      <line x1={8 - meia} y1="8" x2={8 + meia} y2="8" />
-      <line x1={8 - meia} y1="5.5" x2={8 - meia} y2="10.5" />
-      <line x1={8 + meia} y1="5.5" x2={8 + meia} y2="10.5" />
-    </svg>
-  );
-}
-
-// Trilhos rentes à borda do papel: o conteúdo é max-w-6xl (72rem) centrado com
-// px-4; 50vw - 38.5rem posiciona o trilho logo fora dessa borda.
-const POSICAO_TRILHO_ESQ = 'left-[max(0.25rem,calc(50vw-38.5rem))]';
-const POSICAO_TRILHO_DIR = 'right-[max(0.25rem,calc(50vw-38.5rem))]';
-
-function PaletaEditor({
-  modo,
-  aoMudarModo,
-  marcarTermos,
-  aoAlternarTermos,
-  consistenciaDisponivel,
-  aoAbrirConsistencia,
-  aoAbrirEstilo,
-  tamanho,
-  aoMudarTamanho,
-  largura,
-  aoMudarLargura,
-}: {
-  modo: ModoEditor;
-  aoMudarModo: (m: ModoEditor) => void;
-  marcarTermos: boolean;
-  aoAlternarTermos: () => void;
-  consistenciaDisponivel: boolean;
-  aoAbrirConsistencia: () => void;
-  aoAbrirEstilo: () => void;
-  tamanho: number;
-  aoMudarTamanho: React.Dispatch<React.SetStateAction<number>>;
-  largura: LarguraLeitura;
-  aoMudarLargura: (l: LarguraLeitura) => void;
-}) {
-  const diminuir = () => aoMudarTamanho((t) => Math.max(0.8, Number((t - 0.08).toFixed(2))));
-  const aumentar = () => aoMudarTamanho((t) => Math.min(1.6, Number((t + 0.08).toFixed(2))));
-  const pctTexto = `${Math.round((tamanho / TAMANHO_PADRAO) * 100)}%`;
-  const mostrarTexto = modo !== 'segmentado';
-
-  // Um botão só alterna entre as três larguras, em ciclo.
-  const ordemLarguras = Object.keys(LARGURAS) as LarguraLeitura[];
-  const nivelLargura = ordemLarguras.indexOf(largura);
-  const proximaLargura = ordemLarguras[(nivelLargura + 1) % ordemLarguras.length];
-
-  return (
-    <>
-      {/* Trilho esquerdo (xl+): modos e ferramentas */}
-      <div className={`fixed top-1/2 z-20 hidden -translate-y-1/2 xl:block ${POSICAO_TRILHO_ESQ}`}>
-        <div className="cartao flex flex-col items-center gap-1 p-1.5 shadow-lg shadow-tinta/10">
-          {MODOS_EDITOR.map((m) => (
-            <BotaoTrilho key={m.id} rotulo={m.rotulo} ativo={modo === m.id} onClick={() => aoMudarModo(m.id)}>
-              {ICONE_MODO[m.id]}
-            </BotaoTrilho>
-          ))}
-          <div className="my-0.5 w-6 border-t border-linha/60" />
-          <BotaoTrilho
-            rotulo={marcarTermos ? 'Termos do glossário: marcados' : 'Termos do glossário: ocultos'}
-            ativo={marcarTermos}
-            corAtiva="bg-ocre-tint text-ocre-forte"
-            onClick={aoAlternarTermos}
-          >
-            <span className="termo-gloss text-sm leading-none">T</span>
-          </BotaoTrilho>
-          {consistenciaDisponivel && (
-            <BotaoTrilho rotulo="Consistência do glossário" onClick={aoAbrirConsistencia}>
-              <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
-                <circle cx="8" cy="8" r="6.2" />
-                <path d="m5.2 8.2 2 2 3.6-4" />
-              </svg>
-            </BotaoTrilho>
-          )}
-          {consistenciaDisponivel && (
-            <BotaoTrilho rotulo="Estilo da obra" onClick={aoAbrirEstilo}>
-              <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
-                <path d="M3 12.5 8.5 3l2 5.5" />
-                <path d="M5.5 9.5h4.2" />
-                <path d="M12 12.5h1.5" />
-              </svg>
-            </BotaoTrilho>
-          )}
-        </div>
-      </div>
-
-      {/* Trilho direito (xl+): zoom e largura — só nos modos de leitura */}
-      {mostrarTexto && (
-        <div className={`fixed top-1/2 z-20 hidden -translate-y-1/2 xl:block ${POSICAO_TRILHO_DIR}`}>
-          <div className="cartao flex flex-col items-center gap-1 p-1.5 shadow-lg shadow-tinta/10">
-            <BotaoTrilho rotulo="Aumentar texto" ladoRotulo="esquerda" onClick={aumentar}>
-              <span className="text-xs font-semibold">A+</span>
-            </BotaoTrilho>
-            <span className="font-mono text-[10px] text-tinta-2 tabular-nums" title="Tamanho do texto">
-              {pctTexto}
-            </span>
-            <BotaoTrilho rotulo="Diminuir texto" ladoRotulo="esquerda" onClick={diminuir}>
-              <span className="text-xs font-semibold">A−</span>
-            </BotaoTrilho>
-            <div className="my-0.5 w-6 border-t border-linha/60" />
-            <BotaoTrilho
-              rotulo={`Largura: ${LARGURAS[largura].rotulo.toLowerCase()} — clique para alternar`}
-              ladoRotulo="esquerda"
-              onClick={() => aoMudarLargura(proximaLargura)}
-            >
-              <IconeLargura nivel={nivelLargura} />
-            </BotaoTrilho>
-          </div>
-        </div>
+      {mostrarRevisaoLiteraria && (
+        <ComparacaoRevisaoLiteraria
+          revisoes={revisoesLiterarias}
+          frases={data.frases}
+          capituloId={capituloId!}
+          capituloNumero={data.capitulo.numero}
+          aoFechar={() => setMostrarRevisaoLiteraria(false)}
+          aoIrParaFrase={(fraseId) => {
+            setMostrarRevisaoLiteraria(false);
+            setFraseSelecionada(fraseId);
+            requestAnimationFrame(() =>
+              document.getElementById(`frase-${fraseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+            );
+          }}
+        />
       )}
-
-      {/* Barra horizontal (telas < xl) */}
-      <div className="cartao mb-4 flex flex-wrap items-center gap-2 px-3 py-2 xl:hidden">
-        <div className="seg" role="group" aria-label="Modo de visualização">
-          {MODOS_EDITOR.map((m) => (
-            <button key={m.id} type="button" onClick={() => aoMudarModo(m.id)} aria-pressed={modo === m.id}>
-              {m.rotulo}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="ferramenta"
-          onClick={aoAlternarTermos}
-          aria-pressed={marcarTermos}
-          title="Marcar termos do glossário no texto"
-        >
-          Termos
-        </button>
-        {consistenciaDisponivel && (
-          <button type="button" className="ferramenta" onClick={aoAbrirConsistencia}>
-            Consistência
-          </button>
-        )}
-        {consistenciaDisponivel && (
-          <button type="button" className="ferramenta" onClick={aoAbrirEstilo}>
-            Estilo
-          </button>
-        )}
-        {mostrarTexto && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <button type="button" className="ferramenta" onClick={diminuir} aria-label="Diminuir texto">
-              A−
-            </button>
-            <span className="font-mono text-[11px] text-tinta-2 tabular-nums">{pctTexto}</span>
-            <button type="button" className="ferramenta" onClick={aumentar} aria-label="Aumentar texto">
-              A+
-            </button>
-            <button
-              type="button"
-              className="ferramenta"
-              onClick={() => aoMudarLargura(proximaLargura)}
-              title="Alternar largura do texto"
-            >
-              Largura: {LARGURAS[largura].rotulo}
-            </button>
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
 
 function LinhaFrase({
   frase,
+  capituloNumero,
   estado,
   marcador,
   selecionada,
@@ -1023,6 +814,7 @@ function LinhaFrase({
   emVoo = false,
 }: {
   frase: Frase;
+  capituloNumero: number;
   estado: EstadoFrase;
   marcador: MarcadorGlossario | null;
   selecionada: boolean;
@@ -1060,6 +852,12 @@ function LinhaFrase({
         onClick={seSemSelecao(aoSelecionar)}
         title="Clique para revisar esta frase"
       >
+        <span
+          className="mr-2 font-mono text-[10px] tabular-nums text-tinta-2/70"
+          title="Referência capítulo.frase"
+        >
+          [{capituloNumero}.{frase.ordem}]
+        </span>
         <TextoMarcadoZh texto={frase.texto_zh} marcador={marcador} />
       </div>
       {/* Estado B aprovado: lavagem + filete na célula da tradução. */}
@@ -1622,4 +1420,3 @@ function BannerTroca({
     </div>
   );
 }
-

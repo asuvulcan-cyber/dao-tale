@@ -9,19 +9,40 @@
 
 import {
   MARCADOR_PREFERENCIAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V2,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  MARCADOR_CHECKLIST_FINAL,
+  MARCADOR_CHECKLIST_FINAL_V2,
+  MARCADOR_CHECKLIST_FINAL_V3,
   PREFERENCIAS_PADRAO,
   RESSALVA_GLOSSARIO,
   renderizarPreferencias,
+  renderizarPreferenciasCompactas,
+  renderizarPreferenciasCompactasV2,
+  renderizarPreferenciasCompactasV3,
+  renderizarChecklistFinal,
+  renderizarChecklistFinalV2,
+  renderizarChecklistFinalV3,
   type PreferenciasEstilo,
 } from '@dao-tale/shared';
 
-export { MARCADOR_PREFERENCIAS };
+export {
+  MARCADOR_CHECKLIST_FINAL,
+  MARCADOR_PREFERENCIAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V2,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+};
 
 export const VERSAO_PROMPT_PADRAO_INICIAL = '1.0';
 
 /** Ponto onde a composição insere a Seção 6 (delta da obra). Se o usuário
     remover o marcador ao editar o núcleo, o delta é anexado ao final. */
 export const MARCADOR_DELTA = '{{DELTA_OBRA}}';
+/** Variante candidata: esclarece o escopo do Delta sem mudar os bytes de Alfas
+ * históricos que usam `MARCADOR_DELTA`. */
+export const MARCADOR_DELTA_V2 = '{{DELTA_OBRA_V2}}';
 
 /** Alfa (núcleo ativo) + Beta (preferências) + Delta (diretrizes da obra) →
     **Ômega**, o composto que vai para a IA. Determinístico: mesmas versões ⇒
@@ -37,6 +58,7 @@ export function comporOmega(
   preferencias?: PreferenciasEstilo,
 ): string {
   const delta = deltaConteudo.trim();
+  const deltaV2 = nucleoConteudo.includes(MARCADOR_DELTA_V2);
   const secao = delta
     ? [
         '## 6. DIRETRIZES ESPECÍFICAS DA OBRA',
@@ -44,17 +66,27 @@ export function comporOmega(
         // A ressalva do glossário (doc 15 §6) — o mesmo conserto do cabeçalho das
         // preferências, e pela mesma razão: "precedência sobre as demais" incluía a
         // seção que declara o glossário como lei.
-        `*(Regras desta seção têm precedência sobre as demais quando conflitarem — ${RESSALVA_GLOSSARIO}.)*`,
+        deltaV2
+          ? '*(Aplique cada regra somente ao escopo declarado. O original continua a decidir sentido e tom, e o Gama a forma dos termos. Uma exceção explícita desta seção prevalece apenas sobre a convenção Beta correspondente.)*'
+          : `*(Regras desta seção têm precedência sobre as demais quando conflitarem — ${RESSALVA_GLOSSARIO}.)*`,
         '',
         delta,
       ].join('\n')
     : '';
   const nucleo = nucleoConteudo.trimEnd();
-  const comPreferencias = nucleo.includes(MARCADOR_PREFERENCIAS)
-    ? nucleo.replace(MARCADOR_PREFERENCIAS, renderizarPreferencias(preferencias ?? PREFERENCIAS_PADRAO))
-    : nucleo;
-  const composto = comPreferencias.includes(MARCADOR_DELTA)
-    ? comPreferencias.replace(MARCADOR_DELTA, secao ? `${secao}\n\n---` : '')
+  const prefs = preferencias ?? PREFERENCIAS_PADRAO;
+  const comPreferencias = nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+    ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_V3, renderizarPreferenciasCompactasV3(prefs))
+    : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2)
+    ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_V2, renderizarPreferenciasCompactasV2(prefs))
+    : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS)
+      ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS, renderizarPreferenciasCompactas(prefs))
+    : nucleo.includes(MARCADOR_PREFERENCIAS)
+      ? nucleo.replace(MARCADOR_PREFERENCIAS, renderizarPreferencias(prefs))
+      : nucleo;
+  const marcadorDelta = deltaV2 ? MARCADOR_DELTA_V2 : MARCADOR_DELTA;
+  const composto = comPreferencias.includes(marcadorDelta)
+    ? comPreferencias.replace(marcadorDelta, secao ? `${secao}\n\n---` : '')
     : secao
       ? `${comPreferencias}\n\n---\n\n${secao}`
       : comPreferencias;
@@ -63,6 +95,9 @@ export function comporOmega(
   // fim sobra quando o marcador do delta é a última coisa do núcleo (v3.0) —
   // separador sem nada para separar.
   return composto
+    .replace(MARCADOR_CHECKLIST_FINAL_V3, renderizarChecklistFinalV3(prefs))
+    .replace(MARCADOR_CHECKLIST_FINAL_V2, renderizarChecklistFinalV2(prefs))
+    .replace(MARCADOR_CHECKLIST_FINAL, renderizarChecklistFinal(prefs))
     .replace(/\n{3,}/g, '\n\n')
     .trimEnd()
     .replace(/(\n+-{3,})+$/, '');
@@ -319,3 +354,75 @@ ${MARCADOR_PREFERENCIAS}
 
 ${MARCADOR_DELTA}
 `;
+
+/** Alfa novo, opt-in: mesma separação de camadas, com menos instruções concorrentes
+ * e checklist por recência. Não substitui nem altera os Alfas históricos. */
+export const NUCLEO_ANTI_DILUICAO = `# ALFA — TRADUÇÃO LITERÁRIA CHINÊS → PT-BR
+
+Traduza diretamente do chinês para prosa brasileira publicável. Preserve integralmente sentido, informação, ambiguidade, atmosfera e voz. Não invente, não resuma, não explique e não intensifique.
+
+**Prioridade em conflito:** Gama (glossário aplicável) > conteúdo do original > Beta > Delta > naturalidade. Gama decide termos; Beta decide convenções; Delta contém apenas particularidades desta obra.
+
+## 1. PROSA BRASILEIRA, NÃO ESPELHO DO CHINÊS
+
+- Reordene, funda ou separe orações quando necessário ao ritmo, sem mudar relações lógicas.
+- Omita partículas sem função lexical em português; traduza função, não palavra isolada.
+- Chengyu e expressão cristalizada recebem equivalente natural, nunca decalque literal.
+- Preserve imagens vivas; não transforme metáfora concreta em adjetivo genérico.
+- 对方 vira nome/pronome; 开口 vira “disse” ou é omitido quando não acrescenta sentido.
+- Demonstrativos 这/那 só permanecem se evitarem ambiguidade. Algo presente na cena não é “aquele”; lugar atual é “aqui/neste”.
+
+## 2. COESÃO E VOZ
+
+- Mantenha o ponto de vista e o tom de cada personagem.
+- Não substitua nome por descrição elegante. Alterne nome, pronome e sujeito oculto.
+- Se a personagem ainda só tiver epíteto descritivo, trate-o como nome nesta regra: não o repita mecanicamente.
+- Gíria, insulto e obscenidade conservam o grau do original — nunca suavize nem aumente.
+
+## 3. GAMA — GLOSSÁRIO
+
+Use obrigatoriamente cada verbete fornecido quando sua nota de uso se aplicar. Identidade fixa a designação; entrada lexical fixa a escolha de palavra, com flexão normal do português. Não deduza caixa ou número pela aparência do verbete. Termo novo relevante deve manter uma única tradução no capítulo e ser devolvido em termos_novos.
+
+## 4. MEDIDAS E FORMAS CHINESAS
+
+Converta medidas para grandezas compreensíveis em PT-BR, arredondadas como prosa. Se não houver valor seguro, use expressão vaga e verdadeira; nunca invente precisão. Imagens fossilizadas não viram cálculo. Não deixe unidade transliterada.
+
+{{PREFERENCIAS_OBRA_COMPACTAS}}
+
+{{DELTA_OBRA}}
+
+{{CHECKLIST_FINAL}}
+`;
+
+/** Alfa 6.1: preserva 6.0 byte a byte e opta pela regra de fala multiparágrafo. */
+export const NUCLEO_ANTI_DILUICAO_V2 = NUCLEO_ANTI_DILUICAO
+  .replace(MARCADOR_PREFERENCIAS_COMPACTAS, MARCADOR_PREFERENCIAS_COMPACTAS_V2)
+  .replace(MARCADOR_CHECKLIST_FINAL, MARCADOR_CHECKLIST_FINAL_V2);
+
+/** Alfa 6.2: lacunas recorrentes do capítulo 18, sem duplicar Beta/Gama. */
+export const NUCLEO_ANTI_DILUICAO_V3 = NUCLEO_ANTI_DILUICAO_V2
+  .replace(
+    '- Reordene, funda ou separe orações quando necessário ao ritmo, sem mudar relações lógicas.',
+    '- Reordene, funda ou separe orações quando necessário ao ritmo, sem mudar relações lógicas. Complete fragmentos que soem acidentais em português e desfaça sequências mecânicas de ações.',
+  )
+  .replace(
+    '- Mantenha o ponto de vista e o tom de cada personagem.',
+    '- Mantenha o ponto de vista e o tom de cada personagem. Entre equivalentes fiéis, prefira a palavra corrente à rara, solene ou livresca; preserve o registro elevado somente quando estiver no original.',
+  );
+
+/** Alfa 6.3: mantém as regras universais da 6.2 e usa a Beta/checklist que
+ * subordinam toda calibragem de público ao tom local efetivamente lido no
+ * original. Versões anteriores continuam byte a byte imutáveis. */
+export const NUCLEO_ANTI_DILUICAO_V4 = NUCLEO_ANTI_DILUICAO_V3
+  .replace(MARCADOR_PREFERENCIAS_COMPACTAS_V2, MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+  .replace(MARCADOR_CHECKLIST_FINAL_V2, MARCADOR_CHECKLIST_FINAL_V3);
+
+/** Candidato Alfa 6.4 — NÃO é semeado nem ativado automaticamente.
+ * A hierarquia linear anterior dizia Beta > Delta, enquanto a ressalva da
+ * Seção 6 dizia que Delta prevalecia sobre as demais camadas. Responsabilidades
+ * ortogonais são mais testáveis e não obrigam o modelo a resolver uma
+ * contradição artificial. */
+export const NUCLEO_CANDIDATO_6_4 = NUCLEO_ANTI_DILUICAO_V4.replace(
+  '**Prioridade em conflito:** Gama (glossário aplicável) > conteúdo do original > Beta > Delta > naturalidade. Gama decide termos; Beta decide convenções; Delta contém apenas particularidades desta obra.',
+  '**Responsabilidades:** original = sentido e tom; Gama = forma do termo quando aplicável; Beta = convenções editoriais; Delta = exceções específicas da obra. Entre soluções compatíveis, escolha a mais natural em PT-BR. Nenhuma camada autoriza contrariar o original.',
+).replace(MARCADOR_DELTA, MARCADOR_DELTA_V2);

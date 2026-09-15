@@ -111,7 +111,7 @@ describe('saneamento das configurações no boot', () => {
     const db = abrirBanco(caminho);
     gravarCru(db, 'tamanho_bloco', 'abacaxi');
     expect(sanearConfiguracoes(db)).toEqual([]);
-    expect(reposConfig.obterTodas(db).tamanho_bloco).toBe(60); // padrão, via numeroConfig
+    expect(reposConfig.obterTodas(db).tamanho_bloco).toBe(10); // padrão, via numeroConfig
     db.close();
   });
 });

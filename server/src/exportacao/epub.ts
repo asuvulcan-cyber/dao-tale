@@ -62,12 +62,16 @@ export function escaparAtributo(texto: string): string {
 
 /** Parágrafo traduzido → XHTML: os marcadores inline da IA viram <em> e <strong>.
     O escape vem antes da conversão — escapar não introduz asteriscos. */
-export function paragrafoXhtml(texto: string): string {
+export function paragrafoXhtml(texto: string, renderizarNota?: (nota: string) => string): string {
   return partirInline(texto)
     .map((s) => {
       const corpo = escaparTexto(s.texto);
       if (s.tipo === 'negrito') return `<strong>${corpo}</strong>`;
       if (s.tipo === 'italico') return `<em>${corpo}</em>`;
+      if (s.tipo === 'nota')
+        return renderizarNota
+          ? renderizarNota(s.texto)
+          : `<span class="nota" title="${escaparAtributo(s.texto)}"><sup>[nota]</sup></span>`;
       return corpo;
     })
     .join('');
@@ -109,10 +113,23 @@ ${corpo}
 
 function capituloXhtml(cap: CapituloEpub): string {
   const cabecalho = cabecalhoPt(cap);
+  const notas: string[] = [];
   const paragrafos = cap.paragrafos
     .filter((p) => p.pt)
-    .map((p) => `<p>${paragrafoXhtml(p.pt)}</p>`)
+    .map(
+      (p) =>
+        `<p>${paragrafoXhtml(p.pt, (nota) => {
+          notas.push(nota);
+          const n = notas.length;
+          return `<a epub:type="noteref" href="#nota-${n}"><sup>[${n}]</sup></a>`;
+        })}</p>`,
+    )
     .join('\n');
+  const rodape = notas.length
+    ? `<section class="notas"><h2>Notas</h2><ol>${notas
+        .map((nota, i) => `<li id="nota-${i + 1}" epub:type="footnote">${paragrafoXhtml(nota)}</li>`)
+        .join('')}</ol></section>`
+    : '';
   // Só repete o título chinês quando o h1 está em português; sem titulo_pt o
   // cabeçalho já É o título original e a linha zh seria eco.
   const original = cap.titulo && cap.titulo_pt ? `<p class="zh">${escaparTexto(cap.titulo)}</p>\n` : '';
@@ -120,7 +137,7 @@ function capituloXhtml(cap: CapituloEpub): string {
     cabecalho,
     `<h1>${escaparTexto(cabecalho)}</h1>
 <div class="ornamento"></div>
-${original}${paragrafos}`,
+${original}${paragrafos}${rodape}`,
   );
 }
 

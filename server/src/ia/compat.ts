@@ -9,6 +9,8 @@ import {
   type RequisicaoPasseEstilo,
   type RequisicaoRefinarPrompt,
   type RequisicaoRevisao,
+  type RequisicaoRevisaoLiteraria,
+  type RequisicaoAdjudicacaoLiteraria,
   type RequisicaoTraducaoBloco,
   type RequisicaoQa,
   type RespostaContracapa,
@@ -17,6 +19,8 @@ import {
   type RespostaQa,
   type RespostaRefinarPrompt,
   type RespostaRevisaoProvedor,
+  type RespostaRevisaoLiteraria,
+  type RespostaAdjudicacaoLiteraria,
   type RespostaTraducaoBloco,
 } from './provedor.js';
 import {
@@ -26,6 +30,8 @@ import {
   sistemaQa,
   sistemaRefinarPrompt,
   sistemaRevisao,
+  sistemaRevisaoLiteraria,
+  sistemaAdjudicacaoLiteraria,
   sistemaTraducao,
   usuarioContracapa,
   usuarioExtrairTermos,
@@ -33,6 +39,8 @@ import {
   usuarioQa,
   usuarioRefinarPrompt,
   usuarioRevisao,
+  usuarioRevisaoLiteraria,
+  usuarioAdjudicacaoLiteraria,
   usuarioTraducao,
 } from './prompts.js';
 import {
@@ -42,6 +50,8 @@ import {
   CONTRATO_QA,
   CONTRATO_REFINAR_PROMPT,
   CONTRATO_REVISAO,
+  CONTRATO_REVISAO_LITERARIA,
+  CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_TRADUCAO,
   instrucaoJson,
 } from './contratos.js';
@@ -340,6 +350,30 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
         if (e instanceof z.ZodError) {
           throw new ErroProvedor('Resposta do modelo fora do contrato do passe de estilo.', 'transitorio');
         }
+        throw e;
+      }
+    },
+
+    async revisarLiterariamente(chave, req: RequisicaoRevisaoLiteraria): Promise<RespostaRevisaoLiteraria> {
+      const sistema = `${sistemaRevisaoLiteraria(req)}\n\n${instrucaoJson(CONTRATO_REVISAO_LITERARIA)}`;
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioRevisaoLiteraria(req));
+      try {
+        const dados = CONTRATO_REVISAO_LITERARIA.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
+      } catch (e) {
+        if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da revisão literária.', 'transitorio');
+        throw e;
+      }
+    },
+
+    async adjudicarRevisaoLiteraria(chave, req: RequisicaoAdjudicacaoLiteraria): Promise<RespostaAdjudicacaoLiteraria> {
+      const sistema = `${sistemaAdjudicacaoLiteraria(req)}\n\n${instrucaoJson(CONTRATO_ADJUDICACAO_LITERARIA)}`;
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioAdjudicacaoLiteraria(req));
+      try {
+        const dados = CONTRATO_ADJUDICACAO_LITERARIA.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
+      } catch (e) {
+        if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da adjudicação literária.', 'transitorio');
         throw e;
       }
     },

@@ -7,9 +7,17 @@ import {
   normalizarPreferencias,
   preferenciasSaoPadrao,
   renderizarPreferencias,
+  renderizarPreferenciasCompactas,
+  renderizarChecklistFinal,
   type PreferenciasEstilo,
 } from '@dao-tale/shared';
-import { MARCADOR_DELTA, MARCADOR_PREFERENCIAS, NUCLEO_ENXUTO, comporOmega } from './promptPadraoInicial.js';
+import {
+  MARCADOR_DELTA,
+  MARCADOR_PREFERENCIAS,
+  NUCLEO_ANTI_DILUICAO,
+  NUCLEO_ENXUTO,
+  comporOmega,
+} from './promptPadraoInicial.js';
 
 const com = (p: Partial<PreferenciasEstilo>): PreferenciasEstilo => ({ ...PREFERENCIAS_PADRAO, ...p });
 
@@ -117,6 +125,19 @@ describe('renderizarPreferencias', () => {
 });
 
 describe('composição com preferências', () => {
+  it('o Alfa antidiuluição usa Beta curta e termina no checklist, sem marcadores', () => {
+    const texto = comporOmega(NUCLEO_ANTI_DILUICAO, 'Regra exclusiva.', PREFERENCIAS_PADRAO);
+    expect(texto).toContain('## 5. BETA');
+    expect(texto).toContain('## 6. DIRETRIZES');
+    expect(texto).toContain('## CHECKLIST FINAL');
+    expect(texto.indexOf('## CHECKLIST FINAL')).toBeGreaterThan(texto.indexOf('## 6. DIRETRIZES'));
+    expect(texto).not.toContain('{{');
+    expect(renderizarPreferenciasCompactas(PREFERENCIAS_PADRAO).length).toBeLessThan(
+      renderizarPreferencias(PREFERENCIAS_PADRAO).length,
+    );
+    expect(renderizarChecklistFinal(PREFERENCIAS_PADRAO)).toContain('7. Releia só o português');
+  });
+
   it('o núcleo enxuto rende as duas seções na ordem 5 → 6, sem marcador sobrando', () => {
     const texto = comporOmega(NUCLEO_ENXUTO, 'Lin Feng fala em gírias.', PREFERENCIAS_PADRAO);
     expect(texto).not.toContain(MARCADOR_PREFERENCIAS);

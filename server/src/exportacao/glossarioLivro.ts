@@ -15,11 +15,25 @@ export const TITULO_GLOSSARIO = 'Glossário';
  *  como ele escreveu (só com a primeira letra maiúscula). */
 const ROTULOS: Record<string, string> = {
   personagem: 'Personagens',
+  grupo: 'Famílias, facções e grupos',
   local: 'Lugares',
+  titulo: 'Títulos e epítetos',
+  tratamento: 'Formas de tratamento',
+  'posto-funcao': 'Postos e funções',
+  'arte-marcial': 'Artes e técnicas marciais',
+  'conceito-marcial': 'Conceitos marciais',
+  'medicina-tradicional': 'Medicina tradicional',
+  objeto: 'Objetos',
+  texto: 'Obras, manuais e textos',
+  idioma: 'Idiomas',
+  criatura: 'Criaturas',
+  'conceito-cultural': 'Conceitos culturais',
+  'geografia-comum': 'Geografia comum',
+  'lexico-geral': 'Léxico geral',
+  // Compatibilidade com obras que ainda não passaram pela curadoria nova.
   'poder-habilidade': 'Poderes e habilidades',
   entidade: 'Entidades e organizações',
   'titulo-cargo': 'Títulos e cargos',
-  objeto: 'Objetos',
   outro: 'Outros',
 };
 
