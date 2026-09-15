@@ -355,3 +355,38 @@ Próxima rodada acordada: capítulo 20, preservando Alfa 6.3/Delta 2.4, blocos d
 frases e aprovação humana das propostas literárias. Comparar volume de intervenção,
 erros recorrentes e consumo com o capítulo 19. Na consulta desta retomada, o capítulo
 20 ainda não estava importado; a tradução depende do fornecimento do original chinês.
+
+## Capítulo 20 — Gemini e revisão pendente, 15/09/2026
+
+Após a retomada, o usuário importou e traduziu o capítulo 20, “Faca Pontuda”, com
+`gemini-3.8-flash`, por falta de saldo no DeepSeek. Foram traduzidas as 61 frases, com
+Alfa 6.3 e Delta 2.4, sem erros de execução. A telemetria registra sete chamadas,
+30.271 tokens de entrada e 5.134 de saída. O custo estimado está nulo; esses dados não
+demonstram desconto de créditos promocionais na conta Google.
+
+A primeira saída apresentou 14 alertas determinísticos de estilo e um de Gama. A
+leitura contra o chinês encontrou também desvios semânticos: destinatário inventado
+para o sinal “irmão” (20.18), “vocês” no lugar de “você” (20.33), “mundo esquecido” em
+vez de esquecimento (20.44) e comparação entre perdas transformada em comparação com
+posses (20.45). A medida da lâmina inicial também exigiu correção: quatro cun,
+aproximadamente treze centímetros, antes da extensão descrita em 20.17.
+
+Com autorização do usuário, o assistente preparou o lote 4, “Revisão integral do
+capítulo 20 · Gemini 3.8 Flash”: 44 propostas pendentes e 17 frases preservadas. As
+propostas ainda dependem da leitura e aprovação do usuário. Não houve chamadas
+adicionais aos provedores de IA para gerar esse lote.
+
+A composição revisada passou sem violações determinísticas de estilo, inconsistências
+checáveis de Gama ou alertas das travas literárias. Isso valida as convenções
+checáveis, não substitui a aprovação editorial. O script específico
+`server/scripts/registrar-revisao-capitulo20.ts` valida por padrão, exige banco explícito
+e só insere propostas quando executado com `--staging`; verifica a base novamente na
+transação e recusa sobrescrever um lote divergente.
+
+Foi verificado um backup prévio em
+`/var/lib/dao-tale/backups/pre-revisao-cap20-2026-09-15T16-32-45-619Z.db`.
+O hash SHA-256 das linhas completas das 61 frases da base é
+`f2cd622842beabee74d4d68666f63c90bdefcb278139cdbd63fa6a4bc89faef3`.
+O texto vigente e a primeira tradução permanecem preservados para aprovação e futura
+comparação. O volume de propostas (44/61) ainda não equivale a intervenções aprovadas;
+não é uma comparação controlada de qualidade com o DeepSeek no capítulo 19.
