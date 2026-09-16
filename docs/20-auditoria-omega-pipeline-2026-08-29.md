@@ -419,3 +419,27 @@ A base das frases tem SHA-256
 As propostas foram gravadas pelo script `server/scripts/registrar-revisao-capitulo21.ts`,
 com validação prévia e rechecagem da base dentro da transação. Não houve chamadas
 adicionais à API. A aprovação do usuário continua pendente.
+
+## Capítulo 22 — registro e fidelidade, 16/09/2026
+
+O usuário apontou formalidade excessiva na saída do `gemini-3.8-flash`, incluindo
+“meneou” e “retesarem”. A leitura das 74 frases confirmou o padrão e encontrou também
+mudanças de sentido: muitos lugares viraram quase toda a Fortaleza (22.21); cabeça e
+pés viraram ombros e pernas no transporte do corpo (22.27); um plano existente virou
+uma suposição (22.47); e “os irmãos Qi Nu” voltou a atribuir o mesmo nome aos dois
+irmãos (22.72).
+
+O assistente preparou o lote 6 com 55 propostas pendentes e 19 frases preservadas.
+Nenhuma proposta trata exclusivamente de formato de aspas. Ajustes de pontuação
+acompanham revisões de conteúdo; a atribuição da pergunta em 22.47 foi unida à fala
+22.46, produzindo um alerta esperado de extensão nessa fala. As duas propostas devem
+ser lidas juntas. A composição não apresentou violações determinísticas de estilo
+nem inconsistências checáveis do Gama. O usuário ainda precisa aprovar a redação.
+
+O script `server/scripts/registrar-revisao-capitulo22.ts` validou a base antes de
+inserir as propostas em transação. Backup prévio verificado:
+`/var/lib/dao-tale/backups/pre-revisao-cap22-2026-09-16T17-17-04-065Z.db`.
+SHA-256 das linhas das frases:
+`325f05c7a242c797f4af8cdee24c9143b8df6f2f83d170c79f7b4835e1d71a95`.
+A comparação posterior com o backup confirmou preservação de todas as frases,
+capítulos, prompts e glossário. Não houve chamadas adicionais à API nesta revisão.
