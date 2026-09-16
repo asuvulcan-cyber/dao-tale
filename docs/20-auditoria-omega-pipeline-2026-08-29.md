@@ -390,3 +390,32 @@ O hash SHA-256 das linhas completas das 61 frases da base é
 O texto vigente e a primeira tradução permanecem preservados para aprovação e futura
 comparação. O volume de propostas (44/61) ainda não equivale a intervenções aprovadas;
 não é uma comparação controlada de qualidade com o DeepSeek no capítulo 19.
+
+## Capítulo 21 — revisão pendente, 16/09/2026
+
+“Debaixo da Cama” foi traduzido pelo usuário com `gemini-3.8-flash`, mantendo o prompt
+15 (Delta 2.4 associado ao Alfa 6.3). As 83 frases foram traduzidas em nove chamadas:
+36.403 tokens de entrada e 5.893 de saída. O Dao Tale agora registra custo estimado de
+US$ 0,049401; o valor não representa uma confirmação de cobrança líquida pelo Google.
+
+A revisão editorial do assistente gerou o lote 5, com 50 propostas pendentes e 33 frases
+preservadas. Entre os ajustes estão a identidade dos irmãos (21.9), o objeto que o
+protagonista consegue localizar pelo tato (21.52), a respiração reduzida em vez de
+interrompida (21.53), a faquinha que virou adaga (21.38/81) e o colchão acrescentado em
+21.74. O texto revisado mantém a percepção limitada do protagonista e não amplia os
+detalhes da cena.
+
+A composição passou pelas travas literárias sem alertas e pela consistência checável
+do Gama sem violações. Restaram três falsos positivos de estilo confirmados pela
+leitura: `opera` dentro de “operação” (21.11), `terceira` (21.15) e `uma li` dentro de
+“uma lição” (21.49). O script registra explicitamente essas exceções locais; não foram
+reescritos trechos corretos para satisfazer o detector. O defeito do detector permanece
+pendente de correção no código do aplicativo.
+
+Antes da gravação, foi verificado o backup
+`/var/lib/dao-tale/backups/pre-revisao-cap21-2026-09-16T05-19-59-419Z.db`.
+A base das frases tem SHA-256
+`b54fee1b5413aec709e6beb3383400e7f3b2c303ae55223177aaf7c5ab48cb93`.
+As propostas foram gravadas pelo script `server/scripts/registrar-revisao-capitulo21.ts`,
+com validação prévia e rechecagem da base dentro da transação. Não houve chamadas
+adicionais à API. A aprovação do usuário continua pendente.
