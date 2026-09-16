@@ -443,3 +443,45 @@ SHA-256 das linhas das frases:
 `325f05c7a242c797f4af8cdee24c9143b8df6f2f83d170c79f7b4835e1d71a95`.
 A comparação posterior com o backup confirmou preservação de todas as frases,
 capítulos, prompts e glossário. Não houve chamadas adicionais à API nesta revisão.
+
+## Balanço após aprovação do capítulo 22
+
+A consulta posterior confirmou as 55 propostas do lote 6 aprovadas e o capítulo 22
+finalizado. As redações aprovadas e vigentes coincidem com as propostas originais do
+script: não foram encontrados ajustes adicionais do usuário nesse lote. As decisões
+anteriores do capítulo 21 continuam relevantes para calibrar a revisão, especialmente
+continuidade de falas, tempos verbais e separação entre tipografia e conteúdo.
+
+| Capítulo | Frases | Frases diferentes da primeira IA | Chamadas de tradução | Custo estimado em USD |
+|---|---:|---:|---:|---:|
+| 20 | 61 | 44 | 7 | 0,04195575 |
+| 21 | 83 | 51 | 9 | 0,049401 |
+| 22 | 74 | 55 | 8 | 0,04305450 |
+
+As diferenças acima são contagens brutas, incluindo tipografia e edições diretas.
+Não equivalem a erros de tradução nem a mudanças literárias necessárias. No capítulo
+21, o lote 5 tem 49 aprovações e uma rejeição, sem pendências; o status administrativo
+do capítulo ainda é `traduzido`. Os capítulos 20 e 22 estão finalizados.
+
+Propõe-se encerrar esta primeira rodada no capítulo 24: cinco capítulos consecutivos
+com Gemini 3.8 Flash (20–24), mantendo Alfa 6.3/Delta 2.4 e blocos de dez frases.
+É uma amostra prática para decidir o próximo experimento, não evidência suficiente
+para publicação automática ou superioridade estatística de um modelo.
+
+Ao concluir o 24:
+
+1. Separar correções só tipográficas, mudanças de sentido, escolhas de registro,
+   tempos verbais e simples preferências de redação.
+2. Conferir recorrências contra o chinês e contra as correções efetivamente aprovadas,
+   incluindo propostas rejeitadas ou corrigidas pelo usuário.
+3. Medir chamadas, tokens e custo de tradução separadamente da revisão. Não atribuir
+   custo zero à revisão humana/assistida apenas porque não houve chamada à API.
+4. Escolher uma intervenção pequena e testá-la nos mesmos trechos em uma cópia de
+   avaliação: por exemplo, tratamento de registro ou uma melhoria no passe de revisão.
+   Preservar os originais da IA e os textos aprovados como referências.
+5. Manter o Pro fora da rodada por preferência de custo do usuário. Qualquer teste
+   pago com outro modelo dependerá de uma nova decisão, não será iniciado por padrão.
+
+No momento dessa conferência, o capítulo 23 ainda não estava importado. O próximo
+passo operacional depende da importação e tradução dele pelo usuário, como nos
+capítulos anteriores. Nenhum texto ou configuração da VPS foi alterado nesta consulta.
