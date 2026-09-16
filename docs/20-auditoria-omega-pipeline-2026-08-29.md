@@ -485,3 +485,30 @@ Ao concluir o 24:
 No momento dessa conferência, o capítulo 23 ainda não estava importado. O próximo
 passo operacional depende da importação e tradução dele pelo usuário, como nos
 capítulos anteriores. Nenhum texto ou configuração da VPS foi alterado nesta consulta.
+
+## Capítulo 23 — propostas pendentes, 16/09/2026
+
+O capítulo 23, “A Câmara de Tortura”, chegou traduzido com `gemini-3.8-flash`:
+66 frases, sete chamadas, 32.065 tokens de entrada, 5.469 de saída e estimativa local
+de US$ 0,0445575. A revisão editorial gerou o lote 7, com 43 propostas pendentes e
+23 frases preservadas. Nenhuma proposta trata somente de aspas.
+
+Entre os problemas corrigidos: transporte de mortos transformado em enterro (23.29),
+baixa notoriedade dos Assassinos confundida com ocultação de identidade (23.56), e
+ignorar o Senhor Guo traduzido como fazer vista grossa (23.62). A redação revisada
+mantém o registro formal quando ele faz parte da caracterização, como nas falas dos
+responsáveis pelo interrogatório.
+
+As verificações deixaram cinco ocorrências de aspas curvas, fora do escopo das
+propostas literárias; três falsos alertas de mais-que-perfeito em “câmara” (23.29/34/47);
+e dois falsos alertas de Gama (23.9/13), em que 西院 foi localizado dentro de 西院门,
+embora a cena se refira ao portão oeste do pátio atual, não ao local Pátio Oeste.
+Essas exceções estão explícitas no script. Um alerta de extensão em 23.65 foi
+conferido: “capturado e trazido de volta” preserva o sentido de 抓回来.
+
+Backup verificado antes de gravar as propostas:
+`/var/lib/dao-tale/backups/pre-revisao-cap23-2026-09-16T20-05-56-792Z.db`.
+SHA-256 da base das frases:
+`7b97e84e38ddebef739f1d9b15fc72c604aba5f8aeced8a140ce1ce6618826fb`.
+Script: `server/scripts/registrar-revisao-capitulo23.ts`. As propostas continuam
+dependendo de aprovação; não houve chamadas adicionais à API nesta revisão.
