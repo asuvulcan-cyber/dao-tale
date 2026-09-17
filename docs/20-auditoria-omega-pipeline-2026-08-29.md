@@ -512,3 +512,39 @@ SHA-256 da base das frases:
 `7b97e84e38ddebef739f1d9b15fc72c604aba5f8aeced8a140ce1ce6618826fb`.
 Script: `server/scripts/registrar-revisao-capitulo23.ts`. As propostas continuam
 dependendo de aprovação; não houve chamadas adicionais à API nesta revisão.
+
+## Capítulo 24 — propostas pendentes, 17/09/2026
+
+Conferência do capítulo 23: finalizado, 43 propostas do lote 7 aprovadas, sem
+diferenças entre as redações propostas pelo script e as vigentes nessas frases.
+
+O capítulo 24 chegou traduzido com `gemini-3.8-flash`, com 70 frases ainda iguais
+à primeira tradução da IA. A revisão contra o chinês gerou o lote 8: 43 propostas
+pendentes e 27 frases preservadas. Nenhuma proposta trata somente de aspas.
+O foco foi reduzir formalidade desnecessária sem apagar a voz narrativa e corrigir
+desvios de sentido: portão oeste confundido com Pátio Oeste (24.7/14), cabeça
+separada do corpo (24.16), distância em li transformada em léguas (24.30), hábito
+de lavar as mãos descrito como obsessivo (24.44) e roupa de cama como esteira (24.54).
+
+A validação mantém explícitos os alertas brutos e excepciona somente falsos positivos
+conferidos: seis correspondências de mais-que-perfeito em palavras ou partes de
+palavras — câmara (6/32), consideração (15), assustadora (39), terceira (61) e
+aceleração (62) — e duas correspondências de 西院 dentro de 西院门 (7/14).
+Para estas últimas, há também exceção exata no bloqueio individual de identidade.
+Não houve alteração das regras globais de validação.
+
+Backup com `integrity_check=ok`, anterior à gravação:
+`/var/lib/dao-tale/backups/pre-revisao-cap24-2026-09-17T12-05-39-090Z.db`.
+SHA-256 da base das frases:
+`a906001f4dd54f505ac43a05a4406c807483044f6a9bb56da31a981e6348653a`.
+Script: `server/scripts/registrar-revisao-capitulo24.ts`.
+
+Após a inserção, comparação integral por hash com o backup confirmou que `frases`,
+`capitulos`, `prompts`, `prompt_padrao` e `glossario` permaneceram inalterados.
+As 43 propostas estão pendentes; nenhum texto foi aplicado ou aprovado automaticamente.
+Validação remota e `npm -w server run typecheck` concluídos. Não houve chamadas
+adicionais à API de tradução, implantação ou mudança de configuração.
+
+Próximo passo: revisão do lote 8 pelo usuário. Depois disso, consolidar a amostra
+20–24 conforme o plano acima, separando sentido, registro, tempos verbais e
+preferências de redação. Não iniciar outro capítulo ou teste pago com Pro por padrão.
