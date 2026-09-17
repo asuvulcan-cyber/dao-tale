@@ -83,7 +83,7 @@ describe('travas da revisão literária em sombra', () => {
     expect(propostaPodeIrAoStaging(travas)).toBe(true);
   });
 
-  it('bloqueia passado composto novo no passe seletivo', () => {
+  it('bloqueia substituição literal do mais-que-perfeito diagnosticado, incluindo particípio irregular', () => {
     const seletivo = { ...alvo, texto_pt: 'Ele ouvira a voz, mas nunca vira o homem.', diagnostico: { fenomenos: ['regra-deterministica'], razoes: ['mais-que-perfeito: ouvira'] } };
     const travas = validarPropostaLiteraria(seletivo, {
       ordem: 3,
@@ -94,6 +94,39 @@ describe('travas da revisão literária em sombra', () => {
     expect(propostaPodeIrAoStaging(travas)).toBe(false);
   });
 
+  it.each([
+    ['Não intimidava ninguém nem havia traído pessoa alguma.', 'Não tinha intimidado ninguém nem traído pessoa alguma.'],
+    ['Qi Nu e Xie Nu tentaram expulsar o mal.', 'Qi Nu e Xie Nu tinham tentado expulsar o mal dele.'],
+    ['Ele não viu o homem antes.', 'Ele não tinha visto o homem antes.'],
+  ])('encaminha anterioridade possível como alerta, não bloqueio: %s', (texto_pt, texto_revisado) => {
+    const travas = validarPropostaLiteraria({ ...alvo, texto_pt,
+      diagnostico: { fenomenos: ['tempo'], razoes: ['Conferir anterioridade e referente.'] },
+    }, { ordem: 3, texto_revisado, justificativa: '', categorias: ['fidelidade'], confianca: 'alta' }, []);
+    expect(travas).toEqual(expect.arrayContaining([expect.objectContaining({ codigo: 'passado-composto-introduzido', gravidade: 'alerta' })]));
+    expect(propostaPodeIrAoStaging(travas)).toBe(true);
+  });
+
+  it.each([
+    ['Eles tentaram escapar antes.', 'Eles tinham tentado escapar antes.'],
+    ['Eles ouviram a voz.', 'Eles tinham ouvido a voz.'],
+    ['Ele fez isso antes.', 'Ele havia feito isso antes.'],
+  ])('não confunde pretérito perfeito com troca mecânica: %s', (texto_pt, texto_revisado) => {
+    const travas = validarPropostaLiteraria({ ...alvo, texto_pt,
+      diagnostico: { fenomenos: ['tempo'], razoes: ['Conferir mais-que-perfeito no contexto.'] },
+    }, { ordem: 3, texto_revisado, justificativa: '', categorias: ['fidelidade'], confianca: 'alta' }, []);
+    expect(travas.find(t => t.codigo === 'passado-composto-introduzido')?.gravidade).toBe('alerta');
+  });
+
+  it.each([
+    ['Ele treinara antes.', 'Ele tinha treinado antes.'],
+    ['Ele fizera isso.', 'Ele havia feito isso.'],
+  ])('mantém bloqueio de troca literal explicitamente diagnosticada: %s', (texto_pt, texto_revisado) => {
+    const travas = validarPropostaLiteraria({ ...alvo, texto_pt,
+      diagnostico: { fenomenos: ['regra-deterministica'], razoes: ['mais-que-perfeito'] },
+    }, { ordem: 3, texto_revisado, justificativa: '', categorias: ['naturalidade'], confianca: 'alta' }, []);
+    expect(travas.find(t => t.codigo === 'passado-composto-introduzido')?.gravidade).toBe('bloqueio');
+  });
+
   it('bloqueia capitalização oportunista de posto fora do diagnóstico', () => {
     const seletivo = { ...alvo, texto_pt: 'Ele queria ser assassino.', diagnostico: { fenomenos: ['literalidade'], razoes: ['expressão literal'] } };
     const travas = validarPropostaLiteraria(seletivo, {
@@ -101,6 +134,26 @@ describe('travas da revisão literária em sombra', () => {
     }, []);
     expect(travas.map((t) => t.codigo)).toContain('capitalizacao-nao-diagnosticada');
     expect(propostaPodeIrAoStaging(travas)).toBe(false);
+  });
+
+  it('não considera justificativa da IA uma autorização para troca mecânica', () => {
+    const travas = validarPropostaLiteraria({ ...alvo, texto_pt: 'Ele treinara antes.',
+      diagnostico: { fenomenos: ['registro'], razoes: ['mais-que-perfeito: treinara'] },
+    }, { ordem: 3, texto_revisado: 'Ele tinha treinado antes.', justificativa: 'Anterioridade legítima.', categorias: ['fidelidade'], confianca: 'alta' }, []);
+    expect(propostaPodeIrAoStaging(travas)).toBe(false);
+  });
+
+  it('não alerta quando a locução temporal existente foi preservada', () => {
+    const travas = validarPropostaLiteraria({ ...alvo, texto_pt: 'Ele tinha ouvido a voz alta.',
+      diagnostico: { fenomenos: ['registro'], razoes: ['Conferir intensidade.'] },
+    }, { ordem: 3, texto_revisado: 'Ele tinha ouvido a voz.', justificativa: '', categorias: ['fidelidade'], confianca: 'alta' }, []);
+    expect(travas.some(t => t.codigo === 'passado-composto-introduzido')).toBe(false);
+  });
+
+  it('não estende a trava temporal da revisão seletiva à revisão integral', () => {
+    const travas = validarPropostaLiteraria({ ...alvo, texto_pt: 'Ele ouvira a voz.' },
+      { ordem: 3, texto_revisado: 'Ele tinha ouvido a voz.', justificativa: '', categorias: ['naturalidade'], confianca: 'alta' }, []);
+    expect(travas.some(t => t.codigo === 'passado-composto-introduzido')).toBe(false);
   });
 
   it('bloqueia rearranjo que mantém a locução diagnosticada', () => {

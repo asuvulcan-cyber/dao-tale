@@ -46,8 +46,35 @@ const NUMERO = /\d+(?:[.,]\d+)*/g;
 const NOTA = /\(\((.*?)\)\)/gs;
 const MARCADORES_FORMAIS = /\b(?:tampouco|outrossim|doravante|quiçá|deveras|conquanto|não obstante|ademais|destarte|fitou|contemplou|permaneceu|prostr(?:o|a|ou|aram|ar|ado|ada))\b/giu;
 const TIQUES = /\b(?:tornou a|passou a|pôs-se a)\b/giu;
-const PASSADO_COMPOSTO = /\b(?:tinha|tinham|havia|haviam)\s+(?:sido\s+)?[a-zà-úç]+(?:ado|ido)\b/giu;
+const PASSADO_COMPOSTO = /\b(?:tinha|tinham|havia|haviam)\s+(?:sido\s+)?(?:[a-zà-úç]+(?:ado|ido)|feito|dito|visto|posto|escrito|aberto|morto|vindo)\b/giu;
 const POSTOS = /\b(?:assassinos?|espadachins?|espectros?|homens? de sabre)\b/giu;
+
+// Reconhece somente a substituição literal de formas simples por compostas.
+// Não pretende inferir anterioridade do chinês ou julgar alterações mais amplas.
+function trocaTemporalMecanica(base: string, revisado: string): boolean {
+  const escapar = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const irregulares: Record<string, string> = {
+    feito: 'fizera', dito: 'dissera', visto: 'vira', posto: 'pusera',
+    escrito: 'escrevera', aberto: 'abrira', morto: 'morrera', vindo: 'viera', sido: 'fora',
+  };
+  let padrao = '', fim = 0;
+  for (const m of revisado.matchAll(PASSADO_COMPOSTO)) {
+    padrao += escapar(revisado.slice(fim, m.index));
+    const palavras = m[0].toLocaleLowerCase('pt-BR').split(/\s+/u);
+    // Locuções passivas e construções fora deste subconjunto ficam para julgamento.
+    const participio = palavras.length === 2 ? palavras[1] : '';
+    const simples = irregulares[participio] ? [irregulares[participio]]
+      : participio.endsWith('ado') ? [participio.slice(0, -3) + 'ara']
+        : participio.endsWith('ido') ? [participio.slice(0, -3) + 'era', participio.slice(0, -3) + 'ira'] : [];
+    const plural = ['tinham', 'haviam'].includes(palavras[0]);
+    // Permite locuções que já estavam presentes, sem perder o alinhamento literal.
+    // No plural, “ouviram/treinaram” também podem ser pretérito perfeito.
+    // Sem análise contextual não há evidência suficiente para bloquear.
+    padrao += `(?:${[m[0], ...(plural ? [] : simples)].map(escapar).join('|')})`;
+    fim = m.index + m[0].length;
+  }
+  return new RegExp(`^${padrao}${escapar(revisado.slice(fim))}$`, 'iu').test(base);
+}
 
 function multiconjunto(texto: string, padrao: RegExp): string[] {
   return [...texto.matchAll(padrao)].map((m) => m[0]).sort();
@@ -146,10 +173,14 @@ export function validarPropostaLiteraria(
     resultado.push({ codigo: 'tique-repeticao', gravidade: 'alerta', mensagem: 'A candidata introduziu construção perifrástica recorrente; conferir aspecto e naturalidade no contexto.' });
   }
   if (alvo.diagnostico && multiconjunto(revisado, PASSADO_COMPOSTO).length > multiconjunto(alvo.texto_pt, PASSADO_COMPOSTO).length) {
+    const diagnosticaFormaSimples = alvo.diagnostico.razoes.some(r => /mais-que-perfeito/iu.test(r));
+    const mecanica = diagnosticaFormaSimples && trocaTemporalMecanica(alvo.texto_pt, revisado);
     resultado.push({
       codigo: 'passado-composto-introduzido',
-      gravidade: 'bloqueio',
-      mensagem: 'O passe seletivo introduziu “tinha/havia + particípio”; a correção deve preservar o aspecto sem trocar mecanicamente uma forma marcada por outra.',
+      gravidade: mecanica ? 'bloqueio' : 'alerta',
+      mensagem: mecanica
+        ? 'A candidata apenas substituiu o mais-que-perfeito diagnosticado por formas compostas; isso não demonstra resolução do diagnóstico.'
+        : 'A candidata introduziu passado composto. Conferir anterioridade e aspecto contra o chinês e o contexto; a forma, isoladamente, não demonstra erro nem correção.',
     });
   }
   const diagnosticaCapitalizacao = alvo.diagnostico?.fenomenos.includes('capitalizacao-contextual') ?? false;

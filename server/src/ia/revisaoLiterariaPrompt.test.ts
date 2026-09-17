@@ -67,6 +67,8 @@ describe('prompt da revisão literária em sombra', () => {
     expect(sistemaRevisaoLiteraria(seletiva)).toContain('devolva null diante de falso positivo');
     expect(sistemaRevisaoLiteraria(seletiva)).toContain('altere o menor trecho suficiente');
     expect(sistemaRevisaoLiteraria(seletiva)).toContain('Nunca substitua mecanicamente mais-que-perfeito simples');
+    expect(sistemaRevisaoLiteraria(seletiva)).toContain('Isso não proíbe passado composto');
+    expect(sistemaRevisaoLiteraria(seletiva)).toContain('Não transforme um fato anterior em simultâneo');
     expect(usuarioRevisaoLiteraria(seletiva)).toContain('DIAGNÓSTICO: registro');
     expect(usuarioRevisaoLiteraria(seletiva)).toContain('termo formal suspeito');
   });

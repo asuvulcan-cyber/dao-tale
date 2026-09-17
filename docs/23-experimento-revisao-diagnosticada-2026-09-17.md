@@ -89,3 +89,29 @@ de regressão para a trava temporal e a separação de tipografia/conteúdo. Um 
 teste de triagem automática deve usar outros trechos e medir problemas encontrados,
 falsos alarmes e correções efetivamente resolvidas separadamente. Nenhuma nova
 chamada ou mudança de configuração está programada.
+
+## Implementação local da validação temporal — 17/09/2026
+
+A trava deixou de classificar todo passado composto novo como erro objetivo.
+Agora uma introdução de `tinha/havia + particípio` gera alerta para avaliação
+temporal. O bloqueio permanece no subconjunto verificável de substituições
+literais de mais-que-perfeito simples explicitamente diagnosticado, sem outras
+mudanças na frase. A justificativa ou a confiança da IA não remove esse bloqueio.
+
+O reconhecimento é deliberadamente limitado: formas plurais como “ouviram” e
+“treinaram” também podem ser pretérito perfeito e não justificam bloqueio sem
+contexto. Casos não reconhecidos ficam como alerta, não recebem certificado de
+fidelidade. O detector passou a reconhecer também particípios irregulares comuns.
+Mantêm-se as outras travas e a aprovação humana. O prompt seletivo esclarece que
+anterioridade necessária não deve ser apagada só para evitar uma locução composta.
+
+Reexecução **somente da validação local**, com o artefato congelado do experimento:
+as únicas mudanças nos vinte resultados foram 24.42 e 24.47, de bloqueio para
+alerta. Não houve nova geração, alteração das propostas ou aprovação automática.
+Os problemas editoriais remanescentes descritos acima continuam válidos.
+
+Testes de regressão cobrem anterioridade possível, particípios irregulares,
+ambiguidade no plural, substituição literal, justificativa da IA sem poder de
+liberação, locução preexistente e escopo restrito ao passe diagnosticado. A mudança
+foi feita no código local; não foi implantada na VPS. Não houve gasto adicional
+de API ou alteração dos capítulos, bancos e prompts armazenados em produção.

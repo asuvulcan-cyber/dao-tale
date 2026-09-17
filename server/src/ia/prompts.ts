@@ -623,6 +623,7 @@ export function sistemaRevisaoLiterariaPartes(req: Pick<RequisicaoRevisaoLiterar
             'Corrija somente quando o diagnóstico revelar problema real. Não procure motivos adicionais para reescrever uma frase boa e devolva null diante de falso positivo.',
             'Quando houver correção, altere o menor trecho suficiente para resolver exatamente o diagnóstico e preserve literalmente todo o restante que continuar correto. Não aproveite a abertura para trocar sinônimos, aspas, pontuação, tempo verbal ou ritmo não acusados.',
             'Nunca substitua mecanicamente mais-que-perfeito simples por "tinha/havia + particípio". Se a forma simples soar inadequada, reconstrua com o tempo e o aspecto naturais ao contexto; se isso não puder ser feito sem uma reescrita ampla ou perda temporal, devolva null para adjudicação humana.',
+            'Isso não proíbe passado composto: quando o diagnóstico exigir corrigir uma relação temporal, preserve a anterioridade necessária e explique essa relação na justificativa. Não transforme um fato anterior em simultâneo apenas para evitar "tinha/havia + particípio".',
             'Antes de entregar, compare palavra por palavra com o vigente: se alguma mudança não for necessária para sanar uma das razões listadas no DIAGNÓSTICO, desfaça-a.',
           ]
         : [];
