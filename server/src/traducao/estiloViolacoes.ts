@@ -56,6 +56,7 @@ const NAO_VERBOS = new Set([
   // vezes no 5. Falso positivo em nome próprio é o pior tipo — repete e não some.
   'voadora', 'caçadora', 'matadora', 'errante', 'guerreira', 'feiticeira', 'traiçoeira',
   'carnívora',
+  'câmara', 'terceira', 'assustadora',
 ]);
 
 // {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então
@@ -68,7 +69,7 @@ const NAO_VERBOS = new Set([
 // destruíra. Havia um "saíra" real no capítulo 3 da 死人经 que só a leitura
 // humana pegou: o falso negativo que o comentário acima diz ser o que dói,
 // acontecendo na prática.
-const RE_MQP = /\b[a-zà-úâêôãõáéíóúç]{2,}(?:ara|era|ira|ora|íra)\b/gi;
+const RE_MQP = /(?<!\p{L})\p{L}{2,}(?:ara|era|ira|ora|íra)(?!\p{L})/giu;
 
 /** Verbo no mais-que-perfeito simples ("fizera")? Heurística por sufixo, com
  *  lista de exceções — pensada para ACUSAR e ser conferida, não para corrigir. */
@@ -107,7 +108,7 @@ function violacaoAspasNaoRetas(texto: string): string | null {
  * real foi 一炷香 → “tempo de queimar um bastão de incenso”, embora o Alfa peça
  * uma duração compreensível. A lista é conservadora para não acusar “qi”. */
 function violacaoUnidadeChinesa(texto: string): string | null {
-  const m = texto.match(/\b(?:\d+|um|uma|dois|duas|meio|meia)\s+(?:chi|cun|zhang|li|jin|liang|qian|shichen)\b|tempo de (?:queimar|uma) (?:um )?bastão de incenso/iu);
+  const m = texto.match(/(?<!\p{L})(?:\d+|um|uma|dois|duas|meio|meia)\s+(?:chi|cun|zhang|li|jin|liang|qian|shichen)(?!\p{L})|tempo de (?:queimar|uma) (?:um )?bastão de incenso/iu);
   return m?.[0] ?? null;
 }
 

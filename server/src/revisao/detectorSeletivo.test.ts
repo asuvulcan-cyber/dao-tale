@@ -19,15 +19,36 @@ describe('detector seletivo', () => {
     expect(detectarRevisaoSeletiva([frase(0, 'Ele ficou imóvel.')], PREFERENCIAS_PADRAO, [])).toEqual([]);
   });
 
+  it('não envia anterioridade composta isolada para revisão paga', () => {
+    expect(detectarRevisaoSeletiva([frase(0, 'Não tinha maltratado nem traído ninguém.')], PREFERENCIAS_PADRAO, [])).toEqual([]);
+  });
+
   it('não roteia comprimento isolado como se fosse defeito literário', () => {
     const longa = 'Ele atravessou o pátio enquanto os outros garotos observavam em silêncio, sem saber se deveriam acompanhá-lo ou permanecer junto ao portão até que alguém lhes dissesse o que fazer, porque aquela manhã começou de modo diferente das anteriores e ninguém entendia ainda a razão.';
     expect(detectarRevisaoSeletiva([frase(0, longa)], PREFERENCIAS_PADRAO, [])).toEqual([]);
   });
 
-  it('acusa capitalização para conferência contextual, não para troca automática', () => {
-    const [d] = detectarRevisaoSeletiva([frase(0, 'Todos queriam virar Assassinos.')], PREFERENCIAS_PADRAO, []);
+  it('não paga revisão só por capitalização, mas mantém o contexto em outro diagnóstico', () => {
+    expect(detectarRevisaoSeletiva([frase(0, 'Todos queriam virar Assassinos.')], PREFERENCIAS_PADRAO, [])).toEqual([]);
+    const [d] = detectarRevisaoSeletiva([frase(0, 'Os Assassinos permaneceram ali com altivez.')], PREFERENCIAS_PADRAO, []);
     expect(d.fenomenos).toContain('capitalizacao-contextual');
-    expect(d.razoes[0]).toContain('Confirmar');
+    expect(d.razoes.some(r => r.includes('Confirmar'))).toBe(true);
+  });
+
+  it('separa aspas de conteúdo sem ocultar outros sinais na mesma frase', () => {
+    expect(detectarRevisaoSeletiva([frase(0, 'Ele disse “não”.')], PREFERENCIAS_PADRAO, [])).toEqual([]);
+    const [d] = detectarRevisaoSeletiva([frase(0, 'Ele disse “não” com altivez.')], PREFERENCIAS_PADRAO, []);
+    expect(d.fenomenos).toContain('registro');
+    expect(d.razoes.some(r => r.includes('aspas-nao-retas'))).toBe(false);
+  });
+
+  it('não transforma substantivos nem repetições idiomáticas em diagnóstico', () => {
+    expect(detectarRevisaoSeletiva([frase(0, 'Na terceira câmara, a operação era assustadora; avançou de passo em passo.')], PREFERENCIAS_PADRAO, [])).toEqual([]);
+  });
+
+  it('detecta redundância comprovada sem acusar a expressão carne viva', () => {
+    expect(detectarRevisaoSeletiva([frase(0, 'A carne em carne viva.')], PREFERENCIAS_PADRAO, [])[0].fenomenos).toContain('literalidade');
+    expect(detectarRevisaoSeletiva([frase(0, 'Estava em carne viva.')], PREFERENCIAS_PADRAO, [])).toEqual([]);
   });
 
   it('roteia formalismo e decalque confirmados no capítulo 19 sem corrigi-los mecanicamente', () => {

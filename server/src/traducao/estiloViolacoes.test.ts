@@ -5,6 +5,11 @@ import { analisarEstilo } from './estiloViolacoes.js';
 const frases = (textos: string[]) => textos.map((texto_pt, ordem) => ({ ordem, texto_pt }));
 
 describe('analisarEstilo', () => {
+  it('usa fronteiras Unicode completas, sem recortar palavras em letras acentuadas', () => {
+    const r = analisarEstilo(frases(['Na terceira câmara, a operação e a aceleração causaram uma impressão assustadora.', 'Ele deu uma lição, sem consideração especial.']), { ...PREFERENCIAS_PADRAO, mais_que_perfeito:'evitar' });
+    expect(r.violacoes).toEqual([]);
+    expect(analisarEstilo(frases(['Andou um li.']), PREFERENCIAS_PADRAO).violacoes[0].regra).toBe('unidade-chinesa');
+  });
   it('acusa mais-que-perfeito simples quando a obra pediu para evitar', () => {
     const r = analisarEstilo(frases(['Ele cumprira a promessa.', 'Ele tinha cumprido a promessa.']), {
       ...PREFERENCIAS_PADRAO,

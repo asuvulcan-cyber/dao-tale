@@ -7,8 +7,13 @@ import { obterProvedor } from '../src/ia/fabrica.js';
 import { incluirPrincipais, filtrarGlossarioRelevante } from '../src/ia/prompts.js';
 import { validarPropostaLiteraria, propostaPodeIrAoStaging } from '../src/revisao/literaria.js';
 import type { AlvoRevisaoLiteraria } from '../src/ia/provedor.js';
+import { PREFERENCIAS_PADRAO } from '@dao-tale/shared';
+import { detectarRevisaoSeletiva } from '../src/revisao/detectorSeletivo.js';
 
 const [entrada, saida] = process.argv.slice(2).filter(a => !a.startsWith('--'));
+// Modo econômico de integração: somente o bloco 24, triagem gerada pelo código.
+// O modo editorial original continua reproduzível sem esta opção.
+const automatico = process.argv.includes('--automatico');
 if (!entrada || !saida) throw new Error('Informe snapshot e saída exclusiva.');
 const hash = (x: unknown) => createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const anterior = JSON.parse(fs.readFileSync(entrada, 'utf8'));
@@ -31,9 +36,24 @@ const ambiente = { ...anterior.ambiente, origem_sha256: anterior.ambiente_sha256
   blocos: anterior.ambiente.blocos.map((b: any) => ({...b,alvos:b.alvos.map((a: AlvoRevisaoLiteraria) => ({...a,
     diagnostico:diagnosticos[`${b.capitulo}.${a.ordem}`] ?? {fenomenos:[],razoes:['Controle sem problema diagnosticado: preservar literalmente, devolvendo null.']} }))})) };
 if (ambiente.blocos.length !== 2 || ambiente.blocos.some((b: any) => b.alvos.length !== 10 || ambiente.exemplos.some((e: any) => e.capitulo === b.capitulo))) throw new Error('Amostra inesperada ou vazamento.');
+if (automatico) {
+  ambiente.origem_diagnosticos = 'detector-local';
+  ambiente.blocos = ambiente.blocos.filter((b: any) => b.capitulo === 24);
+  ambiente.diagnosticos = {};
+  const prefs = { ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'evitar' as const, dialogo: 'aspas' as const };
+  for (const b of ambiente.blocos) {
+    const ds = detectarRevisaoSeletiva(b.alvos.map((a: AlvoRevisaoLiteraria) => ({...a,id:a.ordem+1})),prefs,ambiente.gama);
+    for (const a of b.alvos) {
+      const d = ds.find(d=>d.ordem===a.ordem);
+      a.diagnostico = d ? {fenomenos:d.fenomenos,razoes:d.razoes} : {fenomenos:[],razoes:['Sem sinal automático: preservar literalmente, devolvendo null.']};
+      if (d) ambiente.diagnosticos[`${b.capitulo}.${a.ordem}`] = a.diagnostico;
+    }
+  }
+}
 const resultados: unknown[] = [];
 const doc = () => ({esquema:'dao-tale-revisao-diagnosticada-v1',ambiente_sha256:hash(ambiente),ambiente,resultados,
-  aviso:'Diagnósticos editoriais conhecidos; mede correção condicionada à triagem, não capacidade de detectar erros autonomamente.'});
+  aviso:automatico ? 'Triagem automática em amostra de calibração conhecida; uma geração, sem promoção automática.'
+    : 'Diagnósticos editoriais conhecidos; mede correção condicionada à triagem, não capacidade de detectar erros autonomamente.'});
 fs.writeFileSync(saida,JSON.stringify(doc(),null,2),{flag:'wx',mode:0o600});
 if (process.argv.includes('--executar')) {
   const chave = await obterChave('gemini');
