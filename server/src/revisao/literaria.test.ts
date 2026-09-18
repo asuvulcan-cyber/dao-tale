@@ -19,6 +19,41 @@ const alvo = {
 };
 
 describe('travas da revisão literária em sombra', () => {
+  it('não deixa uma edição substantiva esconder normalização de aspas fora do diagnóstico', () => {
+    const travas = validarPropostaLiteraria({...alvo,texto_zh:'他们搞暗杀。',texto_pt:'Estavam “possuídos” e tentaram um assassinato.',
+      diagnostico:{fenomenos:['sentido-contextual'],razoes:['assassinato-tentativa: conferir resultado.']}},
+      {ordem:3,texto_revisado:'Estavam "possuídos" e foram armar um assassinato.',justificativa:'Tudo resolvido.',categorias:['fidelidade','tipografia'],confianca:'alta'},[]);
+    expect(travas).toEqual(expect.arrayContaining([
+      expect.objectContaining({codigo:'aspas-nao-diagnosticadas',gravidade:'bloqueio'}),
+      expect.objectContaining({codigo:'diagnostico-nao-resolvido',gravidade:'alerta'}),
+    ]));
+    expect(propostaPodeIrAoStaging(travas)).toBe(false);
+  });
+
+  it.each(['aspas-nao-retas: “nome”', 'Sem regra tipográfica'])('respeita escopo explícito de tipografia: %s', razao => {
+    const travas = validarPropostaLiteraria({...alvo,texto_pt:'Ele disse “nome”.',diagnostico:{fenomenos:[],razoes:[razao]}},
+      {ordem:3,texto_revisado:'Ele disse "nome".',justificativa:'',categorias:['tipografia'],confianca:'alta'},[]);
+    expect(travas.some(t=>t.codigo==='aspas-nao-diagnosticadas')).toBe(!razao.startsWith('aspas-nao-retas:'));
+  });
+
+  it('permite revisão integral de aspas sem ampliar as travas do passe seletivo', () => {
+    const travas = validarPropostaLiteraria({...alvo,texto_pt:'Ele disse “nome”.'},
+      {ordem:3,texto_revisado:'Ele disse "nome".',justificativa:'',categorias:['tipografia'],confianca:'alta'},[]);
+    expect(travas).toEqual([]);
+  });
+
+  it('não confunde reordenação de citações ou conteúdo reescrito com conversão de aspas', () => {
+    const travas = validarPropostaLiteraria({...alvo,texto_pt:'“Um” e "dois".',diagnostico:{fenomenos:['coesao'],razoes:[]}},
+      {ordem:3,texto_revisado:'"dois" e “Um”.',justificativa:'',categorias:['coesao'],confianca:'alta'},[]);
+    expect(travas.some(t=>t.codigo==='aspas-nao-diagnosticadas')).toBe(false);
+  });
+
+  it('trata sinal semântico persistente como suspeita, não sentença automática', () => {
+    const travas = validarPropostaLiteraria({...alvo,texto_zh:'他们搞暗杀。',texto_pt:'Tentaram um assassinato.',diagnostico:{fenomenos:['sentido-contextual'],razoes:['assassinato-tentativa: conferir.']}},
+      {ordem:3,texto_revisado:'Foram armar um assassinato.',justificativa:'',categorias:['fidelidade'],confianca:'alta'},[]);
+    expect(travas).toContainEqual(expect.objectContaining({codigo:'diagnostico-nao-resolvido',gravidade:'alerta'}));
+    expect(propostaPodeIrAoStaging(travas)).toBe(true);
+  });
   it('aceita reescrita fiel que preserva número, nota e Gama', () => {
     const travas = validarPropostaLiteraria(alvo, {
       ordem: 3, texto_revisado: 'Na Fortaleza do Peng Dourado, ele esperou por 3 dias. ((calendário local))',

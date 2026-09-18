@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectarSinaisBilingues } from './sinaisBilingues.js';
+import { conferirSinaisDiagnosticados, detectarSinaisBilingues } from './sinaisBilingues.js';
 
 const casos = [
   ['origem-funcionarios', '他是官宦之后。', 'Era de linhagem nobre.', 'Era descendente de funcionários.'],
@@ -21,5 +21,20 @@ describe('sinais bilíngues de calibração', () => {
   });
   it('não proíbe tentativa quando o chinês também descreve uma tentativa', () => {
     expect(detectarSinaisBilingues('试图暗杀', 'Tentaram um assassinato.')).toEqual([]);
+  });
+
+  it.each(['Tentaram um assassinato.', 'Foram armar um assassinato.', 'Planejaram um assassinato.'])('mantém suspeita do resultado da ação em %s', texto => {
+    expect(conferirSinaisDiagnosticados('他们搞暗杀。', texto, ['assassinato-tentativa: conferir resultado.']))
+      .toEqual([{id:'assassinato-tentativa',estado:'sinal-persiste'}]);
+  });
+
+  it('não certifica correção só porque o padrão desapareceu', () => {
+    expect(conferirSinaisDiagnosticados('他们搞暗杀。', 'Cometeram um assassinato.', ['assassinato-tentativa: conferir resultado.']))
+      .toEqual([{id:'assassinato-tentativa',estado:'sinal-nao-detectado'}]);
+  });
+
+  it('não inventa verificação para diagnóstico desconhecido ou sem evidência chinesa', () => {
+    expect(conferirSinaisDiagnosticados('甲', 'Tentaram um assassinato.', ['assassinato-tentativa: conferir.'])).toEqual([]);
+    expect(conferirSinaisDiagnosticados('搞暗杀', 'Tentaram um assassinato.', ['Corrigir naturalidade.'])).toEqual([]);
   });
 });

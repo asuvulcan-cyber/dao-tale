@@ -93,6 +93,32 @@ describe('pipeline de revisão literária em sombra', () => {
     expect(corpo.bloqueadas[0].travas).toContainEqual(expect.objectContaining({ codigo: 'adjudicacao', gravidade: 'bloqueio' }));
   });
 
+  it.each([false,true])('integra rechecagem e preservação de aspas sem aplicar texto (aspas alteradas=%s)', async alterarAspas => {
+    const base='Estavam “possuídos” e tentaram um assassinato.';
+    db.prepare('UPDATE frases SET texto_zh=?,texto_pt=? WHERE id=?').run('他们搞暗杀。',base,fraseId);
+    vi.spyOn(provedorMock,'revisarLiterariamente').mockResolvedValueOnce({
+      propostas:[{ordem:0,texto_revisado:alterarAspas ? 'Estavam "possuídos" e foram armar um assassinato.' : 'Estavam “possuídos” e foram armar um assassinato.',
+        justificativa:'Correção proposta.',categorias:['fidelidade'],confianca:'alta'}],
+      bruta:'{}',uso:{tokens_entrada:1,tokens_saida:1,tokens_cache_leitura:0,tokens_cache_criacao:0},
+    });
+    const resposta=await chamar('POST',`/api/capitulos/${capituloId}/revisao-literaria/sombra`,{
+      inicio:0,quantidade:1,provedor:'mock',modelo:'mock-v1',adjudicar:false,seletiva:true,
+    });
+    expect(resposta.status).toBe(200);
+    const corpo=await json(resposta);
+    if(alterarAspas){
+      expect(corpo.gravadas).toHaveLength(0);
+      expect(corpo.bloqueadas[0].travas).toContainEqual(expect.objectContaining({codigo:'aspas-nao-diagnosticadas',gravidade:'bloqueio'}));
+      expect(db.prepare('SELECT COUNT(*) n FROM revisoes_literarias').get()).toEqual({n:0});
+    }else{
+      expect(corpo.bloqueadas).toHaveLength(0);
+      expect(corpo.gravadas).toHaveLength(1);
+      expect(corpo.gravadas[0].status).toBe('pendente');
+      expect(corpo.gravadas[0].categorias).toContain('alerta:diagnostico-nao-resolvido');
+    }
+    expect(db.prepare('SELECT texto_pt FROM frases WHERE id=?').get(fraseId)).toEqual({texto_pt:base});
+  });
+
   it('limita o contexto a oito frases de cada lado e não dilui os alvos', async () => {
     db.prepare('DELETE FROM frases WHERE capitulo_id=?').run(capituloId);
     const inserir = db.prepare(`

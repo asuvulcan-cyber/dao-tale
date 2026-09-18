@@ -23,3 +23,16 @@ export function detectarSinaisBilingues(textoZh: string, textoPt: string) {
   return SINAIS_BILINGUES.filter(s => s.zh.test(textoZh) && s.pt.test(textoPt))
     .map(s => ({ id: s.id, razao: s.razao }));
 }
+
+/** Rechecagem limitada aos sinais identificados no diagnóstico. Ausência do
+ * padrão não prova que o sentido foi corrigido: pode haver outra paráfrase ruim. */
+export function conferirSinaisDiagnosticados(textoZh: string, textoPt: string, razoes: string[]) {
+  return SINAIS_BILINGUES.filter(s => razoes.some(r => r.startsWith(`${s.id}:`)) && s.zh.test(textoZh))
+    .map(s => {
+      // Trocar tentativa por preparação não garante o ato consumado. Mantém
+      // uma suspeita para leitura humana, não decide o resultado da ação.
+      const preparacao = s.id === 'assassinato-tentativa'
+        && /\b(?:foram armar|foi armar|planejaram|planejou)\s+(?:um\s+)?assassinato\b/iu.test(textoPt);
+      return { id: s.id, estado: s.pt.test(textoPt) || preparacao ? 'sinal-persiste' as const : 'sinal-nao-detectado' as const };
+    });
+}

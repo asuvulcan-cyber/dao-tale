@@ -1,5 +1,6 @@
 import type { EntradaGlossario } from '@dao-tale/shared';
 import { contemTermoFlexionado } from '../traducao/flexao.js';
+import { conferirSinaisDiagnosticados } from './sinaisBilingues.js';
 
 export const CATEGORIAS_REVISAO_LITERARIA = [
   'fidelidade',
@@ -36,7 +37,7 @@ export interface PropostaLiterariaIa {
 export type GravidadeTravaLiteraria = 'bloqueio' | 'alerta';
 
 export interface TravaLiteraria {
-  codigo: 'ordem' | 'vazio' | 'inicio-minusculo' | 'dicendi-entre-paragrafos' | 'chines-introduzido' | 'numero-perdido' | 'nota-perdida' | 'gama' | 'extensao' | 'registro-elevado' | 'complexidade' | 'tique-repeticao' | 'passado-composto-introduzido' | 'capitalizacao-nao-diagnosticada' | 'diagnostico-nao-resolvido' | 'adjudicacao';
+  codigo: 'ordem' | 'vazio' | 'inicio-minusculo' | 'dicendi-entre-paragrafos' | 'chines-introduzido' | 'numero-perdido' | 'nota-perdida' | 'gama' | 'extensao' | 'registro-elevado' | 'complexidade' | 'tique-repeticao' | 'passado-composto-introduzido' | 'capitalizacao-nao-diagnosticada' | 'aspas-nao-diagnosticadas' | 'diagnostico-nao-resolvido' | 'adjudicacao';
   gravidade: GravidadeTravaLiteraria;
   mensagem: string;
 }
@@ -82,6 +83,24 @@ function multiconjunto(texto: string, padrao: RegExp): string[] {
 
 function iguais(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+// Compara o estilo apenas em citações com conteúdo idêntico. Não confunde
+// reescrita do conteúdo com normalização tipográfica nem tenta analisar diálogos.
+function mudouFormaDasAspas(base: string, revisado: string): boolean {
+  const coletar = (texto: string) => {
+    const mapa = new Map<string, string[]>();
+    for (const m of texto.matchAll(/"([^"\n]*)"|“([^”\n]*)”|「([^」\n]*)」|『([^』\n]*)』/gu)) {
+      const conteudo = m[1] ?? m[2] ?? m[3] ?? m[4];
+      mapa.set(conteudo, [...(mapa.get(conteudo) ?? []), m[0][0]]);
+    }
+    return mapa;
+  };
+  const antes = coletar(base), depois = coletar(revisado);
+  return [...antes].some(([conteudo, formas]) => {
+    const novas = depois.get(conteudo);
+    return novas && formas.length === novas.length && !iguais(formas.sort(), novas.sort());
+  });
 }
 
 /**
@@ -202,6 +221,19 @@ export function validarPropostaLiteraria(
       gravidade: 'bloqueio',
       mensagem: 'A candidata manteve a locução que motivou o passe seletivo; deslocá-la na frase não constitui correção.',
     });
+  }
+  if (alvo.diagnostico) {
+    // A categoria escolhida pela IA não autoriza ampliar o diagnóstico.
+    const diagnosticaAspas = alvo.diagnostico.fenomenos.includes('tipografia')
+      || alvo.diagnostico.razoes.some(r => /^aspas-nao-retas:/u.test(r));
+    if (!diagnosticaAspas && mudouFormaDasAspas(alvo.texto_pt, revisado)) {
+      resultado.push({codigo:'aspas-nao-diagnosticadas',gravidade:'bloqueio',
+        mensagem:'A proposta mudou a forma das aspas fora do diagnóstico seletivo; preservar a tipografia vigente nesta revisão.'});
+    }
+    for (const sinal of conferirSinaisDiagnosticados(alvo.texto_zh, revisado, alvo.diagnostico.razoes)) {
+      if (sinal.estado === 'sinal-persiste') resultado.push({codigo:'diagnostico-nao-resolvido',gravidade:'alerta',
+        mensagem:`O sinal ${sinal.id} persiste na candidata. Conferir o sentido contra o chinês antes de aprovar; alterar a frase não comprova resolução.`});
+    }
   }
   return resultado;
 }
