@@ -1,5 +1,6 @@
 import type { EntradaGlossario } from '@dao-tale/shared';
 import type { AlvoRevisaoLiteraria, ExemploContrastivo } from '../ia/provedor.js';
+import { PERFIL_SERVIDOR_MANDARIM, type PerfilServidor } from '../idiomas/index.js';
 
 const FORMAIS = /\b(?:nutrindo|alimentando|tais|desferiu|permaneceu|contemplou|fitou|tragicamente|inequívoco|doravante|deveras)\b/giu;
 const TIQUES = /\b(?:tornou a|passou a|pôs-se a|tinha\s+\p{L}+(?:ado|ido))\b/giu;
@@ -43,18 +44,19 @@ export function selecionarMemoriaContrastiva(
   memoria: ExemploContrastivo[],
   glossario: EntradaGlossario[],
   limite = 4,
+  perfil: PerfilServidor = PERFIL_SERVIDOR_MANDARIM,
 ): ExemploContrastivo[] {
   if (limite <= 0 || memoria.length === 0) return [];
   const categorias = categoriasProvaveis(alvos);
   const tokensAlvo = tokens(alvos.map((a) => a.texto_pt).join(' '));
-  const zhAlvo = alvos.map((a) => a.texto_zh).join('');
-  const termosAlvo = glossario.filter((g) => zhAlvo.includes(g.termo_zh)).map((g) => g.termo_zh);
+  const origemAlvo = perfil.juntarFrases(alvos.map((a) => a.texto_zh));
+  const termosAlvo = glossario.filter((g) => perfil.casaTermo(origemAlvo, g.termo_zh)).map((g) => g.termo_zh);
 
   return memoria
     .map((exemplo) => {
       let pontos = exemplo.categorias.map(categoriaNormalizada).filter((c) => categorias.has(c)).length * 4;
       pontos += Math.min(4, intersecao(tokensAlvo, tokens(exemplo.texto_rejeitado)));
-      pontos += termosAlvo.filter((termo) => exemplo.texto_zh.includes(termo)).length * 6;
+      pontos += termosAlvo.filter((termo) => perfil.casaTermo(exemplo.texto_zh, termo)).length * 6;
       if (/["“”]/u.test(alvos.map((a) => a.texto_pt).join('')) === /["“”]/u.test(exemplo.texto_rejeitado)) pontos += 1;
       return { exemplo, pontos };
     })

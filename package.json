@@ -2,7 +2,7 @@
   "name": "dao-tale",
   "private": true,
   "version": "0.1.0",
-  "description": "Aplicativo local de tradução e revisão assistida (chinês → PT-BR)",
+  "description": "Aplicativo local de tradução e revisão assistida (mandarim ou inglês → PT-BR)",
   "workspaces": [
     "shared",
     "server",

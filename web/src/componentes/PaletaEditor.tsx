@@ -64,7 +64,7 @@ const ICONE_MODO: Record<ModoEditor, ReactNode> = {
       <line x1="8" y1="2.5" x2="8" y2="13.5" />
     </svg>
   ),
-  bilingue: <span className="texto-zh text-[11px] leading-none">文A</span>,
+  bilingue: <span className="selo-cjk text-[11px] leading-none">文A</span>,
   leitura: (
     <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.3">
       <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" />

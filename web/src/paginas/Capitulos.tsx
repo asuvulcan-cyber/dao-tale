@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   TEMPERATURA_MAX,
+  perfilDe,
   type Capitulo,
   type CapituloResumo,
   type CheckpointObra,
@@ -32,15 +33,24 @@ export function Capitulos() {
     queryFn: () => api<CapituloResumo[]>('GET', `/obras/${obraId}/capitulos`),
   });
 
+  // O perfil da obra governa rótulo e tipografia do original nesta tela.
+  const { data: obraDaLista } = useQuery({
+    queryKey: ['obra', obraId],
+    queryFn: () => api<Obra>('GET', `/obras/${obraId}`),
+  });
+  const perfil = perfilDe(obraDaLista?.idioma_origem);
+
   // Proveniência (doc 08 §2 camada 4): id → versão para o tooltip "traduzido
   // com prompt vX · núcleo vY". Mesmas chaves de cache da tela Prompt mãe.
   const { data: promptsObra } = useQuery({
     queryKey: ['prompts', obraId],
     queryFn: () => api<VersaoDelta[]>('GET', `/obras/${obraId}/prompts`),
   });
+  // Núcleos DO PERFIL da obra: a proveniência de um capítulo inglês está entre
+  // os Alfas ingleses, e a lista mandarim não o encontraria.
   const { data: nucleos } = useQuery({
-    queryKey: ['prompt-padrao'],
-    queryFn: () => api<PromptPadrao[]>('GET', '/prompt-padrao'),
+    queryKey: ['prompt-padrao', perfil.id],
+    queryFn: () => api<PromptPadrao[]>('GET', `/prompt-padrao?idioma=${perfil.id}`),
   });
   const versaoPrompt = new Map((promptsObra ?? []).map((p) => [p.id, p.versao]));
   const versaoNucleo = new Map((nucleos ?? []).map((n) => [n.id, n.versao]));
@@ -54,11 +64,7 @@ export function Capitulos() {
 
   const criar = useMutation({
     mutationFn: (dados: { numero: number; titulo?: string; texto_origem: string }) =>
-      api<{ capitulo: Capitulo; frases_total: number; avisos: string[] }>(
-        'POST',
-        `/obras/${obraId}/capitulos`,
-        dados,
-      ),
+      api<{ capitulo: Capitulo; frases_total: number; avisos: string[] }>('POST', `/obras/${obraId}/capitulos`, dados),
     onSuccess: (resultado) => {
       clienteQuery.invalidateQueries({ queryKey: ['capitulos', obraId] });
       setErro('');
@@ -79,7 +85,8 @@ export function Capitulos() {
         .filter(([, n]) => n > 0)
         .map(([k, n]) => `${n} ${k.replace('_', ' ')}`)
         .join(', ');
-      if (!window.confirm(`Excluir o capítulo ${cap.numero}?${detalhe ? `\n\nSerão perdidos: ${detalhe}.` : ''}`)) return;
+      if (!window.confirm(`Excluir o capítulo ${cap.numero}?${detalhe ? `\n\nSerão perdidos: ${detalhe}.` : ''}`))
+        return;
       await api('DELETE', `/capitulos/${cap.id}`);
     },
     onSuccess: () => clienteQuery.invalidateQueries({ queryKey: ['capitulos', obraId] }),
@@ -148,7 +155,9 @@ export function Capitulos() {
 
       {isLoading && <p className="text-tinta-2">Carregando…</p>}
       {capitulos?.length === 0 && !mostrarFormulario && (
-        <p className="text-tinta-2">Nenhum capítulo ainda. Cole o texto chinês em “Novo capítulo”.</p>
+        <p className="text-tinta-2">
+          Nenhum capítulo ainda. Cole o texto em {perfil.rotulo.toLowerCase()} em “Novo capítulo”.
+        </p>
       )}
 
       {/* Índice como sumário de livro (guia §五.2): número serifado, progresso
@@ -179,14 +188,19 @@ export function Capitulos() {
                   {cap.frases_erro > 0 && <span className="text-erro"> · {cap.frases_erro} erro</span>}
                   {/* D5: varredura local de consistência do glossário. */}
                   {cap.consistencia_violacoes != null && cap.consistencia_violacoes > 0 && (
-                    <span className="text-ocre-forte" title="Termos do glossário traduzidos fora do padrão — abra o capítulo para conferir">
-                      {' '}· {cap.consistencia_violacoes} glossário
+                    <span
+                      className="text-ocre-forte"
+                      title="Termos do glossário traduzidos fora do padrão — abra o capítulo para conferir"
+                    >
+                      {' '}
+                      · {cap.consistencia_violacoes} glossário
                     </span>
                   )}
                   {/* QA por segunda IA (doc 09 §6): apontamentos pendentes de triagem. */}
                   {cap.qa_pendentes > 0 && (
                     <span className="text-selo-forte" title="Apontamentos de QA pendentes — abra o capítulo para triar">
-                      {' '}· {cap.qa_pendentes} QA
+                      {' '}
+                      · {cap.qa_pendentes} QA
                     </span>
                   )}
                 </span>
@@ -267,7 +281,11 @@ function PainelCheckpoint() {
           <Botao
             variante="secundario"
             onClick={() => {
-              if (window.confirm('As taxas ainda não estabilizaram. Liberar o lote assim mesmo pode gerar retrabalho pago (retradução). Continuar?'))
+              if (
+                window.confirm(
+                  'As taxas ainda não estabilizaram. Liberar o lote assim mesmo pode gerar retrabalho pago (retradução). Continuar?',
+                )
+              )
                 mudarFase.mutate('cruzeiro');
             }}
             disabled={mudarFase.isPending}
@@ -282,7 +300,9 @@ function PainelCheckpoint() {
       <div className="grid gap-2 sm:grid-cols-3">
         {checkpoint.metricas.map((m) => (
           <div key={m.chave} className="flex items-start gap-2 rounded border border-linha/60 p-2">
-            <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${cor[m.estado]}`}>
+            <span
+              className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${cor[m.estado]}`}
+            >
               {simbolo[m.estado]}
             </span>
             <div className="min-w-0">
@@ -298,7 +318,8 @@ function PainelCheckpoint() {
 
       {checkpoint.janela_capitulos.length > 0 && (
         <p className="mt-2 text-xs text-tinta-2">
-          Janela medida: capítulos {checkpoint.janela_capitulos.join(', ')} (os {checkpoint.janela_alvo} mais recentes prontos).
+          Janela medida: capítulos {checkpoint.janela_capitulos.join(', ')} (os {checkpoint.janela_alvo} mais recentes
+          prontos).
         </p>
       )}
     </div>
@@ -479,7 +500,7 @@ function FichaObra() {
           />
         ) : (
           <div
-            className="texto-zh grid h-40 w-28 shrink-0 place-items-center rounded bg-papel-fundo text-5xl text-tinta-2/50 shadow-md shadow-tinta/20"
+            className="selo-cjk grid h-40 w-28 shrink-0 place-items-center rounded bg-papel-fundo text-5xl text-tinta-2/50 shadow-md shadow-tinta/20"
             aria-hidden
           >
             道
@@ -580,7 +601,10 @@ function DetalhesObra() {
         titulo_original: tituloOriginalAtual.trim() || null,
         autor: autorAtual.trim() || null,
         sinopse: sinopseAtual.trim() || null,
-        tags: tagsAtual.split(',').map((t) => t.trim()).filter(Boolean),
+        tags: tagsAtual
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
       }),
     onSuccess: () => {
       aoMudarObra();
@@ -615,16 +639,18 @@ function DetalhesObra() {
     onSuccess: aoMudarObra,
   });
 
-  // Título original e/ou sinopse em chinês → traduz com o prompt e glossário da obra.
-  const tituloEmChines = /[一-鿿]/.test(tituloOriginalAtual);
-  const sinopseEmChines = /[一-鿿]/.test(sinopseAtual);
-  const haChines = tituloEmChines || sinopseEmChines;
+  // Título e/ou sinopse ainda no idioma de origem → traduz com o prompt e o
+  // glossário da obra. Quem sabe reconhecer "ainda não traduzido" é o perfil.
+  const perfilObra = perfilDe(obra?.idioma_origem);
+  const tituloNaOrigem = perfilObra.ehDaOrigem(tituloOriginalAtual);
+  const sinopseNaOrigem = perfilObra.ehDaOrigem(sinopseAtual);
+  const haOriginal = tituloNaOrigem || sinopseNaOrigem;
   const traduzirDetalhes = useMutation({
     mutationFn: () =>
       api<{ titulo_pt: string | null; sinopse_pt: string | null }>('POST', '/ia/traduzir-detalhes', {
         obra_id: Number(obraId),
-        ...(tituloEmChines ? { titulo_zh: tituloOriginalAtual.trim() } : {}),
-        ...(sinopseEmChines ? { sinopse_zh: sinopseAtual.trim() } : {}),
+        ...(tituloNaOrigem ? { titulo_zh: tituloOriginalAtual.trim() } : {}),
+        ...(sinopseNaOrigem ? { sinopse_zh: sinopseAtual.trim() } : {}),
       }),
     onSuccess: (r) => {
       if (r.titulo_pt) setTitulo(r.titulo_pt);
@@ -687,7 +713,7 @@ function DetalhesObra() {
               />
             </label>
             <label className="block text-sm">
-              Título original (chinês)
+              Título original ({perfilObra.rotulo.toLowerCase()})
               <input
                 value={tituloOriginalAtual}
                 onChange={(e) => setTituloOriginal(e.target.value)}
@@ -728,15 +754,17 @@ function DetalhesObra() {
             <Botao onClick={() => salvar.mutate()} disabled={salvar.isPending}>
               Salvar detalhes
             </Botao>
-            {haChines && (
-              <Botao variante="secundario" onClick={() => traduzirDetalhes.mutate()} disabled={traduzirDetalhes.isPending}>
+            {haOriginal && (
+              <Botao
+                variante="secundario"
+                onClick={() => traduzirDetalhes.mutate()}
+                disabled={traduzirDetalhes.isPending}
+              >
                 {traduzirDetalhes.isPending
                   ? 'Traduzindo…'
-                  : tituloEmChines && sinopseEmChines
-                    ? 'Traduzir título e sinopse do chinês (IA)'
-                    : tituloEmChines
-                      ? 'Traduzir título do chinês (IA)'
-                      : 'Traduzir sinopse do chinês (IA)'}
+                  : `Traduzir ${
+                      tituloNaOrigem && sinopseNaOrigem ? 'título e sinopse' : tituloNaOrigem ? 'título' : 'sinopse'
+                    } do ${perfilObra.rotulo.toLowerCase()} (IA)`}
               </Botao>
             )}
             {salvo && <span className="text-sm text-jade-forte">Salvo.</span>}
@@ -813,8 +841,7 @@ function PainelPublicacao() {
               Tirar do ar
             </Botao>
           ) : (
-            finalizados.length > 0 &&
-            !confirmando && <Botao onClick={() => setConfirmando(true)}>Publicar obra</Botao>
+            finalizados.length > 0 && !confirmando && <Botao onClick={() => setConfirmando(true)}>Publicar obra</Botao>
           )}
         </div>
       </div>
@@ -824,8 +851,8 @@ function PainelPublicacao() {
           não muda nada. */}
       {!obra.publica && finalizados.length === 0 && (
         <p className="mt-2 text-sm text-tinta-2">
-          Nenhum capítulo está <em>finalizado</em> ainda. Marque ao menos um para poder publicar —
-          só esse status vai para a rua.
+          Nenhum capítulo está <em>finalizado</em> ainda. Marque ao menos um para poder publicar — só esse status vai
+          para a rua.
         </p>
       )}
 
@@ -837,8 +864,8 @@ function PainelPublicacao() {
               {finalizados.length} de {(capitulos ?? []).length}{' '}
               {(capitulos ?? []).length === 1 ? 'capítulo' : 'capítulos'}
             </strong>{' '}
-            — só os marcados como <em>finalizado</em>. Glossário, prompt, custos e o texto em chinês
-            continuam só seus, e tirar do ar é um clique.
+            — só os marcados como <em>finalizado</em>. Glossário, prompt, custos e o texto em chinês continuam só seus,
+            e tirar do ar é um clique.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Botao onClick={() => mudar.mutate(true)} disabled={mudar.isPending}>
@@ -910,11 +937,7 @@ function PreferenciasObra() {
       <div className="flex flex-wrap items-start gap-3">
         <label className="block text-sm">
           Provedor
-          <select
-            value={provedorAtual}
-            onChange={(e) => setProvedor(e.target.value)}
-            className="mt-1 block entrada"
-          >
+          <select value={provedorAtual} onChange={(e) => setProvedor(e.target.value)} className="mt-1 block entrada">
             <option value="">Padrão global</option>
             {provedores.map((p) => (
               <option key={p.id} value={p.id}>
@@ -961,19 +984,15 @@ function PreferenciasObra() {
         <div className="mt-3 flex flex-wrap items-start gap-3">
           <label className="block w-40 text-sm">
             Raciocínio (thinking)
-            <select
-              value={thinkingAtual}
-              onChange={(e) => setThinking(e.target.value)}
-              className="entrada mt-1 w-full"
-            >
+            <select value={thinkingAtual} onChange={(e) => setThinking(e.target.value)} className="entrada mt-1 w-full">
               <option value="">Padrão do provedor</option>
               <option value="desligado">Desligado (economiza)</option>
               <option value="ligado">Ligado</option>
             </select>
           </label>
           <p className="max-w-[52ch] text-xs text-tinta-2">
-            Modelos de raciocínio "pensam" antes de responder, e esse pensamento é{' '}
-            <strong>cobrado como saída</strong> — que é ~99% da conta. Medido nesta obra com o deepseek-v4-flash:{' '}
+            Modelos de raciocínio "pensam" antes de responder, e esse pensamento é <strong>cobrado como saída</strong> —
+            que é ~99% da conta. Medido nesta obra com o deepseek-v4-flash:{' '}
             <strong>86% dos tokens de saída de um capítulo eram raciocínio</strong>, e ele respondeu por quase todo o
             custo e pelos dez minutos de espera. Tradução é tarefa direta;{' '}
             <strong>desligar costuma valer a pena</strong>. Deixe no padrão se quiser comparar antes.
@@ -996,7 +1015,13 @@ function separarTitulo(texto: string): { titulo: string; corpo: string } {
   const linhas = texto.split(/\r?\n/);
   const i = linhas.findIndex((l) => l.trim().length > 0);
   if (i === -1) return { titulo: '', corpo: '' };
-  return { titulo: linhas[i].trim(), corpo: linhas.slice(i + 1).join('\n').trim() };
+  return {
+    titulo: linhas[i].trim(),
+    corpo: linhas
+      .slice(i + 1)
+      .join('\n')
+      .trim(),
+  };
 }
 
 function FormularioNovoCapitulo({

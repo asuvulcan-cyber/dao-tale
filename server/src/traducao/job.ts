@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import {
   resolverTemperatura,
   type EventoTraducao,
+  type IdiomaOrigem,
   type ModoThinking,
   type ProgressoTraducao,
   type ProvedorId,
@@ -197,6 +198,7 @@ export async function iniciarTraducao(
       thinking: obra.thinking ?? undefined,
       chave,
       omega: prompt.texto,
+      idiomaOrigem: obra.idioma_origem,
       config,
       traduzirTitulo,
       aoTerminar,
@@ -219,6 +221,7 @@ async function executarJob(
     thinking?: ModoThinking;
     chave: string | null;
     omega: string;
+    idiomaOrigem: IdiomaOrigem;
     config: ReturnType<typeof reposConfig.obterTodas>;
     traduzirTitulo: boolean;
     aoTerminar?: (resultado: ResultadoJob) => void;
@@ -257,6 +260,7 @@ async function executarJob(
         temperatura: ctx.temperatura,
         thinking: ctx.thinking,
         omega: ctx.omega,
+        idiomaOrigem: ctx.idiomaOrigem,
         tamanhoBloco,
         caudaContexto: ctx.config.cauda_contexto,
         glossarioRelevante: ctx.config.glossario_relevante,

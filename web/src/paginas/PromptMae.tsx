@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PreferenciasEstilo, PromptComposto, PromptPadrao, TipoPrompt } from '@dao-tale/shared';
+import type { IdiomaOrigem, PreferenciasEstilo, PromptComposto, PromptPadrao, TipoPrompt } from '@dao-tale/shared';
 import {
+  IDIOMAS_ORIGEM,
+  IDIOMA_ORIGEM_PADRAO,
+  perfilDe,
   MARCADOR_PREFERENCIAS_COMPACTAS,
   MARCADOR_PREFERENCIAS_COMPACTAS_V2,
   MARCADOR_PREFERENCIAS_COMPACTAS_V3,
@@ -134,23 +137,49 @@ export function PromptMae() {
 }
 
 export function PaginaPromptPadrao() {
+  // Esta tela é global — não está dentro de uma obra —, então o perfil não vem
+  // por contexto: ela precisa do próprio seletor. Há um núcleo ATIVO por
+  // idioma de origem desde a migração 029, e misturar as duas listas faria o
+  // revisor ativar o Alfa errado sem perceber.
+  const [idioma, setIdioma] = useState<IdiomaOrigem>(IDIOMA_ORIGEM_PADRAO);
+  const perfil = perfilDe(idioma);
   return (
-    <GerenciadorPrompts
-      titulo="Núcleo universal"
-      descricao={
-        'As regras zh→pt-BR comuns a todas as obras (prompt padrão global). O delta de cada obra é inserido no marcador {{DELTA_OBRA}}; uma versão nova aqui vale imediatamente para todas as obras em camadas. Versões são imutáveis.'
-      }
-      chave={['prompt-padrao']}
-      urlLista="/prompt-padrao"
-      urlCriar="/prompt-padrao"
-      urlAtivar={(id) => `/prompt-padrao/${id}/ativar`}
-      estadoVazio={
-        <Aviso tipo="info">
-          Não há nenhuma versão do núcleo — sem ele, obras em camadas ficam bloqueadas para tradução. Crie a
-          primeira versão abaixo.
-        </Aviso>
-      }
-    />
+    <>
+      <label className="mb-4 block text-sm">
+        Perfil de idioma
+        <select
+          value={idioma}
+          onChange={(e) => setIdioma(e.target.value as IdiomaOrigem)}
+          className="entrada mt-1 w-full max-w-xs"
+        >
+          {IDIOMAS_ORIGEM.map((id) => (
+            <option key={id} value={id}>
+              {perfilDe(id).rotulo}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-tinta-2">
+          Cada perfil tem o seu núcleo ativo, e as obras daquele idioma são traduzidas por ele. Ativar um não
+          mexe no outro.
+        </span>
+      </label>
+      <GerenciadorPrompts
+        key={idioma}
+        titulo={`Núcleo universal — ${perfil.rotulo}`}
+        descricao={`As regras ${perfil.sigla.toLowerCase()}→pt-BR comuns a todas as obras deste perfil (prompt padrão global). O delta de cada obra é inserido no marcador {{DELTA_OBRA}}; uma versão nova aqui vale imediatamente para todas as obras em camadas daquele idioma. Versões são imutáveis.`}
+        chave={['prompt-padrao', idioma]}
+        urlLista={`/prompt-padrao?idioma=${idioma}`}
+        urlCriar="/prompt-padrao"
+        camposExtraCriar={{ idioma_origem: idioma }}
+        urlAtivar={(id) => `/prompt-padrao/${id}/ativar`}
+        estadoVazio={
+          <Aviso tipo="info">
+            Não há nenhuma versão do núcleo de {perfil.rotulo.toLowerCase()} — sem ele, obras em camadas desse
+            idioma ficam bloqueadas para tradução. Crie a primeira versão abaixo.
+          </Aviso>
+        }
+      />
+    </>
   );
 }
 
@@ -162,6 +191,7 @@ function GerenciadorPrompts({
   chave,
   urlLista,
   urlCriar,
+  camposExtraCriar,
   urlAtivar,
   estadoVazio,
   obraId,
@@ -172,6 +202,9 @@ function GerenciadorPrompts({
   chave: (string | undefined)[];
   urlLista: string;
   urlCriar: string;
+  /** Campos fixos somados ao corpo do POST — o núcleo usa para dizer a que
+   *  perfil de idioma a versão nova pertence. */
+  camposExtraCriar?: Record<string, unknown>;
   urlAtivar: (id: number) => string;
   estadoVazio: ReactNode;
   /** Presente na tela da obra: liga prévia composta, conversão e refinamento. */
@@ -218,7 +251,7 @@ function GerenciadorPrompts({
       // Frases cujas edições alimentaram a proposta que virou esta versão. O
       // consumo é na ACEITAÇÃO: proposta recusada deixa o sinal vivo.
       edicoes_tratadas?: number[];
-    }) => api<{ avisos?: AvisoCamada[] }>('POST', urlCriar, dados),
+    }) => api<{ avisos?: AvisoCamada[] }>('POST', urlCriar, { ...dados, ...camposExtraCriar }),
     onSuccess: (resposta) => {
       invalidar();
       setPainel('ver');

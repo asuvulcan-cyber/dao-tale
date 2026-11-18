@@ -1,4 +1,4 @@
-import type { EntradaGlossario, Frase, ModoThinking } from '@dao-tale/shared';
+import type { EntradaGlossario, Frase, IdiomaOrigem, ModoThinking } from '@dao-tale/shared';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { RequisicaoTraducaoBloco } from '../ia/provedor.js';
 
@@ -20,6 +20,8 @@ export interface ParametrosBloco {
   /** Raciocínio escolhido pela obra; undefined = padrão do provedor. */
   thinking?: ModoThinking;
   omega: string;
+  /** Perfil de idioma da obra; ausente = mandarim. */
+  idiomaOrigem?: IdiomaOrigem;
   tamanhoBloco: number;
   caudaContexto: number;
   glossarioRelevante: boolean;
@@ -85,6 +87,7 @@ export function montarBloco(p: ParametrosBloco): ContextoBloco {
       temperatura: p.temperatura,
       thinking: p.thinking,
       omega: p.omega,
+      idioma_origem: p.idiomaOrigem,
       glossario: glossarioDoBloco,
       glossarioNoUsuario: p.glossarioRelevante,
       termosAdotados: termosAdotadosDoBloco,

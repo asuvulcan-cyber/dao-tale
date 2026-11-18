@@ -6,6 +6,13 @@ Horizonte proposto: **seis semanas, até 30/10/2026**, com janela de contingênc
 planejamento, não promessa de data, execução em segundo plano ou garantia de qualidade.
 Cada marco depende de seu critério de aceite, não apenas de chegar a data.
 
+**Andamento em 18/09:** inventário M0 registrado no
+[relatório de baseline](27-inventario-m0-2026-09-18.md), com 958 testes locais
+passando, diferenças local/VPS delimitadas e backlog priorizado. Não houve deploy
+ou uso pago de API. Próximo trabalho: M1, começando pelas validações anteriores às
+chamadas pagas. Recuperação e identificação integral da release seguem pendentes
+para os respectivos gates; o inventário não é aceite de produção.
+
 ## 1. O que significa estar pronto
 
 Entregar uma versão estável para o uso atual: um usuário, tradução literária

@@ -1,6 +1,9 @@
 // Só tipos vindos de index.js: import de valor aqui fecharia um ciclo em runtime
 // (index faz `export * from './livro.js'`), e a constante sairia undefined.
 import type { Frase, StatusCapitulo } from './index.js';
+// De idiomaOrigem.js dá para importar VALOR: o módulo não importa nada, então
+// não há ciclo — e é por isso que ele é o arquivo mais raso de shared.
+import { PERFIL_MANDARIM, type PerfilIdioma } from './idiomaOrigem.js';
 
 // Regras do "livro" — a obra vista como texto pronto, não como bancada (doc 12).
 // Ficam em shared porque os três alvos precisam das MESMAS regras: o EPUB e o
@@ -11,14 +14,20 @@ import type { Frase, StatusCapitulo } from './index.js';
 export const STATUS_LEGIVEIS: StatusCapitulo[] = ['traduzido', 'revisado', 'finalizado'];
 
 export interface ParagrafoRemontado {
-  /** Chinês do parágrafo: frases coladas, sem separador (a pontuação já separa). */
+  /** Original do parágrafo, remontado como o perfil de idioma manda: o mandarim
+   *  cola as frases sem separador (a pontuação já separa), o inglês usa espaço.
+   *  O nome `zh` é histórico, como os campos `_zh` — é o texto de ORIGEM. */
   zh: string;
   /** Português: frases separadas por espaço; vazio quando nada foi traduzido. */
   pt: string;
 }
 
-/** Agrupa as frases por `paragrafo`, preservando a ordem original do capítulo. */
-export function remontarParagrafos(frases: Frase[]): ParagrafoRemontado[] {
+/** Agrupa as frases por `paragrafo`, preservando a ordem original do capítulo.
+ *  `perfil` ausente = mandarim, que é o idioma de toda obra anterior aos perfis. */
+export function remontarParagrafos(
+  frases: Frase[],
+  perfil: PerfilIdioma = PERFIL_MANDARIM,
+): ParagrafoRemontado[] {
   const porParagrafo = new Map<number, Frase[]>();
   for (const f of frases) {
     const lista = porParagrafo.get(f.paragrafo) ?? [];
@@ -28,7 +37,7 @@ export function remontarParagrafos(frases: Frase[]): ParagrafoRemontado[] {
   return [...porParagrafo.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, fs]) => ({
-      zh: fs.map((f) => f.texto_zh).join(''),
+      zh: perfil.juntarFrases(fs.map((f) => f.texto_zh)),
       pt: fs
         .map((f) => f.texto_pt.trim())
         .filter(Boolean)

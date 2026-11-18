@@ -13,6 +13,7 @@ import {
   type UsoChamada,
 } from './provedor.js';
 import { PROMPT_CONTRACAPA } from './promptContracapa.js';
+import { perfilServidorDe } from '../idiomas/index.js';
 import { estimarTokens } from './uso.js';
 
 // Provedor simulado (decisão D4): permite desenvolver, demonstrar e testar todo o
@@ -117,12 +118,14 @@ export const provedorMock: ProvedorIA = {
     if (req.titulo) traducoes.unshift({ ordem: -1, texto_pt: `[título simulado] ${req.titulo}` });
     // Sugere um termo falso por bloco a partir da frase mais longa, para exercitar
     // o fluxo de termos sugeridos de ponta a ponta.
+    const perfilBloco = perfilServidorDe(req.idioma_origem);
     const maisLonga = [...req.frases].sort((a, b) => b.texto_zh.length - a.texto_zh.length)[0];
+    const recorte = maisLonga ? perfilBloco.extrairTermoSimulado(maisLonga.texto_zh, 2).join(' ').trim() : '';
     const termos_novos =
-      maisLonga && maisLonga.texto_zh.length >= 4
+      maisLonga && maisLonga.texto_zh.length >= 4 && recorte
         ? [
             {
-              termo_zh: [...maisLonga.texto_zh].slice(0, 2).join(''),
+              termo_zh: recorte,
               termo_pt: `Termo Simulado ${maisLonga.ordem}`,
               categoria: 'lexico-geral',
               contexto: `Descrição simulada do termo da frase ${maisLonga.ordem}.`,
@@ -157,11 +160,15 @@ export const provedorMock: ProvedorIA = {
 
   async extrairTermos(_chave, req: RequisicaoExtrairTermos) {
     await espera(latenciaMs());
-    // Determinístico: propõe os 2 primeiros e os 2 últimos caracteres do chinês
-    // como termos distintos (exercita a varredura exaustiva). Filtra o que já
-    // está no glossário; a rota ainda tira as sugestões pendentes.
-    const chineses = [...req.frase.texto_zh].filter((c) => /[一-鿿]/.test(c));
-    const candidatos = [...new Set([chineses.slice(0, 2).join(''), chineses.slice(-2).join('')])];
+    // Determinístico: propõe dois recortes distintos do original como termos
+    // (exercita a varredura exaustiva). O QUE é um recorte vem do perfil — no
+    // mandarim são caracteres, no inglês são palavras, e fatiar inglês por
+    // caractere devolveria pedaços de palavra. Filtra o que já está no
+    // glossário; a rota ainda tira as sugestões pendentes.
+    const perfilFrase = perfilServidorDe(req.idioma_origem);
+    const pedacos = perfilFrase.extrairTermoSimulado(req.frase.texto_zh, Number.MAX_SAFE_INTEGER);
+    const juntar = (ps: string[]) => (perfilFrase.id === 'zh' ? ps.join('') : ps.join(' '));
+    const candidatos = [...new Set([juntar(pedacos.slice(0, 2)), juntar(pedacos.slice(-2))])];
     const termos = candidatos
       .filter((zh) => zh.length >= 2 && !req.glossario.some((e) => e.termo_zh === zh))
       .map((zh) => ({

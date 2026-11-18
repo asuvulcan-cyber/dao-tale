@@ -1,6 +1,7 @@
 // Tipos de domínio e contratos da API — fonte única de verdade entre server e web.
 
 import type { PreferenciasEstilo } from './preferenciasEstilo.js';
+import type { IdiomaOrigem } from './idiomaOrigem.js';
 import { TEMAS, type Camada, type Tema } from './temasDoPrompt.js';
 import { TEMPERATURAS_PADRAO, type TemperaturasPapel } from './temperatura.js';
 
@@ -28,6 +29,9 @@ export * from './catalogoErros.js';
 // Regras de flexão de termo do glossário (plural, gênero, conector): fonte única
 // para a varredura de consistência e o grifo do editor.
 export * from './flexaoTermo.js';
+// Perfil de idioma de origem: tudo que o mandarim assumia implicitamente, dito
+// uma vez só — e o mesmo contrato preenchido pelo inglês.
+export * from './idiomaOrigem.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
@@ -238,6 +242,10 @@ export interface Obra {
   id: number;
   titulo: string;
   titulo_original: string | null;
+  /** Perfil de idioma do original (migração 029). Decide segmentador, Alfa,
+   *  rótulos, tipografia e quais detectores existem. Toda obra anterior aos
+   *  perfis é 'zh', que é o default da coluna. */
+  idioma_origem: IdiomaOrigem;
   /** Autor do original (dc:creator no EPUB, doc 12 §4). */
   autor: string | null;
   sinopse: string | null;
@@ -295,9 +303,15 @@ export interface VersaoDelta {
   criado_em: string;
 }
 
-/** Versão do núcleo universal (prompt padrão global): regras zh→pt-BR comuns a
- * todas as obras; o delta de cada obra é inserido no marcador {{DELTA_OBRA}}. */
-export type PromptPadrao = Omit<VersaoDelta, 'obra_id' | 'tipo' | 'nucleo_id' | 'preferencias'>;
+/** Versão do núcleo universal (prompt padrão global): as regras de tradução
+ * comuns a todas as obras DAQUELE idioma de origem; o delta de cada obra é
+ * inserido no marcador {{DELTA_OBRA}}.
+ *
+ * Desde a migração 029 há um núcleo ativo POR PERFIL DE IDIOMA, não um só no
+ * banco: o Alfa mandarim e o Alfa inglês valem ao mesmo tempo. */
+export type PromptPadrao = Omit<VersaoDelta, 'obra_id' | 'tipo' | 'nucleo_id' | 'preferencias'> & {
+  idioma_origem: IdiomaOrigem;
+};
 
 /** Prompt mãe efetivo de uma obra (núcleo + delta compostos), com proveniência. */
 export interface PromptComposto {
@@ -924,6 +938,8 @@ export type EventoLote =
 export interface CriarObraPayload {
   titulo: string;
   titulo_original?: string;
+  /** Ausente = 'zh', o idioma de toda obra anterior aos perfis. */
+  idioma_origem?: IdiomaOrigem;
   sinopse?: string;
   tags?: string[];
   prompt_inicial?: { versao: string; conteudo: string };

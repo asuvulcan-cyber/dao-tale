@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { caminhoBanco } from '../config.js';
 import {
   NUCLEO_ENXUTO,
+  NUCLEO_EN_PT,
   PROMPT_PADRAO_INICIAL,
   VERSAO_PROMPT_PADRAO_INICIAL,
   extrairCamadas,
@@ -54,6 +55,7 @@ export function abrirBanco(caminho: string, opcoes: { antesDeMigrar?: AntesDeMig
   migrarPadraoParaNucleo(db);
   semearNucleoEnxuto(db);
   corrigirNucleoEnxutoSemeado(db);
+  semearAlfaIngles(db);
   // Config gravada quando as faixas eram outras (ex.: tamanho_bloco 400, de antes
   // do teto de 120 da A1) volta para dentro do aceito hoje — senão a tela de
   // Configurações reenvia o valor velho e o salvar inteiro morre em 400.
@@ -181,7 +183,65 @@ function corrigirNucleoEnxutoSemeado(db: BancoDados): void {
 
 // `prompt_padrao.versao` é UNIQUE: pegar o próximo inteiro acima do maior evita
 // colidir com uma versão que o usuário tenha criado à mão.
-function proximaVersaoNucleo(db: BancoDados): string {
+// O perfil inglês nasce com o próprio Alfa ATIVO — e isso não contradiz a regra
+// de que ativar núcleo é clique do usuário, nunca efeito de abrir o aplicativo.
+// Aquela regra protege quem está traduzindo de ter o prompt trocado embaixo: ela
+// fala de SUBSTITUIR um ativo. Aqui não há o que substituir. Antes desta linha
+// não existe nenhum Alfa inglês, e o índice da migração 029 torna o ativo único
+// POR IDIOMA — então semear este não derruba o mandarim nem toca em obra alguma.
+// Sem ele, criar uma obra inglesa produziria um Ômega sem núcleo.
+//
+// Guardado por flag, como as demais semeaduras: um Alfa inglês que o usuário
+// edite ou substitua depois não é reprocessado.
+function semearAlfaIngles(db: BancoDados): void {
+  const flag = db.prepare("SELECT valor FROM configuracoes WHERE chave = 'alfa_ingles_semeado'").get();
+  if (flag) return;
+  const marcar = () =>
+    db
+      .prepare(
+        "INSERT INTO configuracoes (chave, valor) VALUES ('alfa_ingles_semeado', '1') ON CONFLICT (chave) DO UPDATE SET valor = '1'",
+      )
+      .run();
+  const { n } = db.prepare("SELECT COUNT(*) n FROM prompt_padrao WHERE idioma_origem = 'en'").get() as { n: number };
+  if (n > 0) {
+    marcar();
+    return;
+  }
+  db.transaction(() => {
+    db.prepare(
+      "INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo, idioma_origem) VALUES (?, ?, ?, 1, 'en')",
+    ).run(
+      proximaVersaoNucleo(db, 'en'),
+      NUCLEO_EN_PT,
+      'Alfa do perfil inglês, distribuído com o aplicativo: as regras en→pt-BR que valem para qualquer obra inglesa. Coesão, voz e glossário são os mesmos do Alfa mandarim; mudam o de-calque (Seção 1) e as medidas (Seção 4).',
+    );
+    marcar();
+  })();
+}
+
+/** Próxima versão do núcleo DENTRO de um perfil. A numeração do mandarim fica
+ *  intocada (1.0, 2.0, …); a do inglês nasce prefixada ("EN 1.0") porque
+ *  `prompt_padrao.versao` é UNIQUE no banco inteiro desde a migração 004, e
+ *  reconstruir a tabela para tornar a chave composta custaria mexer nas FKs de
+ *  `prompts.nucleo_id` e `capitulos.nucleo_id` — risco sobre histórico de
+ *  tradução, para ganhar estética num campo de exibição. */
+function proximaVersaoNucleo(db: BancoDados, idioma: 'zh' | 'en' = 'zh'): string {
+  if (idioma === 'en') {
+    const versoes = (
+      db.prepare("SELECT versao FROM prompt_padrao WHERE idioma_origem = 'en'").all() as { versao: string }[]
+    ).map((v) => v.versao);
+    const maior = Math.max(
+      0,
+      ...versoes.map((v) => parseFloat(v.replace(/^EN\s*/i, ''))).filter((n) => !Number.isNaN(n)),
+    );
+    let candidato = Math.floor(maior) + 1;
+    while (versoes.includes(`EN ${candidato}.0`)) candidato += 1;
+    return `EN ${candidato}.0`;
+  }
+  return proximaVersaoNucleoZh(db);
+}
+
+function proximaVersaoNucleoZh(db: BancoDados): string {
   const versoes = (db.prepare('SELECT versao FROM prompt_padrao').all() as { versao: string }[]).map((v) => v.versao);
   const maior = Math.max(0, ...versoes.map((v) => parseFloat(v)).filter((n) => !Number.isNaN(n)));
   let candidato = Math.floor(maior) + 1;

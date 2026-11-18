@@ -1,6 +1,7 @@
 import {
   CATEGORIAS_GLOSSARIO,
   DESCRICOES_CATEGORIAS_GLOSSARIO,
+  perfilDe,
   type CategoriaGlossarioPadrao,
   type EntradaGlossario,
 } from '@dao-tale/shared';
@@ -166,12 +167,14 @@ export function juntarPartes(p: PartesSistema): string {
 }
 
 export function sistemaTraducaoPartes(
-  req: Pick<RequisicaoTraducaoBloco, 'omega' | 'glossario' | 'glossarioNoUsuario'>,
+  req: Pick<RequisicaoTraducaoBloco, 'omega' | 'glossario' | 'glossarioNoUsuario' | 'idioma_origem'>,
 ): PartesSistema {
+  const perfil = perfilDe(req.idioma_origem);
+  const origem = perfil.rotulo.toLowerCase();
   const instrucoes = [
-    'Você receberá frases numeradas em chinês para traduzir ao português brasileiro, seguindo integralmente as regras acima.',
+    `Você receberá frases numeradas em ${origem} para traduzir ao português brasileiro, seguindo integralmente as regras acima.`,
     'Leia o bloco e os contextos por inteiro antes de redigir. Resolva primeiro continuidade, referentes, progressão lógica e o tom local de cada passagem; só então traduza as frases numeradas.',
-    'Antes de entregar, faça uma segunda leitura silenciosa: compare cada tradução com o chinês para recuperar omissões e intensidade; depois leia a sequência apenas em português e corrija decalques, formalidade sem apoio, fragmentos acidentais e construções mecânicas. Não mostre essa análise.',
+    `Antes de entregar, faça uma segunda leitura silenciosa: compare cada tradução com o ${origem} para recuperar omissões e intensidade; depois leia a sequência apenas em português e corrija decalques, formalidade sem apoio, fragmentos acidentais e construções mecânicas. Não mostre essa análise.`,
     'Traduza cada frase numerada mantendo o número. Não traduza o contexto marcado como "já traduzido" nem o marcado como "contexto futuro".',
     'Se encontrar termos novos relevantes (nomes próprios, técnicas, lugares, títulos) que NÃO estão no glossário, liste-os em termos_novos com a tradução que você adotou.',
     'Classifique cada termo novo em exatamente uma categoria da taxonomia abaixo, escolhendo a mais específica; nunca crie categoria nem use “outro”:',
@@ -196,6 +199,7 @@ export function sistemaTraducao(req: Pick<RequisicaoTraducaoBloco, 'omega' | 'gl
 }
 
 export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
+  const sigla = perfilDe(req.idioma_origem).sigla;
   const partes: string[] = [];
   if (req.glossarioNoUsuario && req.glossario.length > 0) {
     partes.push('### Glossário (termos presentes neste trecho — uso obrigatório):');
@@ -211,7 +215,7 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
   }
   if (req.caudaAnterior.length > 0) {
     partes.push('### Contexto anterior (já traduzido — não retraduzir):');
-    for (const f of req.caudaAnterior) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt}`);
+    for (const f of req.caudaAnterior) partes.push(`${sigla}: ${f.texto_zh}\nPT: ${f.texto_pt}`);
     partes.push('');
   }
   partes.push('### Frases a traduzir:');
@@ -224,7 +228,7 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
   if (req.proximas.length > 0) {
     partes.push('');
     partes.push('### Contexto futuro (apenas referência — não traduzir):');
-    for (const zh of req.proximas) partes.push(zh);
+    for (const bruta of req.proximas) partes.push(bruta);
   }
   return partes.join('\n');
 }
@@ -236,15 +240,16 @@ export function usuarioTraducao(req: RequisicaoTraducaoBloco): string {
 // obra vem só o glossário, que continua sendo lei para nomes e termos.
 
 export function sistemaContracapaPartes(
-  req: Pick<RequisicaoContracapa, 'glossario' | 'glossarioNoUsuario' | 'tituloZh' | 'sinopseZh'>,
+  req: Pick<RequisicaoContracapa, 'glossario' | 'glossarioNoUsuario' | 'tituloZh' | 'sinopseZh' | 'idioma_origem'>,
 ): PartesSistema {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
   const operacional = [
     ...(req.glossarioNoUsuario
       ? ['## GLOSSÁRIO DA OBRA', 'Os termos do glossário presentes neste texto virão na mensagem do usuário. Uso obrigatório e consistente.']
       : ['## GLOSSÁRIO DA OBRA (uso obrigatório e consistente)', formatarGlossario(req.glossario)]),
     '',
     '## INSTRUÇÕES OPERACIONAIS DO APLICATIVO',
-    'Você receberá o título e/ou a sinopse da obra em chinês — cada um por inteiro, sem numeração.',
+    `Você receberá o título e/ou a sinopse da obra em ${origem} — cada um por inteiro, sem numeração.`,
     'A sinopse vem completa de uma vez: leia-a toda antes de traduzir, para que os versos e o encadeamento sejam resolvidos juntos. Traduza-a inteira, sem resumir, cortar ou omitir nada.',
     'Preencha titulo_pt com o título traduzido e sinopse_pt com a sinopse traduzida, mantendo em sinopse_pt as mesmas quebras de linha e de parágrafo do original.',
     'Deixe em null o campo cujo texto não foi enviado — nunca invente um título ou uma sinopse que você não recebeu.',
@@ -255,12 +260,13 @@ export function sistemaContracapaPartes(
 }
 
 export function sistemaContracapa(
-  req: Pick<RequisicaoContracapa, 'glossario' | 'glossarioNoUsuario' | 'tituloZh' | 'sinopseZh'>,
+  req: Pick<RequisicaoContracapa, 'glossario' | 'glossarioNoUsuario' | 'tituloZh' | 'sinopseZh' | 'idioma_origem'>,
 ): string {
   return juntarPartes(sistemaContracapaPartes(req));
 }
 
 export function usuarioContracapa(req: RequisicaoContracapa): string {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
   const partes: string[] = [];
   if (req.glossarioNoUsuario && req.glossario.length > 0) {
     partes.push('### Glossário (termos presentes neste texto — uso obrigatório):');
@@ -268,19 +274,20 @@ export function usuarioContracapa(req: RequisicaoContracapa): string {
     partes.push('');
   }
   if (req.tituloZh) {
-    partes.push('### Título da obra (chinês):');
+    partes.push(`### Título da obra (${origem}):`);
     partes.push(req.tituloZh);
     partes.push('');
   }
   if (req.sinopseZh) {
     // Inteira e com as quebras originais — é o que permite ver os versos juntos.
-    partes.push('### Sinopse da obra (chinês, completa):');
+    partes.push(`### Sinopse da obra (${origem}, completa):`);
     partes.push(req.sinopseZh);
   }
   return partes.join('\n').trimEnd();
 }
 
-export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'omega' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {
+export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'omega' | 'glossario' | 'glossarioNoUsuario' | 'idioma_origem'>): PartesSistema {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
   const operacional = [
     ...(req.glossarioNoUsuario
       ? // Mesmo desenho da tradução (A4 da auditoria): glossário filtrado por frase
@@ -292,11 +299,11 @@ export function sistemaRevisaoPartes(req: Pick<RequisicaoRevisao, 'omega' | 'glo
     '## PROTOCOLO DE REVISÃO (instruções do aplicativo)',
     'Você é o revisor da tradução acima descrita. O usuário questionará uma escolha de tradução de UMA frase específica.',
     'A PERGUNTA DO USUÁRIO é a premissa da sua análise, não apenas o endereço da frase.',
-    'Se a pergunta declara um motivo ("o original diz X", "isto soa Y", "no capítulo anterior ficou Z"), sua resposta DEVE tratar desse motivo — confirmando-o ou refutando-o pelo texto-fonte chinês. Nunca substitua o motivo do usuário por outro argumento.',
-    'Se o motivo dele não procede, diga isso e mostre onde no chinês. Concordar por concordar é pior que discordar.',
+    `Se a pergunta declara um motivo ("o original diz X", "isto soa Y", "no capítulo anterior ficou Z"), sua resposta DEVE tratar desse motivo — confirmando-o ou refutando-o pelo texto-fonte em ${origem}. Nunca substitua o motivo do usuário por outro argumento.`,
+    `Se o motivo dele não procede, diga isso e mostre onde no ${origem}. Concordar por concordar é pior que discordar.`,
     'Quando houver "Discussão até aqui", diga explicitamente se você MANTÉM ou REVISA o veredito anterior, e por quê. Repetir o argumento já contestado sem endereçar a contestação é o pior desfecho possível.',
     'Responda exclusivamente pelo formato estruturado, preenchendo:',
-    '- trecho_zh: o trecho EXATO do chinês que fundamenta sua análise;',
+    `- trecho_zh: o trecho EXATO do ${origem} que fundamenta sua análise;`,
     '- resposta: a resposta à dúvida, endereçando o motivo declarado. É o que o revisor lê primeiro;',
     '- veredito: "correto" se a tradução atual está adequada; "incorreto" se precisa de correção; "escolha-legitima" quando ela não está errada mas também não é a única leitura defensável (o que está em jogo é preferência, não regra);',
     '- secao_regra: identificador curto e estável da regra, SOMENTE quando uma regra do prompt é o que decide o caso. Caso contrário, null — a maior parte das dúvidas de tradução não tem regra por trás, e forçar uma faz a resposta ficar sobre um assunto que o usuário não levantou;',
@@ -314,6 +321,7 @@ export function sistemaRevisao(req: Pick<RequisicaoRevisao, 'omega' | 'glossario
 }
 
 export function usuarioRevisao(req: RequisicaoRevisao): string {
+  const sigla = perfilDe(req.idioma_origem).sigla;
   const partes: string[] = [];
   if (req.glossarioNoUsuario && req.glossario.length > 0) {
     partes.push('### Glossário (termos presentes neste trecho — uso obrigatório):');
@@ -322,7 +330,7 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
   }
   if (req.vizinhasAntes.length > 0) {
     partes.push('### Frases anteriores (contexto):');
-    for (const f of req.vizinhasAntes) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);
+    for (const f of req.vizinhasAntes) partes.push(`${sigla}: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);
     partes.push('');
   }
   if (req.rotulosConhecidos && req.rotulosConhecidos.length > 0) {
@@ -365,7 +373,7 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
     partes.push('');
   }
   partes.push('### FRASE QUESTIONADA:');
-  partes.push(`ZH: ${req.frase.texto_zh}`);
+  partes.push(`${sigla}: ${req.frase.texto_zh}`);
   partes.push(`PT atual: ${req.frase.texto_pt || '(sem tradução)'}`);
   if (req.frase.texto_pt_original_ia && req.frase.texto_pt_original_ia !== req.frase.texto_pt) {
     partes.push(`PT original da IA (antes de edições): ${req.frase.texto_pt_original_ia}`);
@@ -373,7 +381,7 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
   partes.push('');
   if (req.vizinhasDepois.length > 0) {
     partes.push('### Frases seguintes (contexto):');
-    for (const f of req.vizinhasDepois) partes.push(`ZH: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);
+    for (const f of req.vizinhasDepois) partes.push(`${sigla}: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);
     partes.push('');
   }
   partes.push('### PERGUNTA DO USUÁRIO (a premissa da sua análise — trate do motivo que ela declara):');
@@ -384,8 +392,9 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
 // ── Extração exaustiva de termos de uma frase ──────────────────────────────
 
 export function sistemaExtrairTermosPartes(
-  req: Pick<RequisicaoExtrairTermos, 'omega' | 'glossario' | 'glossarioNoUsuario'>,
+  req: Pick<RequisicaoExtrairTermos, 'omega' | 'glossario' | 'glossarioNoUsuario' | 'idioma_origem'>,
 ): PartesSistema {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
   const operacional = [
     ...(req.glossarioNoUsuario
       ? // M2 da auditoria: em vez do glossário INTEIRO no sistema a cada frase,
@@ -396,7 +405,7 @@ export function sistemaExtrairTermosPartes(
       : ['## GLOSSÁRIO ATUAL DA OBRA (já catalogado — NÃO repita estes)', formatarGlossario(req.glossario)]),
     '',
     '## TAREFA: CURADORIA DO GLOSSÁRIO',
-    'Você está ajudando a curar o glossário da obra. Receberá UMA frase em chinês e sua tradução em português.',
+    `Você está ajudando a curar o glossário da obra. Receberá UMA frase em ${origem} e sua tradução em português.`,
     'Liste EXAUSTIVAMENTE todos os termos da frase que merecem entrar no glossário — nomes próprios, lugares, personagens, técnicas/poderes, títulos/cargos, entidades, organizações — mesmo os secundários ou de aparência corriqueira.',
     'Inclua nomes de lugar mantidos em pinyin (ex.: transliterações), que costumam passar despercebidos e precisam de consistência.',
     'NÃO liste: palavras comuns, verbos, adjetivos genéricos, nem termos que já estão no glossário.',
@@ -414,13 +423,14 @@ export function sistemaExtrairTermos(req: Pick<RequisicaoExtrairTermos, 'omega' 
 }
 
 export function usuarioExtrairTermos(req: RequisicaoExtrairTermos): string {
+  const sigla = perfilDe(req.idioma_origem).sigla;
   const partes: string[] = [];
   if (req.glossarioNoUsuario && req.glossario.length > 0) {
     partes.push('### Termos já no glossário presentes nesta frase (NÃO repetir):');
     partes.push(formatarGlossario(req.glossario));
     partes.push('');
   }
-  partes.push(`ZH: ${req.frase.texto_zh}`, `PT: ${req.frase.texto_pt || '(sem tradução)'}`);
+  partes.push(`${sigla}: ${req.frase.texto_zh}`, `PT: ${req.frase.texto_pt || '(sem tradução)'}`);
   return partes.join('\n');
 }
 
@@ -428,20 +438,21 @@ export function usuarioExtrairTermos(req: RequisicaoExtrairTermos): string {
 // Um modelo diferente do tradutor compara cada par zh↔pt e aponta problemas nos
 // quatro eixos — só aponta, nunca reescreve. Mesmo desenho de camadas/cache.
 
-export function sistemaQaPartes(req: Pick<RequisicaoQa, 'omega' | 'glossario' | 'glossarioNoUsuario'>): PartesSistema {
+export function sistemaQaPartes(req: Pick<RequisicaoQa, 'omega' | 'glossario' | 'glossarioNoUsuario' | 'idioma_origem'>): PartesSistema {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
   const operacional = [
     ...(req.glossarioNoUsuario
       ? ['## GLOSSÁRIO DA OBRA', 'Os termos do glossário presentes neste trecho virão na mensagem do usuário. Uso obrigatório e consistente.']
       : ['## GLOSSÁRIO DA OBRA', formatarGlossario(req.glossario)]),
     '',
     '## TAREFA: CONTROLE DE QUALIDADE (QA) DA TRADUÇÃO',
-    'Você é um revisor de qualidade independente. Receberá pares de frases (chinês original + tradução em português) já traduzidos e deve APONTAR problemas — NUNCA reescrever o texto por conta própria.',
+    `Você é um revisor de qualidade independente. Receberá pares de frases (original em ${origem} + tradução em português) já traduzidos e deve APONTAR problemas — NUNCA reescrever o texto por conta própria.`,
     'Analise cada par e aponte SOMENTE onde houver problema real, em um destes eixos:',
     '- glossario: termo do glossário traduzido fora do padrão canônico (inclui flexões);',
     '- pronome-genero: pronome/gênero errado ou trocado no meio do trecho (他/她/它 e concordância de adjetivos — crítico em zh→pt);',
-    '- repeticao: eco anômalo (mesma tradução PT para chinês diferente) ou tique repetido de linguagem;',
-    '- omissao: parte da frase chinesa sem correspondência na tradução.',
-    'Para cada apontamento devolva: ordem (o número da frase), tipo (um dos eixos acima), severidade (alta/media/baixa), trecho_zh (o trecho do chinês que evidencia), observacao (o problema em uma frase) e sugestao (uma tradução corrigida completa da frase, OPCIONAL — null se preferir só apontar).',
+    `- repeticao: eco anômalo (mesma tradução PT para original diferente) ou tique repetido de linguagem;`,
+    `- omissao: parte da frase em ${origem} sem correspondência na tradução.`,
+    `Para cada apontamento devolva: ordem (o número da frase), tipo (um dos eixos acima), severidade (alta/media/baixa), trecho_zh (o trecho do ${origem} que evidencia), observacao (o problema em uma frase) e sugestao (uma tradução corrigida completa da frase, OPCIONAL — null se preferir só apontar).`,
     'Os pares marcados como "contexto anterior" servem só para avaliar repetição/continuidade — NÃO os aponte.',
     'Se a tradução estiver boa, devolva a lista de apontamentos vazia.',
     'Responda exclusivamente pela ferramenta/formato estruturado fornecido.',
@@ -454,6 +465,8 @@ export function sistemaQa(req: Pick<RequisicaoQa, 'omega' | 'glossario' | 'gloss
 }
 
 export function usuarioQa(req: RequisicaoQa): string {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
+  const sigla = perfilDe(req.idioma_origem).sigla;
   const partes: string[] = [];
   if (req.glossarioNoUsuario && req.glossario.length > 0) {
     partes.push('### Glossário (termos presentes neste trecho — padrão obrigatório):');
@@ -462,11 +475,11 @@ export function usuarioQa(req: RequisicaoQa): string {
   }
   if (req.caudaAnterior.length > 0) {
     partes.push('### Contexto anterior (apenas referência — NÃO apontar):');
-    for (const p of req.caudaAnterior) partes.push(`ZH: ${p.texto_zh}\nPT: ${p.texto_pt}`);
+    for (const p of req.caudaAnterior) partes.push(`${sigla}: ${p.texto_zh}\nPT: ${p.texto_pt}`);
     partes.push('');
   }
-  partes.push('### Pares a auditar (número, chinês, tradução):');
-  for (const p of req.pares) partes.push(`[${p.ordem}]\nZH: ${p.texto_zh}\nPT: ${p.texto_pt || '(sem tradução)'}`);
+  partes.push(`### Pares a auditar (número, ${origem}, tradução):`);
+  for (const p of req.pares) partes.push(`[${p.ordem}]\n${sigla}: ${p.texto_zh}\nPT: ${p.texto_pt || '(sem tradução)'}`);
   return partes.join('\n');
 }
 
@@ -474,7 +487,8 @@ export function usuarioQa(req: RequisicaoQa): string {
 // Casos recorrentes do banco de testes → propostas concretas de regra para o
 // delta da obra. A IA propõe; o usuário edita/aprova como nova versão.
 
-export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'omega' | 'deltaAtual'>): PartesSistema {
+export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'omega' | 'deltaAtual' | 'idioma_origem'>): PartesSistema {
+  const origem = perfilDe(req.idioma_origem).rotulo.toLowerCase();
   const operacional = [
     '## TAREFA: REFINAR AS DIRETRIZES DA OBRA',
     'O prompt acima rege a tradução da obra. Casos recorrentes e edições humanas são EVIDÊNCIA de lacuna, não prova de que a solução pertença ao Delta.',
@@ -483,7 +497,7 @@ export function sistemaRefinarPromptPartes(req: Pick<RequisicaoRefinarPrompt, 'o
     req.deltaAtual.trim() || '(nenhuma diretriz específica ainda)',
     '```',
     'Antes de propor texto, classifique a camada proprietária de cada achado:',
-    '- Alfa: regra universal de tradução chinês → PT-BR ou de prosa natural, aplicável a muitas obras.',
+    `- Alfa: regra universal de tradução ${origem} → PT-BR ou de prosa natural, aplicável a muitas obras.`,
     '- Beta: escolha configurável da obra (diálogo, pensamento, registro, tempos, notas, onomatopeia, nomes ou capitalização).',
     '- Gama: equivalência individual de termo, nome, lugar, epíteto, cargo ou conceito.',
     '- Delta: exceção ou comportamento recorrente realmente específico desta obra e não representável no Gama/Beta.',
@@ -507,8 +521,9 @@ export function sistemaRefinarPrompt(req: Pick<RequisicaoRefinarPrompt, 'omega' 
 }
 
 export function usuarioRefinarPrompt(
-  req: Pick<RequisicaoRefinarPrompt, 'casos' | 'recusados' | 'edicoes'>,
+  req: Pick<RequisicaoRefinarPrompt, 'casos' | 'recusados' | 'edicoes' | 'idioma_origem'>,
 ): string {
+  const sigla = perfilDe(req.idioma_origem).sigla;
   const partes: string[] = [];
   if (req.casos.length > 0) {
     // Cabeçalho só quando há casos: o refinamento agora também roda só com
@@ -524,7 +539,7 @@ export function usuarioRefinarPrompt(
       partes.push('');
       partes.push(`#### Seção/regra: ${secao} (${casos.length} casos)`);
       for (const c of casos) {
-        partes.push(`- ZH: ${c.trecho_zh}`);
+        partes.push(`- ${sigla}: ${c.trecho_zh}`);
         partes.push(`  Pergunta do revisor: ${c.pergunta}`);
         partes.push(`  Veredito: ${c.veredito} — ${c.justificativa}`);
         if (c.correcao_proposta) partes.push(`  Correção aplicada: ${c.correcao_proposta}`);
@@ -535,7 +550,7 @@ export function usuarioRefinarPrompt(
     partes.push('');
     partes.push('### Casos em que o revisor RECUSOU o veredito da IA');
     for (const r of req.recusados) {
-      partes.push(`- ZH: ${r.trecho_zh}`);
+      partes.push(`- ${sigla}: ${r.trecho_zh}`);
       partes.push(`  Pergunta do revisor: ${r.pergunta}`);
       partes.push(`  Veredito recusado: ${r.veredito} — ${r.resposta}`);
       if (r.motivo_rejeicao) partes.push(`  Motivo da recusa: ${r.motivo_rejeicao}`);

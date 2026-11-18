@@ -1,5 +1,6 @@
 import type { EntradaGlossario, Frase } from '@dao-tale/shared';
 import { contemTermoFlexionado } from './flexao.js';
+import { PERFIL_SERVIDOR_MANDARIM, type PerfilServidor } from '../idiomas/index.js';
 
 // Varredura reversa de consistência do glossário (doc 05 §4.2, D5): para cada
 // termo do glossário presente no chinês de uma frase traduzida, a tradução PT
@@ -35,11 +36,14 @@ export function varrerConsistencia(
   frases: Frase[],
   glossario: EntradaGlossario[],
   ignoradas: ReadonlySet<string> = new Set(),
+  perfil: PerfilServidor = PERFIL_SERVIDOR_MANDARIM,
 ): ResultadoConsistencia {
-  // Dois filtros contra falso positivo: termos de 1 caractere (aparecem dentro
-  // de dezenas de palavras comuns) e um termo que é parte de outro termo mais
-  // longo também presente na frase (coberto pelo mais longo).
-  const curtos = new Set(glossario.filter((g) => [...g.termo_zh].length < 2).map((g) => g.termo_zh));
+  // Dois filtros contra falso positivo: termo curto demais para ser procurado e
+  // termo que é parte de outro termo mais longo também presente na frase
+  // (coberto pelo mais longo). O que conta como "curto" e o que conta como
+  // "presente" são do perfil: no mandarim é substring e contagem de caractere;
+  // no inglês tem de ser limite de palavra, ou "art" casa dentro de "start".
+  const curtos = new Set(glossario.filter((g) => perfil.termoCurtoDemais(g.termo_zh)).map((g) => g.termo_zh));
   const utilizaveis = glossario.filter((g) => !curtos.has(g.termo_zh));
 
   const violacoes: ViolacaoConsistencia[] = [];
@@ -47,9 +51,9 @@ export function varrerConsistencia(
 
   for (const f of frases) {
     if (f.status_traducao !== 'traduzida') continue;
-    const presentes = utilizaveis.filter((g) => f.texto_zh.includes(g.termo_zh));
+    const presentes = utilizaveis.filter((g) => perfil.casaTermo(f.texto_zh, g.termo_zh));
     for (const g of presentes) {
-      if (presentes.some((outro) => outro.termo_zh !== g.termo_zh && outro.termo_zh.includes(g.termo_zh))) continue;
+      if (presentes.some((outro) => outro.termo_zh !== g.termo_zh && perfil.termoContem(outro.termo_zh, g.termo_zh))) continue;
       ocorrencias++;
       // Dispensada pelo revisor: nem toda ausência é erro. Quando o referente
       // já está estabelecido, o português omite em vez de repetir.

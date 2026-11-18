@@ -28,7 +28,7 @@ import {
   reposUso,
   recalcularConsistenciaDaObra,
 } from '../db/repos.js';
-import { segmentar } from '../segmentacao/segmentar.js';
+import { perfilServidorDe } from '../idiomas/index.js';
 import { textoCapitulo, type FormatoTexto } from '../exportacao/texto.js';
 import { varrerConsistencia } from '../traducao/consistencia.js';
 import { separarPorChecagem } from '../traducao/glossarioChecavel.js';
@@ -151,13 +151,17 @@ export function rotasCapitulos(db: BancoDados): Hono {
 
   app.post('/obras/:obraId/capitulos', async (c) => {
     const obraId = Number(c.req.param('obraId'));
-    if (!reposObras.obter(db, obraId)) {
+    const obraDoCapitulo = reposObras.obter(db, obraId);
+    if (!obraDoCapitulo) {
       return c.json({ erro: { codigo: 'nao-encontrado', mensagem: 'Obra não encontrada.' } }, 404);
     }
     const corpo = criarCapituloSchema.safeParse(await lerJson(c));
     if (!corpo.success) return c.json({ erro: { codigo: 'payload-invalido', mensagem: corpo.error.message } }, 400);
 
-    const { frases, avisos } = segmentar(corpo.data.texto_origem);
+    // Segmentar é a primeira decisão que depende do idioma: a máquina de estados
+    // do mandarim quebra em 。 e protege 「」, a do inglês tem de lidar com o
+    // ponto ambíguo de "Mr." e com aspas simétricas.
+    const { frases, avisos } = perfilServidorDe(obraDoCapitulo.idioma_origem).segmentar(corpo.data.texto_origem);
     if (frases.length === 0) {
       return c.json({ erro: { codigo: 'texto-vazio', mensagem: 'O texto enviado não contém nenhuma frase.' } }, 400);
     }

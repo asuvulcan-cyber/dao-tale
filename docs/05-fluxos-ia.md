@@ -4,6 +4,11 @@ Este é o coração técnico do app: os quatro fluxos que envolvem texto chinês
 
 ## 1. Segmentação de frases chinesas
 
+> **Por perfil de idioma (doc 28).** O que esta seção descreve é o segmentador
+> do perfil **mandarim**. Cada idioma de origem traz o seu: o inglês usa a mesma
+> máquina de estados com outra tabela, porque o ponto é ambíguo (`Mr.`, `J. R. R.`)
+> e as aspas retas são simétricas. Quem despacha é `obras.idioma_origem`.
+
 Função pura `segmentar(textoOrigem: string): { texto_zh: string; paragrafo: number }[]`, implementada como máquina de estados caractere a caractere. Sem biblioteca de NLP — o problema é de pontuação, não de linguística.
 
 ### Regras

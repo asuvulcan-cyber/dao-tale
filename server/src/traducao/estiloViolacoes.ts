@@ -1,4 +1,5 @@
 import type { PreferenciasEstilo } from '@dao-tale/shared';
+import { PERFIL_SERVIDOR_MANDARIM, type PerfilServidor } from '../idiomas/index.js';
 
 // Contagem de violações das preferências de estilo da obra, por varredura de
 // texto — sem IA, sem custo, determinística.
@@ -104,17 +105,19 @@ function violacaoAspasNaoRetas(texto: string): string | null {
   return m ? m[0] : null;
 }
 
-/** Medidas chinesas que escaparam traduzidas como explicação literal. O caso
- * real foi 一炷香 → “tempo de queimar um bastão de incenso”, embora o Alfa peça
- * uma duração compreensível. A lista é conservadora para não acusar “qi”. */
-function violacaoUnidadeChinesa(texto: string): string | null {
-  const m = texto.match(/(?<!\p{L})(?:\d+|um|uma|dois|duas|meio|meia)\s+(?:chi|cun|zhang|li|jin|liang|qian|shichen)(?!\p{L})|tempo de (?:queimar|uma) (?:um )?bastão de incenso/iu);
-  return m?.[0] ?? null;
+/** Medida da origem que escapou sem converter. O padrão e o id da regra são do
+ * perfil de idioma: o caso original foi 一炷香 → “tempo de queimar um bastão de
+ * incenso”, mas pés e milhas escapam do inglês exatamente pelo mesmo motivo. */
+function violacaoUnidadeDaOrigem(texto: string, perfil: PerfilServidor): string | null {
+  const unidades = perfil.detectores.unidadesDaOrigem;
+  if (!unidades) return null;
+  return texto.match(unidades.padrao)?.[0] ?? null;
 }
 
 export function analisarEstilo(
   frases: { ordem: number; texto_pt: string | null }[],
   prefs: PreferenciasEstilo,
+  perfil: PerfilServidor = PERFIL_SERVIDOR_MANDARIM,
 ): RelatorioEstilo {
   const violacoes: Violacao[] = [];
   for (const f of frases) {
@@ -135,8 +138,10 @@ export function analisarEstilo(
     const virgula = violacaoVirgulaNaAspa(t, prefs.dialogo);
     if (virgula) violacoes.push({ ordem: f.ordem, regra: 'virgula-dentro-da-aspa', trecho: virgula });
 
-    const unidade = violacaoUnidadeChinesa(t);
-    if (unidade) violacoes.push({ ordem: f.ordem, regra: 'unidade-chinesa', trecho: unidade });
+    const unidade = violacaoUnidadeDaOrigem(t, perfil);
+    if (unidade) {
+      violacoes.push({ ordem: f.ordem, regra: perfil.detectores.unidadesDaOrigem!.regra, trecho: unidade });
+    }
   }
 
   // Terços por POSIÇÃO no capítulo, que é o eixo que revela o decaimento.

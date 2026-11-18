@@ -1,6 +1,6 @@
 # Dao Tale
 
-Aplicativo local de tradução e revisão assistida para tradução literária chinês → PT-BR (webnovels). Substitui o fluxo manual de chat com IA + planilha de revisão por uma ferramenta única: editor bilíngue, prompt mãe versionado, glossário por obra e banco de testes alimentado automaticamente pelo Protocolo de Revisão.
+Aplicativo local de tradução e revisão assistida para tradução literária de webnovels para PT-BR, do **mandarim** ou do **inglês** — cada idioma de origem é um perfil completo (segmentador, núcleo do prompt, detectores e tipografia próprios), escolhido na obra. Substitui o fluxo manual de chat com IA + planilha de revisão por uma ferramenta única: editor bilíngue, prompt mãe versionado, glossário por obra e banco de testes alimentado automaticamente pelo Protocolo de Revisão.
 
 **Status atual: Fases 1, 2 e 3 implementadas** — fluxo completo funcional: obra → capítulo → segmentação → tradução em blocos → editor bilíngue → Protocolo de Revisão → banco de testes, com provedores Claude, Gemini e Simulado; mesclar/dividir frases; exportação/reimportação completa da obra; diff entre versões do prompt mãe; verificação de consistência do glossário; provedor/modelo configurável por obra e por tradução. Único item adiado: empacotamento desktop (só se o formato web local incomodar no uso real — `npm run atalho` já dá o "abrir com um clique").
 
@@ -39,6 +39,7 @@ A especificação completa está em `docs/`, na ordem de leitura:
 | [`docs/04-api.md`](docs/04-api.md) | Contrato da API local entre interface e backend |
 | [`docs/05-fluxos-ia.md`](docs/05-fluxos-ia.md) | Segmentação de frases, pipeline de tradução em blocos, Protocolo de Revisão, captura de termos, abstração multi-provedor e guarda de chaves |
 | [`docs/06-roadmap.md`](docs/06-roadmap.md) | Fases de implementação com critérios de aceite, riscos e estimativas de custo de API |
+| [`docs/28-perfis-de-idioma.md`](docs/28-perfis-de-idioma.md) | Perfis de idioma de origem: o que cada um decide, o que mudou de comportamento e o que custa somar um terceiro |
 
 ## Princípios inegociáveis
 

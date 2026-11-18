@@ -2,6 +2,7 @@ import { NavLink, Outlet, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Obra, TermoSugerido } from '@dao-tale/shared';
 import { api } from '../api';
+import { ProvedorPerfilObra } from '../perfilObra';
 
 /** Só os campos que a contagem da aba precisa — o corpo inteiro de
  *  `GET /obras/:id/consistencia` está tipado em `ConsistenciaObra.tsx`. */
@@ -56,30 +57,32 @@ export function ObraLayout() {
   ];
 
   return (
-    <div>
-      <div className="mb-2 flex items-baseline gap-3">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">{obra?.titulo ?? '…'}</h1>
-        {obra?.titulo_original && <span className="texto-zh text-tinta-2">{obra.titulo_original}</span>}
+    <ProvedorPerfilObra idioma={obra?.idioma_origem}>
+      <div>
+        <div className="mb-2 flex items-baseline gap-3">
+          <h1 className="font-display text-2xl font-semibold tracking-tight">{obra?.titulo ?? '…'}</h1>
+          {obra?.titulo_original && <span className="texto-zh text-tinta-2">{obra.titulo_original}</span>}
+        </div>
+        <nav className="mb-5 flex flex-wrap gap-1 border-b border-linha">
+          {abas.map((aba) => (
+            <NavLink
+              key={aba.rota}
+              to={aba.rota}
+              end={aba.exato}
+              className={({ isActive }) =>
+                `-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${
+                  isActive
+                    ? 'border-jade font-semibold text-tinta'
+                    : 'border-transparent text-tinta-2 hover:text-tinta'
+                }`
+              }
+            >
+              {aba.texto}
+            </NavLink>
+          ))}
+        </nav>
+        <Outlet />
       </div>
-      <nav className="mb-5 flex flex-wrap gap-1 border-b border-linha">
-        {abas.map((aba) => (
-          <NavLink
-            key={aba.rota}
-            to={aba.rota}
-            end={aba.exato}
-            className={({ isActive }) =>
-              `-mb-px rounded-t border-b-2 px-3 py-1.5 text-sm ${
-                isActive
-                  ? 'border-jade font-semibold text-tinta'
-                  : 'border-transparent text-tinta-2 hover:text-tinta'
-              }`
-            }
-          >
-            {aba.texto}
-          </NavLink>
-        ))}
-      </nav>
-      <Outlet />
-    </div>
+    </ProvedorPerfilObra>
   );
 }

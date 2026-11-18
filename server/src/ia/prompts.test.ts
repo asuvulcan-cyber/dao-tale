@@ -345,8 +345,8 @@ describe('contracapa (título/sinopse de obra)', () => {
 
   it('a sinopse vai inteira, com as quebras de verso e de parágrafo preservadas', () => {
     const usuario = usuarioContracapa(req);
-    expect(usuario).toContain('### Título da obra (chinês):\n死人经');
-    expect(usuario).toContain(`### Sinopse da obra (chinês, completa):\n${versos}`);
+    expect(usuario).toContain('### Título da obra (mandarim):\n死人经');
+    expect(usuario).toContain(`### Sinopse da obra (mandarim, completa):\n${versos}`);
     expect(usuario).not.toMatch(/\[\d\]/);
     expect(usuario).not.toContain('parágrafo 1 de');
   });

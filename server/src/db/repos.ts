@@ -19,8 +19,11 @@ import type {
   FaseTraducao,
   PreferenciasEstilo,
   Camada,
+  IdiomaOrigem,
 } from '@dao-tale/shared';
 import {
+  IDIOMA_ORIGEM_PADRAO,
+  ehIdiomaOrigem,
   aplicarCorrecao,
   camadaDoRotulo,
   normalizarSecaoRegra,
@@ -46,12 +49,15 @@ function trocaPorPalavra(texto: string, de: string, para: string): string {
 }
 
 // Linhas cruas do SQLite (booleanos como 0/1) → tipos do domínio.
-function paraPrompt(l: any): VersaoDelta {
+/** Serve às duas tabelas de prompt, que divergiram nas colunas: `prompts` tem
+ *  `preferencias`, `prompt_padrao` tem `idioma_origem`. O genérico existe para o
+ *  chamador dizer qual das duas está lendo, já que a linha entra como `any`. */
+function paraPrompt<T = VersaoDelta>(l: any): T {
   const prompt = { ...l, ativo: !!l.ativo };
   // Só linhas de `prompts` têm preferências; as de `prompt_padrao` (núcleo) não —
   // e um PromptPadrao não deve ganhar o campo do nada.
   if ('preferencias' in l) prompt.preferencias = normalizarPreferencias(l.preferencias);
-  return prompt;
+  return prompt as T;
 }
 function paraFrase(l: any): Frase {
   return { ...l, editado_manualmente: !!l.editado_manualmente };
@@ -66,9 +72,18 @@ function paraGlossario(l: any): EntradaGlossario {
 // ── Obras ──────────────────────────────────────────────────────────────────
 
 // Colunas sem o BLOB da capa (pesado e sem lugar em JSON); tem_capa o resume.
-const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.autor, o.sinopse, o.tags, o.provedor_padrao,
+const COLUNAS_OBRA = `o.id, o.titulo, o.titulo_original, o.idioma_origem, o.autor, o.sinopse, o.tags, o.provedor_padrao,
   o.modelo_padrao, o.temperatura, o.thinking, o.fase_traducao, o.publica, o.criado_em, o.atualizado_em,
   (o.capa IS NOT NULL) AS tem_capa`;
+
+/** Perfil de idioma da obra, direto da coluna — é o que escolhe qual Alfa vale.
+ *  Obra inexistente ou valor solto cai no mandarim, como toda obra anterior. */
+function idiomaDaObra(db: BancoDados, obraId: number): IdiomaOrigem {
+  const l = db.prepare('SELECT idioma_origem FROM obras WHERE id = ?').get(obraId) as
+    | { idioma_origem: string }
+    | undefined;
+  return ehIdiomaOrigem(l?.idioma_origem) ? l.idioma_origem : IDIOMA_ORIGEM_PADRAO;
+}
 
 function paraObra<T extends { tags: unknown; tem_capa: unknown; publica: unknown }>(
   linha: T,
@@ -104,13 +119,15 @@ export const reposObras = {
 
   criar(db: BancoDados, payload: CriarObraPayload): Obra {
     return db.transaction(() => {
+      const idiomaOrigem = payload.idioma_origem ?? IDIOMA_ORIGEM_PADRAO;
       const info = db
-        .prepare('INSERT INTO obras (titulo, titulo_original, sinopse, tags) VALUES (?, ?, ?, ?)')
+        .prepare('INSERT INTO obras (titulo, titulo_original, sinopse, tags, idioma_origem) VALUES (?, ?, ?, ?, ?)')
         .run(
           payload.titulo,
           payload.titulo_original ?? null,
           payload.sinopse ?? null,
           JSON.stringify(payload.tags ?? []),
+          idiomaOrigem,
         );
       const obraId = Number(info.lastInsertRowid);
       if (payload.prompt_inicial) {
@@ -128,7 +145,11 @@ export const reposObras = {
         //
         // Sem núcleo ativo não há com o que compor: aí o conteúdo precisa mesmo bastar-se,
         // e 'completo' é o registro honesto disso.
-        const nucleo = reposPromptPadrao.ativo(db);
+        //
+        // O núcleo é o do PERFIL DA OBRA: compor um Delta inglês sobre o Alfa
+        // mandarim produziria um Ômega que manda traduzir do chinês um texto
+        // que não é chinês.
+        const nucleo = reposPromptPadrao.ativo(db, idiomaOrigem);
         db.prepare(
           'INSERT INTO prompts (obra_id, versao, conteudo, ativo, tipo, nucleo_id) VALUES (?, ?, ?, 1, ?, ?)',
         ).run(
@@ -310,7 +331,7 @@ export const reposPrompts = {
   adotarPadrao(db: BancoDados, obraId: number): VersaoDelta | undefined {
     return db.transaction(() => {
       if (this.listar(db, obraId).length > 0) return undefined;
-      const nucleo = reposPromptPadrao.ativo(db);
+      const nucleo = reposPromptPadrao.ativo(db, idiomaDaObra(db, obraId));
       if (!nucleo) return undefined;
       return this.criar(db, obraId, {
         versao: '1.0',
@@ -338,7 +359,8 @@ export const reposPrompts = {
     const prompt = this.ativoOuAdotado(db, obraId);
     if (!prompt) return undefined;
     if (prompt.tipo !== 'delta') return { texto: prompt.conteudo, prompt, nucleo: null };
-    const nucleo = nucleoId != null ? reposPromptPadrao.obter(db, nucleoId) : reposPromptPadrao.ativo(db);
+    const nucleo =
+      nucleoId != null ? reposPromptPadrao.obter(db, nucleoId) : reposPromptPadrao.ativo(db, idiomaDaObra(db, obraId));
     // Sem núcleo ativo (estado excepcional), o delta sozinho é o que há.
     if (!nucleo) return { texto: comporOmega('', prompt.conteudo, prompt.preferencias), prompt, nucleo: null };
     return {
@@ -351,38 +373,63 @@ export const reposPrompts = {
 
 // ── Prompt padrão global (mesmas regras de versões imutáveis) ──────────────
 
+// Desde a migração 029 o núcleo ativo é um POR IDIOMA DE ORIGEM, não um no banco
+// inteiro: o Alfa mandarim e o Alfa inglês governam ao mesmo tempo, cada um as
+// obras do seu perfil. Por isso `ativo` e `ativar` passaram a exigir o idioma —
+// a assinatura mudou de propósito, para o compilador apontar cada chamador em
+// vez de a mudança passar em silêncio num `WHERE ativo = 1` que agora casa duas
+// linhas.
 export const reposPromptPadrao = {
-  listar(db: BancoDados): PromptPadrao[] {
-    return (db.prepare('SELECT * FROM prompt_padrao ORDER BY criado_em DESC').all() as any[]).map(paraPrompt);
+  /** `idioma` ausente = todos os núcleos, de todos os perfis. */
+  listar(db: BancoDados, idioma?: IdiomaOrigem): PromptPadrao[] {
+    const linhas = idioma
+      ? db.prepare('SELECT * FROM prompt_padrao WHERE idioma_origem = ? ORDER BY criado_em DESC').all(idioma)
+      : db.prepare('SELECT * FROM prompt_padrao ORDER BY criado_em DESC').all();
+    return (linhas as any[]).map((l) => paraPrompt<PromptPadrao>(l));
   },
 
   obter(db: BancoDados, id: number): PromptPadrao | undefined {
     const l = db.prepare('SELECT * FROM prompt_padrao WHERE id = ?').get(id);
-    return l ? paraPrompt(l) : undefined;
+    return l ? paraPrompt<PromptPadrao>(l) : undefined;
   },
 
-  ativo(db: BancoDados): PromptPadrao | undefined {
-    const l = db.prepare('SELECT * FROM prompt_padrao WHERE ativo = 1').get();
-    return l ? paraPrompt(l) : undefined;
+  ativo(db: BancoDados, idioma: IdiomaOrigem = IDIOMA_ORIGEM_PADRAO): PromptPadrao | undefined {
+    const l = db.prepare('SELECT * FROM prompt_padrao WHERE ativo = 1 AND idioma_origem = ?').get(idioma);
+    return l ? paraPrompt<PromptPadrao>(l) : undefined;
   },
 
   criar(
     db: BancoDados,
-    dados: { versao: string; conteudo: string; notas_versao?: string; ativar: boolean },
+    dados: {
+      versao: string;
+      conteudo: string;
+      notas_versao?: string;
+      ativar: boolean;
+      idioma_origem?: IdiomaOrigem;
+    },
   ): PromptPadrao {
+    const idioma = dados.idioma_origem ?? IDIOMA_ORIGEM_PADRAO;
     return db.transaction(() => {
-      if (dados.ativar) db.prepare('UPDATE prompt_padrao SET ativo = 0').run();
+      // Desativa só dentro do mesmo perfil: criar um Alfa inglês não pode
+      // derrubar o mandarim que está traduzindo a obra ao lado.
+      if (dados.ativar) db.prepare('UPDATE prompt_padrao SET ativo = 0 WHERE idioma_origem = ?').run(idioma);
       const info = db
-        .prepare('INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo) VALUES (?, ?, ?, ?)')
-        .run(dados.versao, dados.conteudo, dados.notas_versao ?? null, dados.ativar ? 1 : 0);
+        .prepare(
+          'INSERT INTO prompt_padrao (versao, conteudo, notas_versao, ativo, idioma_origem) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(dados.versao, dados.conteudo, dados.notas_versao ?? null, dados.ativar ? 1 : 0, idioma);
       return this.obter(db, Number(info.lastInsertRowid))!;
     })();
   },
 
   ativar(db: BancoDados, id: number): PromptPadrao | undefined {
-    if (!this.obter(db, id)) return undefined;
+    const alvo = this.obter(db, id);
+    if (!alvo) return undefined;
+    // O idioma sai do próprio núcleo, não de quem chamou: ativar é sempre
+    // dentro do perfil a que aquela versão pertence.
+    const idioma = alvo.idioma_origem ?? IDIOMA_ORIGEM_PADRAO;
     db.transaction(() => {
-      db.prepare('UPDATE prompt_padrao SET ativo = 0').run();
+      db.prepare('UPDATE prompt_padrao SET ativo = 0 WHERE idioma_origem = ?').run(idioma);
       db.prepare('UPDATE prompt_padrao SET ativo = 1 WHERE id = ?').run(id);
     })();
     return this.obter(db, id);

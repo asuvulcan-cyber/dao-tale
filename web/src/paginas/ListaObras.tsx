@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CategoriaGlossario, CriarObraPayload, Obra, ObraComContadores } from '@dao-tale/shared';
-import { ehCategoriaGlossarioPadrao } from '@dao-tale/shared';
+import type { CategoriaGlossario, CriarObraPayload, IdiomaOrigem, Obra, ObraComContadores } from '@dao-tale/shared';
+import { ehCategoriaGlossarioPadrao, estiloDoOriginal, IDIOMAS_ORIGEM, IDIOMA_ORIGEM_PADRAO, perfilDe } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, CabecalhoPagina, Etiqueta, MenuMais } from '../App';
 
@@ -99,7 +99,7 @@ export function ListaObras() {
                 />
               ) : (
                 <div
-                  className="texto-zh grid h-32 w-22 place-items-center rounded bg-papel-fundo text-4xl text-tinta-2/50 shadow-md shadow-tinta/20"
+                  className="selo-cjk grid h-32 w-22 place-items-center rounded bg-papel-fundo text-4xl text-tinta-2/50 shadow-md shadow-tinta/20"
                   aria-hidden
                 >
                   道
@@ -109,7 +109,16 @@ export function ListaObras() {
             <div className="flex min-w-0 flex-1 flex-col">
               <Link to={`/obras/${obra.id}`} className="pr-8 hover:underline">
                 <h2 className="font-display text-lg font-semibold leading-snug">{obra.titulo}</h2>
-                {obra.titulo_original && <p className="texto-zh text-sm text-tinta-2">{obra.titulo_original}</p>}
+                {obra.titulo_original && (
+                  <p
+                    className="texto-zh text-sm text-tinta-2"
+                    // A lista mistura obras de idiomas diferentes, então as
+                    // variáveis vêm por cartão, não de um container comum.
+                    style={estiloDoOriginal(perfilDe(obra.idioma_origem)) as React.CSSProperties}
+                  >
+                    {obra.titulo_original}
+                  </p>
+                )}
               </Link>
               {obra.sinopse && <p className="mt-1.5 line-clamp-2 text-sm text-tinta-2">{obra.sinopse}</p>}
               <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
@@ -176,19 +185,23 @@ function FormularioNovaObra({
 }) {
   const [titulo, setTitulo] = useState('');
   const [tituloOriginal, setTituloOriginal] = useState('');
+  const [idiomaOrigem, setIdiomaOrigem] = useState<IdiomaOrigem>(IDIOMA_ORIGEM_PADRAO);
+  const perfil = perfilDe(idiomaOrigem);
   const [sinopse, setSinopse] = useState('');
   const [tags, setTags] = useState('');
   const [prompt, setPrompt] = useState('');
   const [glossarioCsv, setGlossarioCsv] = useState('');
   const [erroTraducao, setErroTraducao] = useState('');
 
-  // Só campos com texto chinês vão para a IA (a sinopse pode já estar em PT).
-  const temZh = (t: string) => /[一-鿿]/.test(t);
+  // Só campos que ainda estão no idioma de origem vão para a IA — a sinopse pode
+  // já ter sido escrita em PT. Quem decide é o perfil: no mandarim dá para olhar
+  // a escrita; no inglês não, e aí o critério é o campo estar preenchido.
+  const daOrigem = (t: string) => perfil.ehDaOrigem(t);
   const traduzir = useMutation({
     mutationFn: () =>
       api<{ titulo_pt: string | null; sinopse_pt: string | null }>('POST', '/ia/traduzir-detalhes', {
-        ...(temZh(tituloOriginal) ? { titulo_zh: tituloOriginal.trim() } : {}),
-        ...(temZh(sinopse) ? { sinopse_zh: sinopse.trim() } : {}),
+        ...(daOrigem(tituloOriginal) ? { titulo_zh: tituloOriginal.trim() } : {}),
+        ...(daOrigem(sinopse) ? { sinopse_zh: sinopse.trim() } : {}),
       }),
     onSuccess: (r) => {
       if (r.titulo_pt) setTitulo(r.titulo_pt);
@@ -197,11 +210,11 @@ function FormularioNovaObra({
     },
     onError: (e) => setErroTraducao((e as Error).message),
   });
-  const haChines = temZh(tituloOriginal) || temZh(sinopse);
+  const haOriginal = daOrigem(tituloOriginal) || daOrigem(sinopse);
 
   function enviar(e: React.FormEvent) {
     e.preventDefault();
-    const payload: CriarObraPayload = { titulo: titulo.trim() };
+    const payload: CriarObraPayload = { titulo: titulo.trim(), idioma_origem: idiomaOrigem };
     if (tituloOriginal.trim()) payload.titulo_original = tituloOriginal.trim();
     if (sinopse.trim()) payload.sinopse = sinopse.trim();
     const listaTags = tags.split(',').map((t) => t.trim()).filter(Boolean);
@@ -237,17 +250,36 @@ function FormularioNovaObra({
           />
         </label>
         <label className="block text-sm">
-          Título original (chinês)
+          Título original ({perfil.rotulo.toLowerCase()})
           <input
             value={tituloOriginal}
             onChange={(e) => setTituloOriginal(e.target.value)}
             className="texto-zh entrada mt-1 w-full"
-            placeholder="十日终焉"
+            style={estiloDoOriginal(perfil) as React.CSSProperties}
+            placeholder={idiomaOrigem === 'zh' ? '十日终焉' : 'Ten Days to the End'}
           />
         </label>
       </div>
       <label className="block text-sm">
-        Sinopse (opcional — pode colar em chinês e traduzir abaixo)
+        Idioma do original
+        <select
+          value={idiomaOrigem}
+          onChange={(e) => setIdiomaOrigem(e.target.value as IdiomaOrigem)}
+          className="entrada mt-1 w-full"
+        >
+          {IDIOMAS_ORIGEM.map((id) => (
+            <option key={id} value={id}>
+              {perfilDe(id).rotulo}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-tinta-2">
+          Escolhe a segmentação de frases, o núcleo do prompt e quais varreduras se aplicam. Não dá para
+          trocar depois que a obra tem capítulos segmentados.
+        </span>
+      </label>
+      <label className="block text-sm">
+        Sinopse (opcional — pode colar em {perfil.rotulo.toLowerCase()} e traduzir abaixo)
         <textarea
           value={sinopse}
           onChange={(e) => setSinopse(e.target.value)}
@@ -256,10 +288,10 @@ function FormularioNovaObra({
           placeholder="Resumo curto da obra, para o cartão na lista…"
         />
       </label>
-      {haChines && (
+      {haOriginal && (
         <div className="flex items-center gap-3">
           <Botao variante="secundario" type="button" onClick={() => traduzir.mutate()} disabled={traduzir.isPending}>
-            {traduzir.isPending ? 'Traduzindo…' : 'Traduzir título e sinopse do chinês (IA)'}
+            {traduzir.isPending ? 'Traduzindo…' : `Traduzir título e sinopse do ${perfil.rotulo.toLowerCase()} (IA)`}
           </Botao>
           <span className="text-xs text-tinta-2">usa o prompt padrão e o provedor padrão</span>
         </div>

@@ -28,6 +28,11 @@ describe('migração 024 — backfill de origem_edicao', () => {
       if (numeroDaMigracao(arquivo) > numero) break;
       aplicar(db, arquivo);
     }
+    // A 029 entra fora de ordem de propósito: ela só ALTERa `obras` e
+    // `prompt_padrao`, que a 024 não toca, e sem ela os repos abaixo — que são
+    // código ATUAL rodando sobre schema antigo, o desenho deste arquivo — não
+    // acham `obras.idioma_origem`.
+    if (numero < 29) aplicar(db, '029_idioma_origem.sql');
     db.pragma('foreign_keys = ON');
     return db;
   };

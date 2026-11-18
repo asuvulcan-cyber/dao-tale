@@ -15,15 +15,19 @@ import {
   MARCADOR_CHECKLIST_FINAL,
   MARCADOR_CHECKLIST_FINAL_V2,
   MARCADOR_CHECKLIST_FINAL_V3,
+  MARCADOR_CHECKLIST_FINAL_EN,
+  MARCADOR_PREFERENCIAS_COMPACTAS_EN,
   PREFERENCIAS_PADRAO,
   RESSALVA_GLOSSARIO,
   renderizarPreferencias,
   renderizarPreferenciasCompactas,
   renderizarPreferenciasCompactasV2,
   renderizarPreferenciasCompactasV3,
+  renderizarPreferenciasCompactasEn,
   renderizarChecklistFinal,
   renderizarChecklistFinalV2,
   renderizarChecklistFinalV3,
+  renderizarChecklistFinalEn,
   type PreferenciasEstilo,
 } from '@dao-tale/shared';
 
@@ -75,7 +79,9 @@ export function comporOmega(
     : '';
   const nucleo = nucleoConteudo.trimEnd();
   const prefs = preferencias ?? PREFERENCIAS_PADRAO;
-  const comPreferencias = nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+  const comPreferencias = nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_EN)
+    ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_EN, renderizarPreferenciasCompactasEn(prefs))
+    : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
     ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_V3, renderizarPreferenciasCompactasV3(prefs))
     : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2)
     ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_V2, renderizarPreferenciasCompactasV2(prefs))
@@ -95,6 +101,7 @@ export function comporOmega(
   // fim sobra quando o marcador do delta é a última coisa do núcleo (v3.0) —
   // separador sem nada para separar.
   return composto
+    .replace(MARCADOR_CHECKLIST_FINAL_EN, renderizarChecklistFinalEn(prefs))
     .replace(MARCADOR_CHECKLIST_FINAL_V3, renderizarChecklistFinalV3(prefs))
     .replace(MARCADOR_CHECKLIST_FINAL_V2, renderizarChecklistFinalV2(prefs))
     .replace(MARCADOR_CHECKLIST_FINAL, renderizarChecklistFinal(prefs))
@@ -422,6 +429,59 @@ export const NUCLEO_ANTI_DILUICAO_V4 = NUCLEO_ANTI_DILUICAO_V3
  * Seção 6 dizia que Delta prevalecia sobre as demais camadas. Responsabilidades
  * ortogonais são mais testáveis e não obrigam o modelo a resolver uma
  * contradição artificial. */
+/** ALFA DO PERFIL INGLÊS — irmão do 6.4 mandarim, não uma versão dele.
+ *
+ * Mesma arquitetura (Responsabilidades, Beta/Gama/Delta nos marcadores, checklist
+ * por recência), e mesmas Seções 2 e 3 palavra por palavra: coesão, voz e
+ * glossário são regras de PT-BR e de método, não da língua de partida.
+ *
+ * Só as Seções 1 e 4 são reescritas, porque só elas falam da origem. A Seção 1
+ * troca os decalques do mandarim (对方, 开口, 这/那, chengyu) pelos do inglês, que
+ * são outros e mais traiçoeiros justamente por o português tolerá-los: o
+ * possessivo de posse óbvia, o progressivo, a passiva e o `said` repetido
+ * produzem frases que passam por português sem serem. A Seção 4 troca medida
+ * chinesa por medida imperial, pela mesma razão de sempre — o leitor brasileiro
+ * recebe grandeza compreensível, não a palavra estrangeira. */
+export const NUCLEO_EN_PT = `# ALFA — TRADUÇÃO LITERÁRIA INGLÊS → PT-BR
+
+Traduza diretamente do inglês para prosa brasileira publicável. Preserve integralmente sentido, informação, ambiguidade, atmosfera e voz. Não invente, não resuma, não explique e não intensifique.
+
+**Responsabilidades:** original = sentido e tom; Gama = forma do termo quando aplicável; Beta = convenções editoriais; Delta = exceções específicas da obra. Entre soluções compatíveis, escolha a mais natural em PT-BR. Nenhuma camada autoriza contrariar o original.
+
+## 1. PROSA BRASILEIRA, NÃO ESPELHO DO INGLÊS
+
+O decalque do inglês é mais perigoso que o do mandarim porque o português o tolera: a frase sai gramatical e mesmo assim não é português. Desconfie exatamente onde a tradução literal "funcionou".
+
+- **Possessivo de posse óbvia sai.** "his eyes", "her hand", "his own father" → "os olhos", "a mão", "o pai". O português marca posse pelo contexto; repeti-la soa a manual traduzido.
+- **Progressivo não é reflexo.** "was walking", "were watching" → "caminhava", "observavam". "Estava caminhando" só quando a duração for o ponto da frase.
+- **Passiva vira ativa** quando o português pedir, e o agente indeterminado vira sujeito indeterminado ou partícula "se": "he was told" → "disseram a ele".
+- **\`Said\` é "disse".** O inglês repete o verbo de elocução de propósito, e ele é invisível na leitura; trocá-lo por sinônimo elegante ("proferiu", "articulou") inventa um registro que o original não tem. Varie omitindo, não enfeitando.
+- **Phrasal verb e idiom recebem equivalente natural**, nunca tradução peça por peça: "he made up his mind" → "decidiu", não "fez a mente dele".
+- **Reordene, funda ou separe orações** quando o ritmo pedir, sem mudar relações lógicas. Complete fragmentos que soem acidentais em português e desfaça sequências mecânicas de ações.
+- **Preserve imagens vivas**; não transforme metáfora concreta em adjetivo genérico.
+
+## 2. COESÃO E VOZ
+
+- Mantenha o ponto de vista e o tom de cada personagem. Entre equivalentes fiéis, prefira a palavra corrente à rara, solene ou livresca; preserve o registro elevado somente quando estiver no original.
+- Não substitua nome por descrição elegante. Alterne nome, pronome e sujeito oculto.
+- Se a personagem ainda só tiver epíteto descritivo, trate-o como nome nesta regra: não o repita mecanicamente.
+- Gíria, insulto e obscenidade conservam o grau do original — nunca suavize nem aumente.
+
+## 3. GAMA — GLOSSÁRIO
+
+Use obrigatoriamente cada verbete fornecido quando sua nota de uso se aplicar. Identidade fixa a designação; entrada lexical fixa a escolha de palavra, com flexão normal do português. Não deduza caixa ou número pela aparência do verbete. Termo novo relevante deve manter uma única tradução no capítulo e ser devolvido em termos_novos.
+
+## 4. MEDIDAS E FORMAS INGLESAS
+
+Converta medidas imperiais — pés, polegadas, jardas, milhas, libras, onças, galões, graus Fahrenheit — para grandezas compreensíveis em PT-BR, arredondadas como prosa. Se não houver valor seguro, use expressão vaga e verdadeira; nunca invente precisão. Imagens fossilizadas ("miles away" como distância vaga, "an inch from death") não viram cálculo. Não deixe unidade sem converter.
+
+{{PREFERENCIAS_OBRA_EN}}
+
+{{DELTA_OBRA_V2}}
+
+{{CHECKLIST_FINAL_EN}}
+`;
+
 export const NUCLEO_CANDIDATO_6_4 = NUCLEO_ANTI_DILUICAO_V4.replace(
   '**Prioridade em conflito:** Gama (glossário aplicável) > conteúdo do original > Beta > Delta > naturalidade. Gama decide termos; Beta decide convenções; Delta contém apenas particularidades desta obra.',
   '**Responsabilidades:** original = sentido e tom; Gama = forma do termo quando aplicável; Beta = convenções editoriais; Delta = exceções específicas da obra. Entre soluções compatíveis, escolha a mais natural em PT-BR. Nenhuma camada autoriza contrariar o original.',

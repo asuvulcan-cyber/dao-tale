@@ -1,6 +1,7 @@
 import type { EntradaGlossario } from '@dao-tale/shared';
 import { contemTermoFlexionado } from '../traducao/flexao.js';
 import { conferirSinaisDiagnosticados } from './sinaisBilingues.js';
+import { PERFIL_SERVIDOR_MANDARIM, type PerfilServidor } from '../idiomas/index.js';
 
 export const CATEGORIAS_REVISAO_LITERARIA = [
   'fidelidade',
@@ -42,7 +43,9 @@ export interface TravaLiteraria {
   mensagem: string;
 }
 
-const HAN = /[\u3400-\u9fff]/gu;
+// A faixa Han que morava aqui virou `detectores.escritaVazada` do perfil
+// mandarim (server/src/idiomas). O c\u00f3digo da trava continua 'chines-introduzido'
+// de prop\u00f3sito: ele \u00e9 tipo e \u00e9 dado gravado, n\u00e3o r\u00f3tulo de tela.
 const NUMERO = /\d+(?:[.,]\d+)*/g;
 const NOTA = /\(\((.*?)\)\)/gs;
 const MARCADORES_FORMAIS = /\b(?:tampouco|outrossim|doravante|quiçá|deveras|conquanto|não obstante|ademais|destarte|fitou|contemplou|permaneceu|prostr(?:o|a|ou|aram|ar|ado|ada))\b/giu;
@@ -112,6 +115,7 @@ export function validarPropostaLiteraria(
   alvo: AlvoRevisaoLiteraria,
   proposta: PropostaLiterariaIa,
   glossario: EntradaGlossario[],
+  perfil: PerfilServidor = PERFIL_SERVIDOR_MANDARIM,
 ): TravaLiteraria[] {
   const resultado: TravaLiteraria[] = [];
   if (proposta.ordem !== alvo.ordem) {
@@ -132,10 +136,16 @@ export function validarPropostaLiteraria(
     resultado.push({ codigo: 'dicendi-entre-paragrafos', gravidade: 'bloqueio', mensagem: 'A atribuição está separada da fala por uma fronteira de parágrafo e precisa formar uma oração autônoma.' });
   }
 
-  const hanAntes = multiconjunto(alvo.texto_pt, HAN);
-  const hanDepois = multiconjunto(revisado, HAN);
-  if (hanDepois.length > hanAntes.length) {
-    resultado.push({ codigo: 'chines-introduzido', gravidade: 'bloqueio', mensagem: 'A revisão introduziu caracteres chineses no texto em português.' });
+  // Escrita da origem vazando para o português. Só existe quando as escritas
+  // diferem: entre inglês e português não há o que detectar, e o perfil diz isso
+  // com `null` em vez de uma varredura que nunca acusa nada.
+  const escritaVazada = perfil.detectores.escritaVazada;
+  if (escritaVazada) {
+    const antes = multiconjunto(alvo.texto_pt, escritaVazada);
+    const depois = multiconjunto(revisado, escritaVazada);
+    if (depois.length > antes.length) {
+      resultado.push({ codigo: 'chines-introduzido', gravidade: 'bloqueio', mensagem: `A revisão introduziu caracteres do original (${perfil.rotulo}) no texto em português.` });
+    }
   }
 
   const numerosAntes = multiconjunto(alvo.texto_pt, NUMERO);
@@ -150,9 +160,11 @@ export function validarPropostaLiteraria(
     resultado.push({ codigo: 'nota-perdida', gravidade: 'bloqueio', mensagem: 'Uma nota editorial ((...)) foi alterada, removida ou inventada.' });
   }
 
-  const presentes = glossario.filter((termo) => !termo.ambiguo && [...termo.termo_zh].length >= 2 && alvo.texto_zh.includes(termo.termo_zh));
+  const presentes = glossario.filter(
+    (termo) => !termo.ambiguo && !perfil.termoCurtoDemais(termo.termo_zh) && perfil.casaTermo(alvo.texto_zh, termo.termo_zh),
+  );
   for (const termo of presentes) {
-    if (presentes.some((outro) => outro.termo_zh !== termo.termo_zh && outro.termo_zh.includes(termo.termo_zh))) continue;
+    if (presentes.some((outro) => outro.termo_zh !== termo.termo_zh && perfil.termoContem(outro.termo_zh, termo.termo_zh))) continue;
     // Entradas lexicais podem flexionar; exigir substring nelas produziria
     // falsos bloqueios. Identidades, ao contrário, têm grafia canônica.
     if ((termo.especie ?? 'identidade') !== 'identidade') continue;

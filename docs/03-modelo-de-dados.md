@@ -21,7 +21,10 @@ configuracoes (chave-valor global)
 CREATE TABLE obras (
   id               INTEGER PRIMARY KEY,
   titulo           TEXT NOT NULL,
-  titulo_original  TEXT,                          -- nome em chinês, opcional
+  titulo_original  TEXT,                          -- nome no idioma de origem, opcional
+  idioma_origem    TEXT NOT NULL DEFAULT 'zh',    -- (+) migração 029: perfil de idioma do original (doc 28);
+                                                  --     CHECK ('zh','en'). Decide segmentador, Alfa, rótulos,
+                                                  --     tipografia e quais varreduras existem.
   sinopse          TEXT,                          -- (+) resumo curto, exibido no cartão da obra
   tags             TEXT NOT NULL DEFAULT '[]',    -- (+) JSON array de strings
   capa             BLOB,                          -- (+) imagem de capa (app local, dispensa arquivos soltos)
@@ -37,6 +40,12 @@ CREATE TABLE obras (
 --     PRIMARY KEY (data, provedor, modelo) — alimenta o indicador de cota gratuita.
 -- (+) provedor/modelo padrão por obra: requisito 4.7 do briefing ("seleção do
 --     provedor/modelo padrão por obra ou por capítulo") precisava morar em algum lugar.
+--
+-- SOBRE OS CAMPOS `_zh` (texto_zh, termo_zh, trecho_zh, titulo_zh, sinopse_zh):
+-- eles significam TEXTO DE ORIGEM, não "texto em chinês". O sufixo é histórico —
+-- o aplicativo nasceu só com mandarim e a coluna `idioma_origem` só chegou na
+-- migração 029 (doc 28). Renomeá-los custaria migração de cinco tabelas e bump
+-- do formato `dao-tale-export`, sobre histórico de tradução, para ganhar um nome.
 
 CREATE TABLE prompts (
   id           INTEGER PRIMARY KEY,

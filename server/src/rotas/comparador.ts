@@ -9,7 +9,7 @@ import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { metricasEstilo, type MetricasEstilo } from '../ia/metricasEstilo.js';
 import { ErroProvedor, type RequisicaoTraducaoBloco } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
-import { segmentar } from '../segmentacao/segmentar.js';
+import { perfilServidorDe } from '../idiomas/index.js';
 import { registrarEvento } from '../telemetria/registrar.js';
 
 // Comparador de modelos: o mesmo trecho passa por vários provedores/modelos em
@@ -62,7 +62,7 @@ export function rotasComparador(db: BancoDados): Hono {
       return c.json({ erro: { codigo: 'sem-prompt', mensagem: 'A obra não tem prompt mãe ativo e não há prompt padrão ativo.' } }, 400);
     }
 
-    const { frases } = segmentar(corpo.data.texto_zh);
+    const { frases } = perfilServidorDe(obra.idioma_origem).segmentar(corpo.data.texto_zh);
     if (frases.length === 0) {
       return c.json({ erro: { codigo: 'texto-vazio', mensagem: 'Nenhuma frase reconhecida no texto.' } }, 400);
     }

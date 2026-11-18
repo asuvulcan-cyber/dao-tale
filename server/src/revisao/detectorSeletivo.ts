@@ -3,6 +3,7 @@ import { analisarEstilo } from '../traducao/estiloViolacoes.js';
 import { varrerCatalogo } from '../traducao/catalogoZhPt.js';
 import { contemTermoFlexionado } from '../traducao/flexao.js';
 import { detectarSinaisBilingues } from './sinaisBilingues.js';
+import { PERFIL_SERVIDOR_MANDARIM, type PerfilServidor } from '../idiomas/index.js';
 
 export type FenomenoSeletivo =
   | 'regra-deterministica' | 'gama' | 'literalidade' | 'registro'
@@ -44,28 +45,38 @@ function adicionar(
 /** Triagem conservadora: acusa para revisão; nunca reescreve nem publica. */
 export function detectarRevisaoSeletiva(
   frases: FraseDetectorSeletivo[], prefs: PreferenciasEstilo, glossario: EntradaGlossario[],
+  perfil: PerfilServidor = PERFIL_SERVIDOR_MANDARIM,
 ): DiagnosticoSeletivo[] {
   const mapa = new Map<number, DiagnosticoSeletivo>();
   const porOrdem = new Map(frases.map((f) => [f.ordem, f]));
 
-  for (const v of analisarEstilo(frases, prefs).violacoes) {
+  for (const v of analisarEstilo(frases, prefs, perfil).violacoes) {
     // Continua no relatório de estilo, mas não paga revisão literária por aspas.
     if (v.regra === 'aspas-nao-retas') continue;
     adicionar(mapa, v.ordem, 'tom-naturalidade', 'regra-deterministica', `${v.regra}: ${v.trecho}`, 'alta');
   }
-  for (const v of varrerCatalogo(frases.map((f) => ({ ...f, status_traducao: 'traduzida' }))).violacoes) {
-    adicionar(mapa, v.ordem, 'fidelidade', 'regra-deterministica', `${v.entrada_id}: ${v.trecho_pt}`, 'alta');
+  // Catálogo e sinais bilíngues dependem de gatilho medido no corpus daquela
+  // origem. O perfil diz se essa varredura EXISTE; fora do mandarim ela não é
+  // "zero resultados", é ausência — e quem pergunta tem de saber a diferença.
+  if (perfil.detectores.catalogo) {
+    for (const v of varrerCatalogo(frases.map((f) => ({ ...f, status_traducao: 'traduzida' }))).violacoes) {
+      adicionar(mapa, v.ordem, 'fidelidade', 'regra-deterministica', `${v.entrada_id}: ${v.trecho_pt}`, 'alta');
+    }
   }
 
   for (const frase of frases) {
-    for (const sinal of detectarSinaisBilingues(frase.texto_zh, frase.texto_pt)) {
-      adicionar(mapa, frase.ordem, 'fidelidade', 'sentido-contextual', `${sinal.id}: ${sinal.razao}`);
+    if (perfil.detectores.sinaisBilingues) {
+      for (const sinal of detectarSinaisBilingues(frase.texto_zh, frase.texto_pt)) {
+        adicionar(mapa, frase.ordem, 'fidelidade', 'sentido-contextual', `${sinal.id}: ${sinal.razao}`);
+      }
     }
     const repeticao = frase.texto_pt.match(/\bcarne em carne viva\b/iu);
     if (repeticao) adicionar(mapa, frase.ordem, 'tom-naturalidade', 'literalidade', `Conferir repetição lexical “${repeticao[0]}”; pode ser redundância, não substituir automaticamente.`);
-    const presentes = glossario.filter((g) => !g.ambiguo && [...g.termo_zh].length >= 2 && frase.texto_zh.includes(g.termo_zh));
+    const presentes = glossario.filter(
+      (g) => !g.ambiguo && !perfil.termoCurtoDemais(g.termo_zh) && perfil.casaTermo(frase.texto_zh, g.termo_zh),
+    );
     for (const termo of presentes) {
-      if (presentes.some((outro) => outro.termo_zh !== termo.termo_zh && outro.termo_zh.includes(termo.termo_zh))) continue;
+      if (presentes.some((outro) => outro.termo_zh !== termo.termo_zh && perfil.termoContem(outro.termo_zh, termo.termo_zh))) continue;
       if ((termo.especie ?? 'identidade') !== 'identidade') continue;
       if (!contemTermoFlexionado(frase.texto_pt, termo.termo_pt)) {
         adicionar(mapa, frase.ordem, 'fidelidade', 'gama', `Confirmar ausência de “${termo.termo_pt}” para ${termo.termo_zh}.`, 'alta');

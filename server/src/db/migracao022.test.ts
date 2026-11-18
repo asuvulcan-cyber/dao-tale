@@ -112,6 +112,11 @@ describe('migração 022 — caminho de dados (dados reais atravessando o INSERT
       if (numeroDaMigracao(arquivo) > 21) break;
       aplicar(db, arquivo);
     }
+    // A 029 entra fora de ordem de propósito: ela só ALTERa `obras` e
+    // `prompt_padrao`, que a 022 não toca, e sem ela o `reposObras` abaixo —
+    // que é código ATUAL rodando sobre schema antigo, o desenho deste arquivo —
+    // não acha `obras.idioma_origem`.
+    aplicar(db, '029_idioma_origem.sql');
     db.pragma('foreign_keys = ON');
 
     // Obra/capítulo/frases pelo código do app — não pelas migrações: elas não

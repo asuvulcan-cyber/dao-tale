@@ -32,6 +32,11 @@ export const MARCADOR_PREFERENCIAS_COMPACTAS_V2 = '{{PREFERENCIAS_OBRA_COMPACTAS
 export const MARCADOR_CHECKLIST_FINAL_V2 = '{{CHECKLIST_FINAL_V2}}';
 export const MARCADOR_PREFERENCIAS_COMPACTAS_V3 = '{{PREFERENCIAS_OBRA_COMPACTAS_V3}}';
 export const MARCADOR_CHECKLIST_FINAL_V3 = '{{CHECKLIST_FINAL_V3}}';
+/** Marcadores do perfil inglês. São próprios, e não uma v4, para `comporOmega`
+ *  ganhar só mais um par de `replace` em vez de ramificar por idioma — e para
+ *  nenhum byte dos Alfas mandarins históricos precisar mudar. */
+export const MARCADOR_PREFERENCIAS_COMPACTAS_EN = '{{PREFERENCIAS_OBRA_EN}}';
+export const MARCADOR_CHECKLIST_FINAL_EN = '{{CHECKLIST_FINAL_EN}}';
 
 export type ModoDialogo = 'aspas' | 'travessao';
 export type MarcaPensamento = 'italico' | 'aspas';
@@ -474,6 +479,53 @@ export function renderizarChecklistFinalV3(prefs: PreferenciasEstilo): string {
     '7. Releia só o português: sem decalque, epíteto repetido mecanicamente, eco lexical evitável ou marca tipográfica aberta.',
     '7. Compare o efeito local com o chinês: voz, formalidade, densidade e ritmo continuam os deste trecho; depois releia só o português, sem decalque, epíteto mecânico, eco evitável ou marca tipográfica aberta.',
   );
+}
+
+// ── Beta e checklist do perfil inglês ──────────────────────────────────────
+//
+// Derivam da v3 e trocam SÓ o que não existe quando a origem é o inglês. Não
+// são uma v4: as versões mandarins acima continuam byte a byte imutáveis, e o
+// Alfa inglês usa marcadores próprios (ver MARCADOR_*_EN) justamente para que
+// `comporOmega` não precise ramificar por idioma.
+//
+// O que muda, e por quê:
+// - **Nomes** e **Onomatopeia** falam em pinyin, que é transcrição do mandarim.
+//   Em inglês o nome já chega em alfabeto latino, e a decisão é outra: manter a
+//   grafia do original ou traduzir o que é descritivo.
+// - O **checklist** cita "caractere chinês vazado" e "unidade chinesa". Entre
+//   inglês e português não há escrita a vazar; o que escapa é unidade imperial
+//   e, no lugar do caractere, a palavra inglesa não traduzida.
+
+export function renderizarPreferenciasCompactasEn(prefs: PreferenciasEstilo): string {
+  return renderizarPreferenciasCompactasV3(prefs)
+    .replace(
+      /^\*\*Onomatopeia:\*\*.*$/m,
+      prefs.onomatopeia === 'adaptar'
+        ? '**Onomatopeia:** equivalente natural do PT-BR, sempre em *itálico* e sem aspas.'
+        : '**Onomatopeia:** conserve a forma do original, sempre em *itálico* e sem aspas.',
+    )
+    .replace(
+      /^\*\*Nomes:\*\*.*$/m,
+      prefs.nomes_proprios === 'traduzir'
+        ? '**Nomes:** traduza o que tiver sentido descritivo; antropônimo e topônimo sem carga semântica ficam na grafia do original. O Gama decide cada forma catalogada.'
+        : prefs.nomes_proprios === 'mesclar'
+          ? '**Nomes:** pessoa na grafia do original; apelido, epíteto e nome descritivo traduzidos; termo consagrado do gênero preservado. O Gama decide cada forma catalogada.'
+          : '**Nomes:** conserve a grafia do original, exceto títulos e cargos, que são traduzidos. O Gama decide cada forma catalogada.',
+    )
+    .replace('identifique no chinês a voz', 'identifique no inglês a voz');
+}
+
+export function renderizarChecklistFinalEn(prefs: PreferenciasEstilo): string {
+  return renderizarChecklistFinalV3(prefs)
+    .replace(
+      '1. Todo sentido do chinês está presente, sem invenção, explicação ou intensificação.',
+      '1. Todo sentido do inglês está presente, sem invenção, explicação ou intensificação.',
+    )
+    .replace(
+      '6. Nenhuma unidade chinesa ficou transliterada; nenhum caractere chinês vazou para o português.',
+      '6. Nenhuma medida imperial ficou sem converter (pés, milhas, libras, °F); nenhuma palavra do inglês ficou sem traduzir por descuido.',
+    )
+    .replace('7. Compare o efeito local com o chinês:', '7. Compare o efeito local com o inglês:');
 }
 
 /** Rótulos curtos para a UI e para as notas de versão ("Diálogo: travessão"). */

@@ -26,7 +26,7 @@ versionamento e para os fluxos que hoje violam a regra (revisão e extração).
 
 | # | Camada | Conteúdo | Onde vive | Quando muda |
 |---|--------|----------|-----------|-------------|
-| 1 | **Núcleo universal** | Identidade do tradutor, regras zh→pt-BR (Seções 1–5 e 7 do prompt atual), sem nada de obra | tabela `prompt_padrao` (renomeada em conceito para "núcleo"; mesma tabela, versões imutáveis, uma ativa) | Raramente — nova versão global com diff e data |
+| 1 | **Núcleo universal** | Identidade do tradutor, regras de tradução do idioma de origem (Seções 1–5 e 7 do prompt atual), sem nada de obra | tabela `prompt_padrao` (renomeada em conceito para "núcleo"; mesma tabela, versões imutáveis, **uma ativa POR IDIOMA DE ORIGEM** desde a migração 029 — ver doc 28) | Raramente — nova versão global com diff e data |
 | 2 | **Delta por obra** | Só o que difere do núcleo: tom, época, vícios de fala, exceções (a atual Seção 6) | tabela `prompts` (por obra, versões imutáveis, uma ativa) — passa a guardar **só o delta**, nunca cópia do núcleo | Quando a obra pede — nova versão por obra |
 | 3 | **Contexto dinâmico por bloco** | Glossário **filtrado** (só termos cujo `termo_zh` aparece literalmente no trecho), termos adotados no job, cauda anterior, contexto futuro | Mensagem do **usuário**, montada por chamada | Toda chamada |
 | 4 | **Versionamento** | Toda mudança em núcleo ou delta gera versão com diff, data e notas; cada capítulo registra qual par (núcleo, delta) usou | `prompt_padrao` + `prompts` + novo `capitulos.nucleo_id` | A cada nova versão / job |

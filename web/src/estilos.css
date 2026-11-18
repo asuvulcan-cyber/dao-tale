@@ -205,11 +205,22 @@ body {
 
 :focus-visible { outline: 2px solid var(--cor-marca); outline-offset: 2px; }
 
-/* Tipografia dedicada para o texto chinês no editor bilíngue */
+/* Tipografia do texto de ORIGEM no editor bilíngue.
+   O nome da classe é histórico, como os campos `_zh`: ela marca o original,
+   seja ele qual for. A fonte não está fixa aqui — vem de `--fonte-origem`, que
+   o container da obra define a partir do perfil de idioma (`estiloDoOriginal`).
+   Assim os ~30 pontos que usam esta classe acertam a tipografia de uma vez, por
+   herança, em vez de cada um ter de escolher a classe certa.
+   O fallback é o mandarim: fora da árvore de uma obra não há perfil. */
 .texto-zh {
-  font-family: var(--fonte-zh);
-  line-height: 1.9;
+  font-family: var(--fonte-origem, var(--fonte-zh));
+  line-height: var(--entrelinha-origem, 1.9);
 }
+
+/* Glifo decorativo do aplicativo (o 道 da capa sem imagem, o 文A da paleta).
+   É marca, não texto da obra: usa a pilha CJK sempre, independentemente do
+   idioma da obra aberta. */
+.selo-cjk { font-family: var(--fonte-zh); }
 
 /* ── Termo do glossário no texto (item 13 do backlog) ───────────────────────
    Discreto como um link: sublinhado pontilhado fino, sem fundo.
@@ -260,7 +271,7 @@ body {
   outline: none;
 }
 .entrada::placeholder { color: var(--cor-tinta-2); opacity: 0.7; }
-/* Campo com fonte CJK: sem o line-height de leitura (1.9), que desalinha a altura. */
+/* Campo com texto de origem: sem o line-height de leitura, que desalinha a altura. */
 .entrada.texto-zh { line-height: 1.5; }
 
 /* Botão-ferramenta: ação secundária em pílula (barras de ferramentas). */

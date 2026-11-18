@@ -1,4 +1,4 @@
-import type { EntradaGlossario, ModeloInfo, ModoThinking, ProvedorId, RespostaRevisao } from '@dao-tale/shared';
+import type { EntradaGlossario, IdiomaOrigem, ModeloInfo, ModoThinking, ProvedorId, RespostaRevisao } from '@dao-tale/shared';
 
 // ── Consumo real de uma chamada (telemetria, doc 11 §1) ────────────────────
 // Toda resposta de provedor carrega o `usage` que a API devolveu, normalizado:
@@ -32,6 +32,10 @@ export interface FraseParaTraduzir {
 
 export interface RequisicaoTraducaoBloco {
   modelo: string;
+  /** Perfil de idioma da obra. Viaja com a requisição — e não como parâmetro dos
+   *  construtores de prompt — porque quem os chama é o provedor, que só recebe
+   *  `req`. Ausente = mandarim, o idioma de toda obra anterior aos perfis. */
+  idioma_origem?: IdiomaOrigem;
   temperatura?: number;
   /** Raciocínio prolongado; `undefined` = não mandar nada (padrão do provedor). */
   thinking?: ModoThinking;
@@ -77,6 +81,8 @@ export interface RespostaTraducaoBloco {
 
 export interface RequisicaoContracapa {
   modelo: string;
+  /** Perfil de idioma da obra; ausente = mandarim. */
+  idioma_origem?: IdiomaOrigem;
   temperatura?: number;
   /** Ausente quando o usuário só quer a sinopse. */
   tituloZh?: string;
@@ -98,6 +104,8 @@ export interface RespostaContracapa {
 
 export interface RequisicaoRevisao {
   modelo: string;
+  /** Perfil de idioma da obra; ausente = mandarim. */
+  idioma_origem?: IdiomaOrigem;
   temperatura?: number;
   omega: string;
   glossario: EntradaGlossario[];
@@ -144,6 +152,8 @@ export interface RespostaRevisaoProvedor extends RespostaRevisao {
 
 export interface RequisicaoExtrairTermos {
   modelo: string;
+  /** Perfil de idioma da obra; ausente = mandarim. */
+  idioma_origem?: IdiomaOrigem;
   temperatura?: number;
   omega: string;
   /** Termos já catalogados que o modelo não deve repetir. Com `glossarioNoUsuario`,
@@ -167,6 +177,8 @@ export interface RespostaExtrairTermos {
 
 export interface RequisicaoRefinarPrompt {
   modelo: string;
+  /** Perfil de idioma da obra; ausente = mandarim. */
+  idioma_origem?: IdiomaOrigem;
   temperatura?: number;
   /** Prompt mãe composto (núcleo + delta) vigente na obra. */
   omega: string;
@@ -217,6 +229,8 @@ export interface ParParaQa {
 
 export interface RequisicaoQa {
   modelo: string;
+  /** Perfil de idioma da obra; ausente = mandarim. */
+  idioma_origem?: IdiomaOrigem;
   temperatura?: number;
   omega: string;
   glossario: EntradaGlossario[];

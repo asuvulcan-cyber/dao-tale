@@ -4,10 +4,13 @@ import { z } from 'zod';
 import { lerJson } from './json.js';
 import {
   FASES_TRADUCAO,
+  IDIOMAS_ORIGEM,
+  IDIOMA_ORIGEM_PADRAO,
   PROVEDORES_IDS,
   MODOS_THINKING,
   TEMPERATURA_MAX,
   camadaDoRotulo,
+  ehIdiomaOrigem,
   normalizarPreferencias,
   resolverTemperatura,
   type Configuracoes,
@@ -37,6 +40,7 @@ import { telemetriaDaObra } from '../telemetria/painel.js';
 const criarObraSchema = z.object({
   titulo: z.string().min(1),
   titulo_original: z.string().optional(),
+  idioma_origem: z.enum(IDIOMAS_ORIGEM).optional(),
   sinopse: z.string().optional(),
   tags: z.array(z.string().min(1)).max(20).optional(),
   prompt_inicial: z.object({ versao: z.string().min(1), conteudo: z.string().min(1) }).optional(),
@@ -130,6 +134,9 @@ const criarPromptPadraoSchema = z.object({
   conteudo: z.string().min(1),
   notas_versao: z.string().optional(),
   ativar: z.boolean().default(true),
+  // Ausente = mandarim: um Alfa criado pela tela antiga, que não sabe que
+  // perfis existem, continua sendo o que sempre foi.
+  idioma_origem: z.enum(IDIOMAS_ORIGEM).default(IDIOMA_ORIGEM_PADRAO),
 });
 
 export function rotasObras(db: BancoDados): Hono {
@@ -719,7 +726,14 @@ export function rotasObras(db: BancoDados): Hono {
 
   // ── Prompt padrão global ────────────────────────────────────────────────
 
-  app.get('/prompt-padrao', (c) => c.json(reposPromptPadrao.listar(db)));
+  // A lista de núcleos é POR PERFIL DE IDIOMA: misturar os Alfas mandarins com
+  // os ingleses numa tela só faria o usuário ativar o núcleo errado. Sem o
+  // parâmetro vale o mandarim, que é o perfil de toda obra anterior à 029 — e é
+  // o que mantém a tela existente funcionando sem saber que perfis existem.
+  app.get('/prompt-padrao', (c) => {
+    const pedido = c.req.query('idioma');
+    return c.json(reposPromptPadrao.listar(db, ehIdiomaOrigem(pedido) ? pedido : IDIOMA_ORIGEM_PADRAO));
+  });
 
   app.post('/prompt-padrao', async (c) => {
     const corpo = criarPromptPadraoSchema.safeParse(await lerJson(c));
