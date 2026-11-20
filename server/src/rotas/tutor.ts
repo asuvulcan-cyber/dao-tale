@@ -20,7 +20,9 @@ import {
   reposUso,
   reposVocabulario,
 } from '../db/repos.js';
+import { dicionarioAtual } from '../dicionario/banco.js';
 import { obterProvedor } from '../ia/fabrica.js';
+import { selecionarPalavras } from '../ia/promptDicionario.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import type { RequisicaoTutorBase } from '../ia/promptTutor.js';
 import { ErroProvedor } from '../ia/provedor.js';
@@ -43,6 +45,7 @@ const vazio = (fraseId: number): EstadoTutorFrase => ({
   correcao: null,
   tentativas: 0,
   salva_em: null,
+  divergencias: [],
 });
 
 const erro = (codigo: string, mensagem: string) => ({ erro: { codigo, mensagem } });
@@ -101,6 +104,9 @@ export function rotasTutor(db: BancoDados): Hono {
       glossarioTodo,
     );
 
+    // Dicionário local (doc 30): só há fontes de mandarim por enquanto.
+    const dicionario = obra.idioma_origem === 'zh' ? dicionarioAtual() : null;
+
     const req: RequisicaoTutorBase = {
       modelo,
       idioma_origem: obra.idioma_origem,
@@ -112,12 +118,28 @@ export function rotasTutor(db: BancoDados): Hono {
       frase: frase.texto_zh,
       antes,
       depois,
+      dicionario: dicionario ? selecionarPalavras(dicionario.palavrasDaFrase(frase.texto_zh, glossario), 'tutor') : undefined,
     };
     return { obra, provedor, provedorId, modelo, chave, req };
   }
 
   function obterFrase(id: string) {
     return reposFrases.obter(db, Number(id));
+  }
+
+  /**
+   * Estado da frase com o pinyin conferido no dicionário. Conferido a cada
+   * leitura, não guardado: atualizar o dicionário reconfere explicações antigas,
+   * e a conta é de milissegundos.
+   */
+  function estadoDe(frase: Frase): EstadoTutorFrase {
+    const estado = reposTutor.obter(db, frase.id, frase.texto_zh) ?? vazio(frase.id);
+    if (!estado.explicacao) return estado;
+    const capitulo = reposCapitulos.obter(db, frase.capitulo_id);
+    const obra = capitulo ? reposObras.obter(db, capitulo.obra_id) : null;
+    const dicionario = obra?.idioma_origem === 'zh' ? dicionarioAtual() : null;
+    if (!dicionario) return estado;
+    return { ...estado, divergencias: dicionario.conferirSegmentos(estado.explicacao.segmentos) };
   }
 
   // ── Estado por frase ────────────────────────────────────────────────────
@@ -127,7 +149,7 @@ export function rotasTutor(db: BancoDados): Hono {
   app.get('/frases/:id/tutor', (c) => {
     const frase = obterFrase(c.req.param('id'));
     if (!frase) return c.json(erro('nao-encontrado', 'Frase não encontrada.'), 404);
-    return c.json(reposTutor.obter(db, frase.id, frase.texto_zh) ?? vazio(frase.id));
+    return c.json(estadoDe(frase));
   });
 
   app.post('/frases/:id/tutor/explicar', async (c) => {
@@ -138,7 +160,7 @@ export function rotasTutor(db: BancoDados): Hono {
 
     // Já explicada: devolve a guardada. Reabrir a frase não gasta de novo.
     const atual = reposTutor.obter(db, frase.id, frase.texto_zh);
-    if (atual?.explicacao && !corpo.data.refazer) return c.json(atual);
+    if (atual?.explicacao && !corpo.data.refazer) return c.json(estadoDe(frase));
 
     try {
       const { obra, provedor, provedorId, modelo, chave, req } = await prepararChamada(frase);
@@ -147,7 +169,7 @@ export function rotasTutor(db: BancoDados): Hono {
       registrarEvento(db, { obra_id: obra.id, capitulo_id: frase.capitulo_id, papel: 'tutor', provedor: provedorId, modelo, uso: resposta.uso });
       const { bruta: _bruta, uso: _uso, ...explicacao } = resposta;
       reposTutor.gravarExplicacao(db, frase.id, frase.texto_zh, explicacao);
-      return c.json(reposTutor.obter(db, frase.id, frase.texto_zh)!);
+      return c.json(estadoDe(frase));
     } catch (e) {
       const mensagem = e instanceof ErroProvedor ? e.message : `Falha na explicação: ${(e as Error).message}`;
       return c.json(erro('tutor', mensagem), 502);
@@ -160,7 +182,7 @@ export function rotasTutor(db: BancoDados): Hono {
     const frase = obterFrase(c.req.param('id'));
     if (!frase) return c.json(erro('nao-encontrado', 'Frase não encontrada.'), 404);
     reposTutor.registrarDicas(db, frase.id, frase.texto_zh, corpo.data.dicas);
-    return c.json(reposTutor.obter(db, frase.id, frase.texto_zh)!);
+    return c.json(estadoDe(frase));
   });
 
   app.post('/frases/:id/tutor/corrigir', async (c) => {
@@ -177,7 +199,7 @@ export function rotasTutor(db: BancoDados): Hono {
       registrarEvento(db, { obra_id: obra.id, capitulo_id: frase.capitulo_id, papel: 'tutor', provedor: provedorId, modelo, uso: resposta.uso });
       const { bruta: _bruta, uso: _uso, ...correcao } = resposta;
       reposTutor.gravarCorrecao(db, frase.id, frase.texto_zh, corpo.data.tentativa, correcao);
-      return c.json(reposTutor.obter(db, frase.id, frase.texto_zh)!);
+      return c.json(estadoDe(frase));
     } catch (e) {
       const mensagem = e instanceof ErroProvedor ? e.message : `Falha na correção: ${(e as Error).message}`;
       return c.json(erro('tutor', mensagem), 502);
@@ -190,7 +212,7 @@ export function rotasTutor(db: BancoDados): Hono {
     const frase = obterFrase(c.req.param('id'));
     if (!frase) return c.json(erro('nao-encontrado', 'Frase não encontrada.'), 404);
     reposTutor.salvarTraducao(db, frase.id, frase.texto_zh, corpo.data.texto_pt);
-    return c.json({ frase: reposFrases.obter(db, frase.id)!, estado: reposTutor.obter(db, frase.id, frase.texto_zh)! });
+    return c.json({ frase: reposFrases.obter(db, frase.id)!, estado: estadoDe(frase) });
   });
 
   // ── Vocabulário ─────────────────────────────────────────────────────────

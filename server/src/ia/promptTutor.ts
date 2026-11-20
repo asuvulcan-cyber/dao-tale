@@ -5,7 +5,9 @@ import {
   type ExplicacaoTutor,
   type IdiomaOrigem,
   type NivelIdioma,
+  type PalavraDicionario,
 } from '@dao-tale/shared';
+import { blocoDicionario } from './promptDicionario.js';
 import { formatarGlossario, type PartesSistema } from './prompts.js';
 
 // Prompts do modo tutor (doc 29). Doutrina fixa no código, como a contracapa:
@@ -32,6 +34,9 @@ export interface RequisicaoTutorBase {
   antes: { origem: string; pt: string }[];
   /** Frases seguintes, só o original. */
   depois: string[];
+  /** Verbetes das palavras da frase (doc 30), já selecionados; ausente sem
+   *  dicionário instalado e no inglês. */
+  dicionario?: PalavraDicionario[];
 }
 
 export type RequisicaoExplicarTutor = RequisicaoTutorBase;
@@ -157,6 +162,8 @@ function contexto(req: RequisicaoTutorBase): string[] {
   if (req.glossario.length > 0) {
     linhas.push('## GLOSSÁRIO DA OBRA (termos presentes neste trecho; uso obrigatório)', formatarGlossario(req.glossario), '');
   }
+  // Depois do glossário: o leitor vê primeiro o que é lei, depois o que só confere.
+  linhas.push(...blocoDicionario(req.dicionario, 'tutor'));
   if (req.antes.length > 0) {
     linhas.push('## CONTEXTO ANTERIOR (não explicar)');
     for (const a of req.antes) {

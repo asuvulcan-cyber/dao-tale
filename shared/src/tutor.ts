@@ -1,3 +1,4 @@
+import type { DivergenciaLeitura } from './dicionario.js';
 import type { IdiomaOrigem } from './idiomaOrigem.js';
 
 // Modo tutor de idioma (doc 29): tipos trocados entre servidor e interface, e a
@@ -108,6 +109,10 @@ export interface EstadoTutorFrase {
   tentativas: number;
   /** Quando a tradução desta frase foi salva pelo tutor. */
   salva_em: string | null;
+  /** Segmentos cujo pinyin não bate com o dicionário local (doc 30). Calculado
+   *  a cada leitura, não guardado: atualizar o dicionário reconfere explicações
+   *  antigas. Vazio sem dicionário instalado e no inglês. */
+  divergencias: DivergenciaLeitura[];
 }
 
 // ── Vocabulário ────────────────────────────────────────────────────────────

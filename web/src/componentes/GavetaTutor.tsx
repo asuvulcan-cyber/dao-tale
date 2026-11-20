@@ -18,6 +18,7 @@ import { api, mensagemDeErro } from '../api';
 import { Aviso, Botao, Etiqueta, type CorEtiqueta } from '../App';
 import { usePerfilObra } from '../perfilObra';
 import { useVoz } from '../util/voz';
+import { DetalheDicionario } from './DicionarioFrase';
 
 const VEREDITO: Record<VereditoTutor, { texto: string; cor: CorEtiqueta }> = {
   certo: { texto: 'sentido certo', cor: 'jade' },
@@ -201,6 +202,12 @@ export function GavetaTutor({
   const ruby =
     perfil.id === 'zh' && dicas >= 1 && !!explicacao && segmentosCobremFrase(frase.texto_zh, explicacao.segmentos);
   const ocupado = explicar.isPending || corrigir.isPending || salvar.isPending;
+  // Pinyin que não bate com o dicionário local (doc 30), por índice de segmento.
+  const divergencia = new Map((estado?.divergencias ?? []).map((d) => [d.indice, d]));
+  const avisoLeitura = (i: number) => {
+    const d = divergencia.get(i);
+    return d ? `O dicionário lê ${d.leituras_dicionario.join(' ou ')} — confira antes de memorizar.` : undefined;
+  };
 
   const botaoVocab = (p: PalavraNova) =>
     adicionadas.has(p.termo) ? (
@@ -248,9 +255,11 @@ export function GavetaTutor({
                 ehPontuacao(s) || !s.leitura ? (
                   <span key={i}>{s.texto}</span>
                 ) : (
-                  <ruby key={i} className="mx-px" title={s.significado}>
+                  <ruby key={i} className="mx-px" title={avisoLeitura(i) ?? s.significado}>
                     {s.texto}
-                    <rt className="text-[0.55em] text-tinta-2">{s.leitura}</rt>
+                    <rt className={`text-[0.55em] ${divergencia.has(i) ? 'text-ocre-forte underline decoration-wavy' : 'text-tinta-2'}`}>
+                      {s.leitura}
+                    </rt>
                   </ruby>
                 ),
               )}
@@ -381,8 +390,9 @@ export function GavetaTutor({
             <h4 className="olho mb-1">Dica 1 · Palavras</h4>
             <ul className="space-y-1.5">
               {explicacao.segmentos
-                .filter((s) => !ehPontuacao(s))
-                .map((s, i) => (
+                .map((s, i) => ({ s, i }))
+                .filter(({ s }) => !ehPontuacao(s))
+                .map(({ s, i }) => (
                   <li key={i} className="flex items-start gap-2 text-sm">
                     <div className="min-w-0 flex-1">
                       <button
@@ -399,6 +409,7 @@ export function GavetaTutor({
                         <span className="ml-1.5 text-[10px] uppercase tracking-wide text-tinta-2">{s.classe}</span>
                       )}
                       {s.nota && <p className="text-xs text-tinta-2">{s.nota}</p>}
+                      {divergencia.has(i) && <p className="text-xs text-ocre-forte">⚠ {avisoLeitura(i)}</p>}
                     </div>
                     {botaoVocab({ termo: s.texto, leitura: s.leitura, significado: s.significado, nota: s.nota })}
                   </li>
@@ -438,6 +449,10 @@ export function GavetaTutor({
             )}
           </section>
         )}
+
+        {/* Conferência sem IA (doc 30). Fechado por padrão: aberto, entrega as
+            palavras de bandeja — é a ferramenta para quando a dica não basta. */}
+        {perfil.id === 'zh' && <DetalheDicionario fraseId={frase.id} titulo="Dicionário (sem IA)" />}
 
         {/* Navegação: seguir o capítulo sem fechar a gaveta. */}
         <div className="flex items-center justify-between border-t border-linha pt-2 text-sm">

@@ -39,6 +39,13 @@ O nível fica em Configurações (`nivel_idioma`, por idioma) e entra no prompt.
    e a mineração de edições manuais não lê a tradução de quem está aprendendo como
    se fosse correção da IA.
 
+## Dicionário local (doc 30)
+
+Com o `dicionarios.db` instalado, a explicação recebe os verbetes do DCP e do
+CC-CEDICT das palavras da frase, o pinyin de cada segmento é conferido contra o
+dicionário (divergência aparece em ocre na gaveta) e há um painel
+"Dicionário (sem IA)" para consultar sem gastar chamada.
+
 ## Vocabulário com repetição espaçada
 
 - Qualquer palavra das dicas ou da correção vai para o vocabulário com um clique

@@ -23,13 +23,14 @@ substitui nem enxuga o app.
 | `server/src/db/migrations` | SQL numerado; aplicado no boot, com snapshot do banco antes |
 | `server/src/ia` | provedores (`claudeCode`, `claude`, `gemini`, `compat`, `mock`), contratos JSON, prompts |
 | `server/src/rotas` | API (`/api/...`); testes de rota ao lado (`*.test.ts`) |
+| `server/src/dicionario` | dicionários locais de mandarim (DCP + CC-CEDICT) em `dicionarios.db`, à parte do banco (doc 30) |
 | `web/src` | React + Vite + react-query + Tailwind; precisa de `npm run build` para a instância real |
 | `docs/` | especificação numerada; decisões novas viram um doc novo numerado |
 | `scripts/` | `start.mjs` (lançador), `criar-atalho.mjs`, `subir.mjs` (deploy da VPS, desligada) |
 
 Docs que mais respondem perguntas: 02 arquitetura · 03 modelo de dados · 04 API ·
 05 fluxos de IA · 08 prompt universal · 15 camadas do prompt · 28 perfis de idioma ·
-29 modo tutor.
+29 modo tutor · 30 dicionários locais.
 
 ## Comandos
 
@@ -38,6 +39,7 @@ npm run dev                                  # servidor + Vite com reload
 npm run check                                # lint + format + typecheck + testes + build — rode antes de commit
 npm -w server exec vitest run src/rotas/tutor.test.ts   # um arquivo de teste
 npm run atalho                               # (re)cria o atalho do menu/barra de tarefas (Linux)
+npm run dicionarios                          # baixa DCP + CC-CEDICT e monta dicionarios.db (pasta de dados)
 ```
 
 ## A instância real — não experimente nela

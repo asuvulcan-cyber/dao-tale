@@ -45,6 +45,8 @@ function paraEstado(linha: LinhaTutor): EstadoTutorFrase {
     correcao: lerJson<CorrecaoTutor>(linha.correcao),
     tentativas: linha.tentativas,
     salva_em: linha.salva_em,
+    // Preenchida pela rota, que é quem tem o dicionário (doc 30).
+    divergencias: [],
   };
 }
 

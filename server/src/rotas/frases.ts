@@ -15,7 +15,9 @@ import {
   reposUso,
   recalcularConsistenciaDaObra,
 } from '../db/repos.js';
+import { dicionarioAtual } from '../dicionario/banco.js';
 import { obterProvedor } from '../ia/fabrica.js';
+import { selecionarPalavras } from '../ia/promptDicionario.js';
 import { filtrarGlossarioRelevante, incluirPrincipais } from '../ia/prompts.js';
 import { ErroProvedor } from '../ia/provedor.js';
 import { obterChave } from '../credenciais/index.js';
@@ -239,6 +241,10 @@ export function rotasFrases(db: BancoDados): Hono {
           glossarioTodo,
         )
       : glossarioTodo;
+    // Dicionário local (doc 30): verbetes do CC-CEDICT das palavras da frase
+    // questionada — referência de sentido, nunca o juiz (o glossário e as regras
+    // da obra decidem).
+    const dicionario = obra.idioma_origem === 'zh' ? dicionarioAtual() : null;
 
     try {
       reposUso.registrar(db, provedorId, modelo);
@@ -262,6 +268,9 @@ export function rotasFrases(db: BancoDados): Hono {
         rotulosConhecidos: reposTestes.rotulosDeRegra(db, obra.id),
         turnosAnteriores,
         turnosOmitidos: omitidos,
+        dicionario: dicionario
+          ? selecionarPalavras(dicionario.palavrasDaFrase(frase.texto_zh, glossarioTodo), 'revisao', corpo.data.pergunta)
+          : undefined,
       });
       registrarEvento(db, {
         obra_id: obra.id,

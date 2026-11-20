@@ -8,6 +8,7 @@ import { rotasObras } from './rotas/obras.js';
 import { rotasCapitulos } from './rotas/capitulos.js';
 import { rotasFrases } from './rotas/frases.js';
 import { rotasTutor } from './rotas/tutor.js';
+import { rotasDicionario } from './rotas/dicionario.js';
 import { rotasCuradoria } from './rotas/curadoria.js';
 import { rotasComparador } from './rotas/comparador.js';
 import { rotasExportacao } from './rotas/exportacao.js';
@@ -85,6 +86,7 @@ export function criarApp(db: BancoDados, opcoes: OpcoesApp = {}): Hono {
   app.route('/api', rotasCapitulos(db));
   app.route('/api', rotasFrases(db));
   app.route('/api', rotasTutor(db));
+  app.route('/api', rotasDicionario(db));
   app.route('/api', rotasCuradoria(db));
   app.route('/api', rotasComparador(db));
   app.route('/api', rotasExportacao(db));

@@ -36,6 +36,9 @@ export * from './idiomaOrigem.js';
 // Modo tutor de idioma (doc 29): explicação, correção, vocabulário e a conta da
 // repetição espaçada.
 export * from './tutor.js';
+// Dicionários locais de mandarim (doc 30): verbetes, pinyin com tons e a
+// conferência da leitura que a IA deu.
+export * from './dicionario.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 

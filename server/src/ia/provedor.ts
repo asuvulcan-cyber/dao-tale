@@ -5,6 +5,7 @@ import type {
   IdiomaOrigem,
   ModeloInfo,
   ModoThinking,
+  PalavraDicionario,
   ProvedorId,
   RespostaRevisao,
 } from '@dao-tale/shared';
@@ -148,6 +149,9 @@ export interface RequisicaoRevisao {
   }[];
   /** Quantos turnos ficaram de fora pelo teto — vai dito ao modelo. */
   turnosOmitidos?: number;
+  /** Verbetes do CC-CEDICT das palavras da frase questionada (doc 30), já
+   *  selecionados; ausente sem dicionário instalado e no inglês. */
+  dicionario?: PalavraDicionario[];
 }
 
 export interface RespostaRevisaoProvedor extends RespostaRevisao {

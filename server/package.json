@@ -9,6 +9,7 @@
     "restaurar": "tsx src/db/restaurar-cli.ts",
     "senha": "tsx src/auth/senha-cli.ts",
     "ips": "tsx src/auth/ips-cli.ts",
+    "dicionarios": "tsx src/dicionario/importar-cli.ts",
     "eval:literaria:exportar": "tsx scripts/exportar-eval-literaria.ts",
     "eval:literaria:executar": "tsx scripts/executar-eval-literaria.ts",
     "eval:literaria:aferir": "tsx scripts/aferir-eval-literaria.ts",

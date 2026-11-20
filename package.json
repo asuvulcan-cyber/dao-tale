@@ -18,6 +18,7 @@
     "restaurar": "npm -w server run restaurar",
     "senha": "npm -w server run senha",
     "ips": "npm -w server run ips --",
+    "dicionarios": "npm -w server run dicionarios --",
     "atalho": "node scripts/criar-atalho.mjs",
     "test": "npm -w server run test && npm -w web run test",
     "typecheck": "npm -w server run typecheck && npm -w web run typecheck",

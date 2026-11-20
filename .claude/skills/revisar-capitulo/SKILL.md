@@ -60,6 +60,21 @@ A varredura **não acusa** e nunca vai acusar sozinha:
 **Mandarim:**
 - **Sentido invertido** — o caso mais grave que apareceu foi 刀/剑 colapsando em "espada", tornando a frase autocontraditória. Dicionários de aprendiz fazem o mesmo colapso (o DCP dá 刀 = "faca; espada"): para distinções de wuxia, dicionário não decide — contexto e glossário decidem.
 - **Chengyu e expressões** traduzidos ao pé da letra.
+- **Conferir o original sem depender de memória:** o dicionário local (doc 30)
+  devolve as palavras da frase com DCP (pt) e CC-CEDICT (en), e o termo do
+  glossário marcado. Serve para checar sentido e leitura; distinção de gênero
+  continua sendo do glossário e do contexto.
+
+  ```bash
+  curl -s localhost:8317/api/frases/<frase_id>/dicionario | python3 -c "import sys,json
+  for p in json.load(sys.stdin)['palavras']:
+      g = p['glossario']; vs = p['verbetes']
+      print(p['texto'], '→ glossário: ' + g['termo_pt'] if g else '|'.join(sorted({v['leitura'] for v in vs})),
+            '' if g else '; '.join(s for v in vs[:2] for a in v['acepcoes'][:1] for s in a['sentidos'][:2]))"
+  curl -s 'localhost:8317/api/dicionario/busca?termo=刀'   # uma palavra só
+  ```
+
+  `instalado: false` = falta rodar `npm run dicionarios`, não "palavra inexistente".
 
 **Inglês** (o decalque passa porque o português o tolera — o núcleo `NUCLEO_EN_PT` proíbe estes, então cada um é violação real):
 - **Possessivo de posse óbvia** ("seus olhos", "a mão dela" para *his eyes*, *her hand*).

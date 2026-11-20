@@ -8,6 +8,8 @@ import { aplicarCorrecao as aplicarCorrecao_previa, propostaPareceTrecho } from 
 import type { CasoTeste, Frase } from '@dao-tale/shared';
 import { api } from '../api';
 import { Aviso, Botao, Etiqueta, EtiquetaCamada, STATUS_CASO_ROTULO, VEREDITO_ROTULO } from '../App';
+import { usePerfilObra } from '../perfilObra';
+import { DetalheDicionario } from './DicionarioFrase';
 import { agruparEmFios } from './fios';
 
 interface TermoExtraido {
@@ -121,6 +123,7 @@ export function GavetaRevisao({
 }) {
   const clienteQuery = useQueryClient();
   const { obraId } = useParams();
+  const perfil = usePerfilObra();
   const [pergunta, setPergunta] = useState('');
   const [replica, setReplica] = useState('');
   const [discordando, setDiscordando] = useState(false);
@@ -464,6 +467,10 @@ export function GavetaRevisao({
             )}
           </div>
         </details>
+
+        {/* Conferência sem IA (doc 30): o que a palavra do original quer dizer,
+            antes de perguntar à revisão — ou para checar a resposta dela. */}
+        {perfil.id === 'zh' && <DetalheDicionario fraseId={frase.id} titulo="Dicionário da frase (sem IA)" />}
 
         <textarea
           value={pergunta}

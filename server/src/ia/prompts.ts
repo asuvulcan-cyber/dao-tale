@@ -17,6 +17,7 @@ import type {
   RequisicaoTraducaoBloco,
 } from './provedor.js';
 import { PROMPT_CONTRACAPA } from './promptContracapa.js';
+import { blocoDicionario } from './promptDicionario.js';
 
 const TAXONOMIA_GAMA = CATEGORIAS_GLOSSARIO.map(
   (categoria) => `- ${categoria}: ${DESCRICOES_CATEGORIAS_GLOSSARIO[categoria as CategoriaGlossarioPadrao]}`,
@@ -328,6 +329,7 @@ export function usuarioRevisao(req: RequisicaoRevisao): string {
     partes.push(formatarGlossario(req.glossario));
     partes.push('');
   }
+  partes.push(...blocoDicionario(req.dicionario, 'revisao'));
   if (req.vizinhasAntes.length > 0) {
     partes.push('### Frases anteriores (contexto):');
     for (const f of req.vizinhasAntes) partes.push(`${sigla}: ${f.texto_zh}\nPT: ${f.texto_pt || '(sem tradução)'}`);

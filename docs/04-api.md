@@ -98,6 +98,14 @@ explícita, vence o intervalo). Escopo sem capítulo nenhum → `400 escopo-vazi
 | `GET /telemetria/dia` | Consumo do dia por provedor: tentativas (`uso_ia`) vs. chamadas faturadas, tokens, custo e % da cota |
 | `POST /telemetria/recalcular` | Recalcula `custo_estimado` de todo o histórico com a tabela de preços vigente; devolve `{ atualizados, total }` |
 
+### Dicionário local (doc 30)
+
+| Método e rota | Descrição |
+|---|---|
+| `GET /dicionario` | `{ instalado, fontes[] }` |
+| `GET /dicionario/busca?termo=` | Verbetes de uma palavra (simplificada ou tradicional), DCP primeiro |
+| `GET /frases/:id/dicionario` | Palavras da frase com os verbetes e o termo do glossário marcado |
+
 ### Sessão (só no modo hospedado, doc 13)
 
 | Método e rota | Descrição |
