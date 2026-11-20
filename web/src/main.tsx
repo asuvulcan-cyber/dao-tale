@@ -28,6 +28,7 @@ const PaginaPromptPadrao = pagina(() => import('./paginas/PromptMae'), 'PaginaPr
 const BancoTestes = pagina(() => import('./paginas/BancoTestes'), 'BancoTestes');
 const TermosSugeridos = pagina(() => import('./paginas/TermosSugeridos'), 'TermosSugeridos');
 const Configuracoes = pagina(() => import('./paginas/Configuracoes'), 'Configuracoes');
+const Vocabulario = pagina(() => import('./paginas/Vocabulario'), 'Vocabulario');
 const Changelog = pagina(() => import('./paginas/Changelog'), 'Changelog');
 const Docs = pagina(() => import('./paginas/Docs'), 'Docs');
 const ComparadorModelos = pagina(() => import('./paginas/ComparadorModelos'), 'ComparadorModelos');
@@ -83,6 +84,7 @@ const rotasBancada = createBrowserRouter([
       { path: 'mudancas', element: adiar(<Changelog />) },
       { path: 'prompt-padrao', element: adiar(<PaginaPromptPadrao />) },
       { path: 'configuracoes', element: adiar(<Configuracoes />) },
+      { path: 'vocabulario', element: adiar(<Vocabulario />) },
       {
         path: 'obras/:obraId',
         element: adiar(<ObraLayout />),

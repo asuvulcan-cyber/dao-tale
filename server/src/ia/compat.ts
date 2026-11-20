@@ -22,6 +22,8 @@ import {
   type RespostaRevisaoLiteraria,
   type RespostaAdjudicacaoLiteraria,
   type RespostaTraducaoBloco,
+  type RespostaExplicarTutor,
+  type RespostaCorrigirTutor,
 } from './provedor.js';
 import {
   sistemaContracapa,
@@ -42,7 +44,16 @@ import {
   usuarioRevisaoLiteraria,
   usuarioAdjudicacaoLiteraria,
   usuarioTraducao,
+  juntarPartes,
 } from './prompts.js';
+import {
+  sistemaCorrigirTutorPartes,
+  sistemaExplicarTutorPartes,
+  usuarioCorrigirTutor,
+  usuarioExplicarTutor,
+  type RequisicaoCorrigirTutor,
+  type RequisicaoExplicarTutor,
+} from './promptTutor.js';
 import {
   CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
@@ -53,6 +64,8 @@ import {
   CONTRATO_REVISAO_LITERARIA,
   CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_TRADUCAO,
+  CONTRATO_TUTOR_CORRIGIR,
+  CONTRATO_TUTOR_EXPLICAR,
   instrucaoJson,
 } from './contratos.js';
 import { usoDoCompat } from './uso.js';
@@ -374,6 +387,30 @@ export function criarProvedorCompat(opts: OpcoesCompat): ProvedorIA {
         return { ...dados, bruta: JSON.stringify(bruto), uso };
       } catch (e) {
         if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da adjudicação literária.', 'transitorio');
+        throw e;
+      }
+    },
+
+    async explicarFraseTutor(chave, req: RequisicaoExplicarTutor): Promise<RespostaExplicarTutor> {
+      const sistema = `${juntarPartes(sistemaExplicarTutorPartes(req))}\n\n${instrucaoJson(CONTRATO_TUTOR_EXPLICAR)}`;
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioExplicarTutor(req));
+      try {
+        const dados = CONTRATO_TUTOR_EXPLICAR.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
+      } catch (e) {
+        if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da explicação do tutor.', 'transitorio');
+        throw e;
+      }
+    },
+
+    async corrigirTentativaTutor(chave, req: RequisicaoCorrigirTutor): Promise<RespostaCorrigirTutor> {
+      const sistema = `${juntarPartes(sistemaCorrigirTutorPartes(req))}\n\n${instrucaoJson(CONTRATO_TUTOR_CORRIGIR)}`;
+      const { bruto, uso } = await completar(chave, req, sistema, usuarioCorrigirTutor(req));
+      try {
+        const dados = CONTRATO_TUTOR_CORRIGIR.zod.parse(bruto);
+        return { ...dados, bruta: JSON.stringify(bruto), uso };
+      } catch (e) {
+        if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da correção do tutor.', 'transitorio');
         throw e;
       }
     },

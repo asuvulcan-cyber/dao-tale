@@ -8,7 +8,7 @@
 // módulo, apertar uma faixa já traz junto a correção dos valores existentes.
 
 import { z } from 'zod';
-import { PAPEIS_TEMPERATURA, PROVEDORES_IDS, TEMPERATURA_MAX } from '@dao-tale/shared';
+import { NIVEIS_IDIOMA, PAPEIS_TEMPERATURA, PROVEDORES_IDS, TEMPERATURA_MAX } from '@dao-tale/shared';
 import type { BancoDados } from './index.js';
 
 export const configSchema = z.object({
@@ -48,6 +48,10 @@ export const configSchema = z.object({
   provedor_qa: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
   modelo_qa: z.string().max(120).optional(),
   qa_automatica: z.boolean().optional(),
+  // Tutor de idioma (doc 29): par próprio e nível de quem aprende, por idioma.
+  provedor_tutor: z.enum(PROVEDORES_IDS).or(z.literal('')).optional(),
+  modelo_tutor: z.string().max(120).optional(),
+  nivel_idioma: z.object({ zh: z.enum(NIVEIS_IDIOMA), en: z.enum(NIVEIS_IDIOMA) }).partial().optional(),
   // Telemetria (doc 11 §3): preços em USD por 1M tokens, chave "provedor:modelo"
   // (curinga "provedor:*" aceito). Teto alto o bastante para qualquer modelo de
   // ponta e baixo o bastante para pegar dedo trocado (preço por 1k em vez de 1M).

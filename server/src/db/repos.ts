@@ -1532,6 +1532,7 @@ export const reposConsistencia = {
 // ── Repositórios extraídos ─────────────────────────────────────────────────
 
 export { dataLocalHoje, reposConfig, reposLotes, reposUso };
+export { reposTutor, reposVocabulario, type NovaPalavra } from './repos/tutor.js';
 
 export const reposQa = criarReposQa({
   definirQaEm: (db, capituloId) => reposCapitulos.definirQaEm(db, capituloId),

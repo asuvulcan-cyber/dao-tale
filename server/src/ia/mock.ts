@@ -10,8 +10,11 @@ import {
   type RequisicaoTraducaoBloco,
   type RespostaRevisaoLiteraria,
   type RespostaAdjudicacaoLiteraria,
+  type RespostaExplicarTutor,
+  type RespostaCorrigirTutor,
   type UsoChamada,
 } from './provedor.js';
+import type { RequisicaoCorrigirTutor, RequisicaoExplicarTutor } from './promptTutor.js';
 import { PROMPT_CONTRACAPA } from './promptContracapa.js';
 import { perfilServidorDe } from '../idiomas/index.js';
 import { estimarTokens } from './uso.js';
@@ -301,5 +304,46 @@ export const provedorMock: ProvedorIA = {
       riscos: ['nenhum' as const],
     }));
     return { julgamentos, bruta: JSON.stringify({ julgamentos }), uso: usoSimulado('adjudicacao-literaria', req, { julgamentos }) };
+  },
+
+  // Tutor simulado: segmenta por caractere (mandarim) ou por espaço (inglês),
+  // para a tela poder ser exercitada inteira sem gastar nada.
+  async explicarFraseTutor(_chave, req: RequisicaoExplicarTutor): Promise<RespostaExplicarTutor> {
+    await espera(latenciaMs());
+    const pedacos = req.idioma_origem === 'en' ? req.frase.split(/\s+/).filter(Boolean) : Array.from(req.frase.replace(/\s+/g, ''));
+    const segmentos = pedacos.map((texto, i) => {
+      const pontuacao = /^\p{P}+$/u.test(texto);
+      return {
+        texto,
+        leitura: req.idioma_origem === 'zh' && !pontuacao ? `pīn${i + 1}` : null,
+        significado: pontuacao ? '' : `[simulado] palavra ${i + 1}`,
+        classe: pontuacao ? 'pontuação' : 'palavra',
+        nota: null,
+      };
+    });
+    const explicacao = {
+      segmentos,
+      estrutura: '[simulado] Sujeito, verbo e complemento, nesta ordem.',
+      literal: `[simulado literal] ${req.frase}`,
+      traducao: `[tutor simulado] ${req.frase}`,
+      armadilhas: [],
+    };
+    return { ...explicacao, bruta: JSON.stringify(explicacao), uso: usoSimulado('tutor-explicar', req, explicacao) };
+  },
+
+  async corrigirTentativaTutor(_chave, req: RequisicaoCorrigirTutor): Promise<RespostaCorrigirTutor> {
+    await espera(latenciaMs());
+    const tentativa = req.tentativa.trim();
+    const certo = !!req.explicacao && tentativa === req.explicacao.traducao.trim();
+    const correcao = {
+      veredito: (certo ? 'certo' : 'quase') as 'certo' | 'quase',
+      acertos: '[simulado] Você manteve o sentido geral da frase.',
+      problemas: certo
+        ? []
+        : [{ trecho: tentativa.split(/\s+/)[0] ?? '', tipo: 'naturalidade' as const, explicacao: '[simulado] Dá para soar mais natural.', sugestao: tentativa }],
+      versao_corrigida: tentativa,
+      palavras_para_estudar: [{ texto: Array.from(req.frase)[0] ?? req.frase, leitura: null, significado: '[simulado]' }],
+    };
+    return { ...correcao, bruta: JSON.stringify(correcao), uso: usoSimulado('tutor-corrigir', req, correcao) };
   },
 };

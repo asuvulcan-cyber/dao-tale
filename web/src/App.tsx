@@ -10,6 +10,7 @@ import {
   type CategoriaGlossario,
   type EstadoSaude,
   type EstadoSessao,
+  type ResumoVocabulario,
   type Veredito,
 } from '@dao-tale/shared';
 import { api } from './api';
@@ -178,6 +179,15 @@ export function Casca() {
               Obras
             </NavLink>
             <NavLink
+              to="/vocabulario"
+              className={({ isActive }) =>
+                isActive ? 'font-semibold text-tinta' : 'text-tinta-2 hover:text-tinta'
+              }
+            >
+              Vocabulário
+              <SeloRevisoesHoje />
+            </NavLink>
+            <NavLink
               to="/prompt-padrao"
               className={({ isActive }) =>
                 isActive ? 'font-semibold text-tinta' : 'text-tinta-2 hover:text-tinta'
@@ -330,6 +340,26 @@ export function CabecalhoPagina({
       </div>
       {children && <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">{children}</div>}
     </div>
+  );
+}
+
+/** Quantas palavras vencem hoje (todos os idiomas): o lembrete da revisão
+ *  diária fica na navegação, onde se vê sem abrir a página. */
+function SeloRevisoesHoje() {
+  const { data } = useQuery({
+    queryKey: ['vocabulario-resumo'],
+    queryFn: () => api<ResumoVocabulario[]>('GET', '/vocabulario/resumo'),
+    refetchInterval: 5 * 60_000,
+  });
+  const total = data?.reduce((n, r) => n + r.para_hoje, 0) ?? 0;
+  if (total === 0) return null;
+  return (
+    <span
+      className="ml-1 rounded-full bg-jade-tint px-1.5 text-[11px] tabular-nums text-jade-forte"
+      title={`${total} palavra(s) para revisar hoje`}
+    >
+      {total}
+    </span>
   );
 }
 

@@ -22,6 +22,8 @@ import {
   type RespostaRevisaoLiteraria,
   type RespostaAdjudicacaoLiteraria,
   type RespostaTraducaoBloco,
+  type RespostaExplicarTutor,
+  type RespostaCorrigirTutor,
 } from './provedor.js';
 import {
   sistemaContracapa,
@@ -42,7 +44,16 @@ import {
   usuarioRevisaoLiteraria,
   usuarioAdjudicacaoLiteraria,
   usuarioTraducao,
+  juntarPartes,
 } from './prompts.js';
+import {
+  sistemaCorrigirTutorPartes,
+  sistemaExplicarTutorPartes,
+  usuarioCorrigirTutor,
+  usuarioExplicarTutor,
+  type RequisicaoCorrigirTutor,
+  type RequisicaoExplicarTutor,
+} from './promptTutor.js';
 import {
   CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
@@ -53,6 +64,8 @@ import {
   CONTRATO_REVISAO_LITERARIA,
   CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_TRADUCAO,
+  CONTRATO_TUTOR_CORRIGIR,
+  CONTRATO_TUTOR_EXPLICAR,
   paraGemini,
 } from './contratos.js';
 import { usoDoGemini } from './uso.js';
@@ -69,6 +82,8 @@ const SCHEMA_QA_GEMINI = paraGemini(CONTRATO_QA.schema);
 const SCHEMA_PASSE_ESTILO_GEMINI = paraGemini(CONTRATO_PASSE_ESTILO.schema);
 const SCHEMA_REVISAO_LITERARIA_GEMINI = paraGemini(CONTRATO_REVISAO_LITERARIA.schema);
 const SCHEMA_ADJUDICACAO_LITERARIA_GEMINI = paraGemini(CONTRATO_ADJUDICACAO_LITERARIA.schema);
+const SCHEMA_TUTOR_EXPLICAR_GEMINI = paraGemini(CONTRATO_TUTOR_EXPLICAR.schema);
+const SCHEMA_TUTOR_CORRIGIR_GEMINI = paraGemini(CONTRATO_TUTOR_CORRIGIR.schema);
 
 function classificarErro(e: unknown): ErroProvedor {
   if (e instanceof ApiError) {
@@ -375,6 +390,42 @@ export const provedorGemini: ProvedorIA = {
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da adjudicação literária.', 'transitorio');
+      throw classificarErro(e);
+    }
+  },
+
+  async explicarFraseTutor(chave, req: RequisicaoExplicarTutor): Promise<RespostaExplicarTutor> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await gerar(cliente, req.modelo, usuarioExplicarTutor(req), {
+        systemInstruction: juntarPartes(sistemaExplicarTutorPartes(req)), responseMimeType: 'application/json',
+        responseSchema: SCHEMA_TUTOR_EXPLICAR_GEMINI, ...amostragem(req),
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new ErroProvedor('A explicação do tutor foi truncada.', 'truncado');
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_TUTOR_EXPLICAR.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata, resposta.modelVersion) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da explicação do tutor.', 'transitorio');
+      throw classificarErro(e);
+    }
+  },
+
+  async corrigirTentativaTutor(chave, req: RequisicaoCorrigirTutor): Promise<RespostaCorrigirTutor> {
+    const cliente = new GoogleGenAI({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await gerar(cliente, req.modelo, usuarioCorrigirTutor(req), {
+        systemInstruction: juntarPartes(sistemaCorrigirTutorPartes(req)), responseMimeType: 'application/json',
+        responseSchema: SCHEMA_TUTOR_CORRIGIR_GEMINI, ...amostragem(req),
+      });
+      if (resposta.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new ErroProvedor('A correção do tutor foi truncada.', 'truncado');
+      const bruto = parsearJson(resposta.text);
+      const dados = CONTRATO_TUTOR_CORRIGIR.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoGemini(resposta.usageMetadata, resposta.modelVersion) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da correção do tutor.', 'transitorio');
       throw classificarErro(e);
     }
   },

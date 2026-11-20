@@ -1,4 +1,14 @@
-import type { EntradaGlossario, IdiomaOrigem, ModeloInfo, ModoThinking, ProvedorId, RespostaRevisao } from '@dao-tale/shared';
+import type {
+  CorrecaoTutor,
+  EntradaGlossario,
+  ExplicacaoTutor,
+  IdiomaOrigem,
+  ModeloInfo,
+  ModoThinking,
+  ProvedorId,
+  RespostaRevisao,
+} from '@dao-tale/shared';
+import type { RequisicaoCorrigirTutor, RequisicaoExplicarTutor } from './promptTutor.js';
 
 // ── Consumo real de uma chamada (telemetria, doc 11 §1) ────────────────────
 // Toda resposta de provedor carrega o `usage` que a API devolveu, normalizado:
@@ -391,6 +401,20 @@ export class ErroProvedor extends Error {
   }
 }
 
+// ── Tutor de idioma (doc 29) ───────────────────────────────────────────────
+// As requisições moram em promptTutor.ts (junto da doutrina que as lê); aqui
+// ficam as respostas, no formato de todo provedor: dados + bruta + uso.
+
+export interface RespostaExplicarTutor extends ExplicacaoTutor {
+  bruta: string;
+  uso: UsoChamada;
+}
+
+export interface RespostaCorrigirTutor extends CorrecaoTutor {
+  bruta: string;
+  uso: UsoChamada;
+}
+
 // ── Interface comum ────────────────────────────────────────────────────────
 
 export interface ProvedorIA {
@@ -409,4 +433,6 @@ export interface ProvedorIA {
   passeEstilo(chave: string | null, req: RequisicaoPasseEstilo): Promise<RespostaPasseEstilo>;
   revisarLiterariamente(chave: string | null, req: RequisicaoRevisaoLiteraria): Promise<RespostaRevisaoLiteraria>;
   adjudicarRevisaoLiteraria(chave: string | null, req: RequisicaoAdjudicacaoLiteraria): Promise<RespostaAdjudicacaoLiteraria>;
+  explicarFraseTutor(chave: string | null, req: RequisicaoExplicarTutor): Promise<RespostaExplicarTutor>;
+  corrigirTentativaTutor(chave: string | null, req: RequisicaoCorrigirTutor): Promise<RespostaCorrigirTutor>;
 }

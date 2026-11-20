@@ -21,6 +21,7 @@ const PAPEL_ROTULO: Record<string, string> = {
   titulo: 'Título e sinopse',
   comparador: 'Comparador',
   estilo: 'Passe de estilo',
+  tutor: 'Tutor de idioma',
 };
 
 const COR_ESTADO: Record<EstadoMetrica, CorEtiqueta> = {

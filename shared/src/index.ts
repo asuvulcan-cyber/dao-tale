@@ -2,6 +2,7 @@
 
 import type { PreferenciasEstilo } from './preferenciasEstilo.js';
 import type { IdiomaOrigem } from './idiomaOrigem.js';
+import { NIVEL_IDIOMA_PADRAO, type NivelIdioma } from './tutor.js';
 import { TEMAS, type Camada, type Tema } from './temasDoPrompt.js';
 import { TEMPERATURAS_PADRAO, type TemperaturasPapel } from './temperatura.js';
 
@@ -32,6 +33,9 @@ export * from './flexaoTermo.js';
 // Perfil de idioma de origem: tudo que o mandarim assumia implicitamente, dito
 // uma vez só — e o mesmo contrato preenchido pelo inglês.
 export * from './idiomaOrigem.js';
+// Modo tutor de idioma (doc 29): explicação, correção, vocabulário e a conta da
+// repetição espaçada.
+export * from './tutor.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
@@ -601,6 +605,7 @@ export const PAPEIS_IA = [
   'titulo',
   'comparador',
   'estilo',
+  'tutor',
 ] as const;
 export type PapelIa = (typeof PAPEIS_IA)[number];
 
@@ -775,6 +780,13 @@ export interface Configuracoes {
   /** QA automática ao fim de cada capítulo do lote. Padrão desligado: como a
    * revisão humana é integral, o QA é compra separada (feedback do usuário). */
   qa_automatica: boolean;
+  // ── Tutor de idioma (doc 29) ──
+  /** Par do tutor; vazio = cadeia normal (obra → padrão global). Chamadas curtas
+   * e frequentes, por frase. */
+  provedor_tutor: ProvedorId | '';
+  modelo_tutor: string;
+  /** Nível de quem aprende, por idioma de origem — muda o tom das explicações. */
+  nivel_idioma: Record<IdiomaOrigem, NivelIdioma>;
   // ── Telemetria de custo (doc 11 §3) ──
   /** Preços por modelo (USD/1M tokens) — sem isto não existe "custo em dinheiro". */
   precos_modelos: PrecosModelos;
@@ -811,6 +823,9 @@ export const CONFIG_PADRAO: Configuracoes = {
   provedor_qa: '',
   modelo_qa: '',
   qa_automatica: false,
+  provedor_tutor: '',
+  modelo_tutor: '',
+  nivel_idioma: { ...NIVEL_IDIOMA_PADRAO },
   // Só a família Claude vem de fábrica — são os preços que dá para afirmar sem
   // inventar (USD/1M, jul/2026). Todo outro provedor começa SEM preço: o painel
   // conta "N chamadas sem preço" em vez de exibir US$ 0,00 como se fosse grátis.

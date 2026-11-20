@@ -5,8 +5,9 @@ import type {
   PrecosModelos,
   ProvedorId,
   TemperaturasPapel,
+  NivelIdioma,
 } from '@dao-tale/shared';
-import { CONFIG_PADRAO, normalizarTemperaturas } from '@dao-tale/shared';
+import { CONFIG_PADRAO, NIVEIS_IDIOMA, normalizarTemperaturas } from '@dao-tale/shared';
 import type { BancoDados } from '../index.js';
 
 export const reposConfig = {
@@ -42,6 +43,9 @@ export const reposConfig = {
       provedor_qa: (mapa.provedor_qa as Configuracoes['provedor_qa']) ?? CONFIG_PADRAO.provedor_qa,
       modelo_qa: mapa.modelo_qa ?? CONFIG_PADRAO.modelo_qa,
       qa_automatica: mapa.qa_automatica ? mapa.qa_automatica === 'true' : CONFIG_PADRAO.qa_automatica,
+      provedor_tutor: (mapa.provedor_tutor as Configuracoes['provedor_tutor']) ?? CONFIG_PADRAO.provedor_tutor,
+      modelo_tutor: mapa.modelo_tutor ?? CONFIG_PADRAO.modelo_tutor,
+      nivel_idioma: lerNivelIdioma(mapa),
       precos_modelos: lerPrecos(mapa),
       taxa_usd_brl: numeroConfig(mapa.taxa_usd_brl, CONFIG_PADRAO.taxa_usd_brl),
     };
@@ -60,6 +64,22 @@ export const reposConfig = {
     return this.obterTodas(db);
   },
 };
+
+/** Nível por idioma: chave ausente ou valor estranho volta ao padrão daquele idioma. */
+function lerNivelIdioma(mapa: Record<string, string>): Configuracoes['nivel_idioma'] {
+  const niveis = { ...CONFIG_PADRAO.nivel_idioma };
+  if (!mapa.nivel_idioma) return niveis;
+  try {
+    const gravado = JSON.parse(mapa.nivel_idioma) as Record<string, unknown>;
+    for (const idioma of Object.keys(niveis) as (keyof typeof niveis)[]) {
+      const valor = gravado[idioma];
+      if (NIVEIS_IDIOMA.includes(valor as NivelIdioma)) niveis[idioma] = valor as NivelIdioma;
+    }
+  } catch {
+    // JSON corrompido: fica o padrão.
+  }
+  return niveis;
+}
 
 /** Config numérica com guarda de NaN (B9): valor corrompido cai no padrão. */
 function numeroConfig(valor: string | undefined, padrao: number): number {

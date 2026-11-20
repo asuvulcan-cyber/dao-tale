@@ -22,7 +22,17 @@ import {
   type RespostaRevisaoLiteraria,
   type RespostaAdjudicacaoLiteraria,
   type RespostaTraducaoBloco,
+  type RespostaExplicarTutor,
+  type RespostaCorrigirTutor,
 } from './provedor.js';
+import {
+  sistemaCorrigirTutorPartes,
+  sistemaExplicarTutorPartes,
+  usuarioCorrigirTutor,
+  usuarioExplicarTutor,
+  type RequisicaoCorrigirTutor,
+  type RequisicaoExplicarTutor,
+} from './promptTutor.js';
 import {
   sistemaContracapaPartes,
   sistemaExtrairTermosPartes,
@@ -54,6 +64,8 @@ import {
   CONTRATO_REVISAO_LITERARIA,
   CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_TRADUCAO,
+  CONTRATO_TUTOR_CORRIGIR,
+  CONTRATO_TUTOR_EXPLICAR,
   type Contrato,
 } from './contratos.js';
 import { usoDoClaude } from './uso.js';
@@ -362,6 +374,46 @@ export const provedorClaude: ProvedorIA = {
     } catch (e) {
       if (e instanceof ErroProvedor) throw e;
       if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da adjudicação literária.', 'transitorio');
+      throw classificarErro(e);
+    }
+  },
+
+  async explicarFraseTutor(chave, req: RequisicaoExplicarTutor): Promise<RespostaExplicarTutor> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo, max_tokens: 8192, ...amostragem(req),
+        system: sistemaEmBlocos(sistemaExplicarTutorPartes(req)),
+        messages: [{ role: 'user', content: usuarioExplicarTutor(req) }],
+        ...ferramenta(CONTRATO_TUTOR_EXPLICAR),
+      });
+      if (resposta.stop_reason === 'max_tokens') throw new ErroProvedor('A explicação do tutor foi truncada.', 'truncado');
+      const bruto = extrairToolUse(resposta, CONTRATO_TUTOR_EXPLICAR.ferramenta);
+      const dados = CONTRATO_TUTOR_EXPLICAR.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da explicação do tutor.', 'transitorio');
+      throw classificarErro(e);
+    }
+  },
+
+  async corrigirTentativaTutor(chave, req: RequisicaoCorrigirTutor): Promise<RespostaCorrigirTutor> {
+    const cliente = new Anthropic({ apiKey: exigirChave(chave) });
+    try {
+      const resposta = await cliente.messages.create({
+        model: req.modelo, max_tokens: 8192, ...amostragem(req),
+        system: sistemaEmBlocos(sistemaCorrigirTutorPartes(req)),
+        messages: [{ role: 'user', content: usuarioCorrigirTutor(req) }],
+        ...ferramenta(CONTRATO_TUTOR_CORRIGIR),
+      });
+      if (resposta.stop_reason === 'max_tokens') throw new ErroProvedor('A correção do tutor foi truncada.', 'truncado');
+      const bruto = extrairToolUse(resposta, CONTRATO_TUTOR_CORRIGIR.ferramenta);
+      const dados = CONTRATO_TUTOR_CORRIGIR.zod.parse(bruto);
+      return { ...dados, bruta: JSON.stringify(bruto), uso: usoDoClaude(resposta.usage) };
+    } catch (e) {
+      if (e instanceof ErroProvedor) throw e;
+      if (e instanceof z.ZodError) throw new ErroProvedor('Resposta fora do contrato da correção do tutor.', 'transitorio');
       throw classificarErro(e);
     }
   },

@@ -151,3 +151,47 @@ export const respostaAdjudicacaoLiterariaSchema = z.object({
     riscos: z.array(z.enum(['omissao', 'invencao', 'gama', 'registro', 'truncamento', 'dialogo', 'ritmo', 'nenhum'])).default([]),
   })).default([]),
 });
+
+// ── Tutor de idioma (doc 29) ───────────────────────────────────────────────
+// Frouxo de propósito onde o modelo varia sem dano (classe livre, nota/leitura
+// nulas ou ausentes); firme onde a tela depende (texto do segmento, tradução).
+
+export const respostaExplicacaoTutorSchema = z.object({
+  segmentos: z
+    .array(
+      z.object({
+        texto: z.string().min(1),
+        leitura: z.string().nullable().default(null),
+        significado: z.string().default(''),
+        classe: z.string().default(''),
+        nota: z.string().nullable().default(null),
+      }),
+    )
+    .min(1),
+  estrutura: z.string().min(1),
+  literal: z.string().default(''),
+  traducao: z.string().min(1),
+  armadilhas: z.array(z.string()).default([]),
+});
+
+export const respostaCorrecaoTutorSchema = z.object({
+  veredito: z.enum(['certo', 'quase', 'errado']),
+  acertos: z.string().default(''),
+  problemas: z
+    .array(
+      z.object({
+        trecho: z.string().default(''),
+        // Tipo fora da lista vira 'sentido' em vez de derrubar a correção inteira.
+        tipo: z
+          .enum(['sentido', 'omissao', 'acrescimo', 'gramatica', 'naturalidade', 'glossario', 'estilo'])
+          .catch('sentido'),
+        explicacao: z.string().min(1),
+        sugestao: z.string().default(''),
+      }),
+    )
+    .default([]),
+  versao_corrigida: z.string().min(1),
+  palavras_para_estudar: z
+    .array(z.object({ texto: z.string().min(1), leitura: z.string().nullable().default(null), significado: z.string() }))
+    .default([]),
+});

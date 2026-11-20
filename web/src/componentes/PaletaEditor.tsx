@@ -4,6 +4,9 @@ export const MODOS_EDITOR = [
   { id: 'segmentado', rotulo: 'Segmentado' },
   { id: 'bilingue', rotulo: 'Bilíngue' },
   { id: 'leitura', rotulo: 'Leitura' },
+  // Tutor de idioma (doc 29): layout do segmentado, tradução oculta, e clicar
+  // na frase abre a gaveta do tutor no lugar da de revisão.
+  { id: 'tutor', rotulo: 'Tutor' },
 ] as const;
 export type ModoEditor = (typeof MODOS_EDITOR)[number]['id'];
 
@@ -71,6 +74,7 @@ const ICONE_MODO: Record<ModoEditor, ReactNode> = {
       <circle cx="8" cy="8" r="2" />
     </svg>
   ),
+  tutor: <span className="selo-cjk text-[13px] leading-none">学</span>,
 };
 
 function IconeLargura({ nivel }: { nivel: number }) {
@@ -115,7 +119,7 @@ export function PaletaEditor({
   const diminuir = () => aoMudarTamanho((t) => Math.max(0.8, Number((t - 0.08).toFixed(2))));
   const aumentar = () => aoMudarTamanho((t) => Math.min(1.6, Number((t + 0.08).toFixed(2))));
   const pctTexto = `${Math.round((tamanho / TAMANHO_PADRAO) * 100)}%`;
-  const mostrarTexto = modo !== 'segmentado';
+  const mostrarTexto = modo !== 'segmentado' && modo !== 'tutor';
   const ordemLarguras = Object.keys(LARGURAS) as LarguraLeitura[];
   const nivelLargura = ordemLarguras.indexOf(largura);
   const proximaLargura = ordemLarguras[(nivelLargura + 1) % ordemLarguras.length];

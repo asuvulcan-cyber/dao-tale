@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FATOR_CACHE_CRIACAO,
   FATOR_CACHE_LEITURA,
+  IDIOMAS_ORIGEM,
+  NIVEIS_IDIOMA,
+  PERFIS_IDIOMA,
+  ROTULO_NIVEL,
   TEMPERATURA_MAX,
+  type NivelIdioma,
   type Configuracoes as Config,
   type EstadoConfiguracoes,
   type EstadoSaude,
@@ -903,6 +908,68 @@ function FormularioPadroes({
             QA é uma despesa extra opt-in. Só roda quando há um par de QA diferente do tradutor do capítulo.
           </span>
         </label>
+      </div>
+
+      <div className="mt-4">
+        <h3 className="text-sm font-medium">Tutor de idioma</h3>
+        <p className="mb-2 mt-0.5 text-sm text-tinta-2">
+          O modo Tutor do editor explica cada frase e corrige a sua tradução. O nível muda o tom: do zero, toda palavra
+          vem explicada (no mandarim, com pinyin); nos níveis acima, a explicação se concentra no que é difícil. O par
+          próprio vale para as chamadas do tutor, que são curtas e por frase. Vazio = cadeia normal da obra.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {IDIOMAS_ORIGEM.map((idioma) => (
+            <label key={idioma} className="block text-sm">
+              Seu nível em {PERFIS_IDIOMA[idioma].rotulo.toLowerCase()}
+              <select
+                value={valores.nivel_idioma[idioma]}
+                onChange={(e) =>
+                  setValores({
+                    ...valores,
+                    nivel_idioma: { ...valores.nivel_idioma, [idioma]: e.target.value as NivelIdioma },
+                  })
+                }
+                className="entrada mt-1 w-full"
+              >
+                {NIVEIS_IDIOMA.map((n) => (
+                  <option key={n} value={n}>
+                    {ROTULO_NIVEL[n]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <label className="block text-sm">
+            Provedor do tutor
+            <select
+              value={valores.provedor_tutor}
+              onChange={(e) =>
+                setValores({ ...valores, provedor_tutor: e.target.value as ProvedorId | '', modelo_tutor: '' })
+              }
+              className="entrada mt-1 w-full"
+            >
+              <option value="">— usar a cadeia normal —</option>
+              {provedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            Modelo do tutor
+            {valores.provedor_tutor ? (
+              <SeletorModelo
+                provedor={valores.provedor_tutor}
+                valor={valores.modelo_tutor}
+                aoMudar={(novo) => setValores({ ...valores, modelo_tutor: novo })}
+                modeloPadraoProvedor={provedores.find((p) => p.id === valores.provedor_tutor)?.modelo_padrao}
+              />
+            ) : (
+              <input disabled value="" placeholder="segue a cadeia normal" className="entrada mt-1 w-full opacity-60" />
+            )}
+          </label>
+        </div>
       </div>
 
       <div className="mt-4">

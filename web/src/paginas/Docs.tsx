@@ -9,6 +9,7 @@ const SECOES = [
   { id: 'assinatura', titulo: 'Motor pela assinatura' },
   { id: 'chaves', titulo: 'Chaves de API' },
   { id: 'traduzindo', titulo: 'Traduzindo um capítulo' },
+  { id: 'tutor', titulo: 'Modo tutor e vocabulário' },
   { id: 'glossario', titulo: 'Glossário e termos sugeridos' },
   { id: 'prompt-mae', titulo: 'Prompt mãe' },
   { id: 'revisao', titulo: 'Revisão com IA' },
@@ -296,6 +297,56 @@ export function Docs() {
           <p>
             No editor, cada frase mostra o chinês e o português lado a lado. Editar uma frase marca-a como editada
             manualmente e guarda a versão original da IA no histórico de revisões da frase.
+          </p>
+        </Secao>
+
+        <Secao id="tutor" titulo="Modo tutor e vocabulário">
+          <p>
+            O modo tutor serve para você traduzir o capítulo <strong>com as próprias mãos</strong>, aprendendo o idioma
+            no caminho, com a IA ensinando em vez de traduzir. Ligue pelo ícone <span className="selo-cjk">学</span> da
+            paleta do editor (ao lado de Segmentado, Bilíngue e Leitura). A tradução que já existe fica oculta; clique
+            em "mostrar" numa frase se quiser ver.
+          </p>
+          <Passos
+            itens={[
+              <>
+                <strong>Clique no original</strong> de uma frase. Abre a gaveta do tutor.
+              </>,
+              <>
+                <strong>Tente traduzir</strong> no campo "Sua tradução", mesmo que incompleto.
+              </>,
+              <>
+                <strong>Travou? Peça dica</strong>, uma de cada vez: 1) as palavras, com pinyin e significado (no
+                mandarim o pinyin aparece em cima de cada caractere); 2) a estrutura da frase e a versão palavra por
+                palavra; 3) a tradução sugerida.
+              </>,
+              <>
+                <strong>Corrigir minha tradução</strong> (ou Ctrl+Enter): a IA diz se o sentido está certo, o que você
+                acertou, cada problema com o porquê, e devolve a sua versão consertada com o mínimo de mudanças.
+              </>,
+              <>
+                <strong>Salve</strong> a sua versão ou a corrigida. A frase fica marcada como "sua" e o botão
+                Traduzir do capítulo não passa por cima dela.
+              </>,
+            ]}
+          />
+          <Sub>Vocabulário</Sub>
+          <p>
+            O "+" ao lado de uma palavra guarda ela no{' '}
+            <Link className="text-jade-forte underline" to="/vocabulario">
+              Vocabulário
+            </Link>
+            , com a frase de onde veio. Lá, "Revisar agora" mostra as palavras do dia: tente lembrar, vire o cartão
+            (espaço) e responda Errei, Difícil, Bom ou Fácil (teclas 1 a 4). Cada botão mostra quando a palavra volta;
+            "Errei" faz ela voltar na mesma sessão. O número ao lado de "Vocabulário" no topo é quantas vencem hoje.
+          </p>
+          <p className="text-tinta-2">
+            O nível em cada idioma (do zero ao avançado) e o modelo do tutor ficam em{' '}
+            <Link className="text-jade-forte underline" to="/configuracoes">
+              Configurações → Tutor de idioma
+            </Link>
+            . Cada frase custa no máximo duas chamadas (explicar e corrigir); a explicação fica guardada, então reabrir
+            a frase não gasta de novo. "Ouvir" usa a voz do sistema e só aparece se houver voz instalada para o idioma.
           </p>
         </Secao>
 

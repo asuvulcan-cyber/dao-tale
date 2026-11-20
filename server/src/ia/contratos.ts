@@ -11,6 +11,8 @@ import {
   respostaRevisaoLiterariaSchema,
   respostaAdjudicacaoLiterariaSchema,
   respostaTraducaoSchema,
+  respostaExplicacaoTutorSchema,
+  respostaCorrecaoTutorSchema,
 } from './respostas.js';
 
 // Fonte única dos contratos de saída estruturada (M7 da auditoria). Cada
@@ -384,4 +386,90 @@ export const CONTRATO_REFINAR_PROMPT: Contrato<typeof respostaRefinarPromptSchem
     required: ['propostas'],
   },
   notasInstrucao: ['Se nada sustentar regra nova, use "propostas": [].'],
+};
+
+// ── Tutor de idioma (doc 29) ───────────────────────────────────────────────
+
+export const CONTRATO_TUTOR_EXPLICAR: Contrato<typeof respostaExplicacaoTutorSchema> = {
+  ferramenta: 'entregar_explicacao',
+  descricao: 'Entrega a frase explicada em três dicas: palavras, estrutura e tradução sugerida.',
+  zod: respostaExplicacaoTutorSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      segmentos: {
+        type: 'array',
+        description: 'a frase INTEIRA, em ordem, palavra por palavra (ou expressão que só faz sentido junta); pontuação inclusa',
+        items: {
+          type: 'object',
+          properties: {
+            texto: { type: 'string', description: 'a palavra/expressão copiada do original' },
+            leitura: { type: ['string', 'null'], description: 'pinyin com marcas de tom (mandarim); null no inglês e na pontuação' },
+            significado: { type: 'string', description: 'significado em português neste contexto; vazio na pontuação' },
+            classe: { type: 'string', description: 'classe curta: substantivo, verbo, partícula, classificador, nome próprio, pontuação…' },
+            nota: { type: ['string', 'null'], description: 'o que a palavra FAZ na frase, quando isso ajuda (partículas, classificadores, tempos); senão null' },
+          },
+          required: ['texto', 'leitura', 'significado', 'classe', 'nota'],
+        },
+      },
+      estrutura: { type: 'string', description: 'como a frase se monta, em português simples, 2 a 5 frases curtas' },
+      literal: { type: 'string', description: 'versão palavra por palavra, na ordem do original' },
+      traducao: { type: 'string', description: 'tradução natural em português, seguindo as regras e o glossário da obra' },
+      armadilhas: { type: 'array', items: { type: 'string' }, description: 'até 3 pontos onde é fácil errar nesta frase' },
+    },
+    required: ['segmentos', 'estrutura', 'literal', 'traducao', 'armadilhas'],
+  },
+  notasInstrucao: [
+    'Os campos "texto" dos segmentos, concatenados em ordem, devem reproduzir a frase original inteira.',
+    'Se não houver armadilha que valha apontar, use "armadilhas": [].',
+  ],
+};
+
+export const CONTRATO_TUTOR_CORRIGIR: Contrato<typeof respostaCorrecaoTutorSchema> = {
+  ferramenta: 'entregar_correcao',
+  descricao: 'Entrega a correção didática da tradução feita por quem está aprendendo.',
+  zod: respostaCorrecaoTutorSchema,
+  schema: {
+    type: 'object',
+    properties: {
+      veredito: {
+        type: 'string',
+        enum: ['certo', 'quase', 'errado'],
+        description: 'certo = sentido correto (mesmo que dê para polir); quase = sentido no geral, com erro pontual; errado = sentido trocado ou faltando',
+      },
+      acertos: { type: 'string', description: 'o que a tentativa acertou, concreto (1–2 frases)' },
+      problemas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            trecho: { type: 'string', description: 'pedaço da tentativa com o problema, copiado; vazio se o problema é algo que faltou' },
+            tipo: {
+              type: 'string',
+              enum: ['sentido', 'omissao', 'acrescimo', 'gramatica', 'naturalidade', 'glossario', 'estilo'],
+            },
+            explicacao: { type: 'string', description: 'por que está errado, citando a palavra do original que decide' },
+            sugestao: { type: 'string', description: 'como fica o trecho' },
+          },
+          required: ['trecho', 'tipo', 'explicacao', 'sugestao'],
+        },
+      },
+      versao_corrigida: { type: 'string', description: 'a tentativa com o MÍNIMO de mudanças para ficar certa e natural' },
+      palavras_para_estudar: {
+        type: 'array',
+        description: 'palavras do original que causaram os erros (no máximo 5)',
+        items: {
+          type: 'object',
+          properties: {
+            texto: { type: 'string', description: 'a palavra no original' },
+            leitura: { type: ['string', 'null'], description: 'pinyin com tons (mandarim) ou null' },
+            significado: { type: 'string', description: 'significado em português' },
+          },
+          required: ['texto', 'leitura', 'significado'],
+        },
+      },
+    },
+    required: ['veredito', 'acertos', 'problemas', 'versao_corrigida', 'palavras_para_estudar'],
+  },
+  notasInstrucao: ['Sem problemas a apontar, use "problemas": [] e repita a tentativa em versao_corrigida.'],
 };

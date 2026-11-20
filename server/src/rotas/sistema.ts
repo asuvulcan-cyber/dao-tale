@@ -67,10 +67,13 @@ export function rotasSistema(db: BancoDados): Hono {
     // literalmente, e um salvar recusado precisa dizer QUAL campo recusou.
     if (!corpo.success)
       return c.json({ erro: { codigo: 'payload-invalido', mensagem: mensagemDeValidacao(corpo.error) } }, 400);
-    const { temperaturas, ...resto } = corpo.data;
+    const { temperaturas, nivel_idioma, ...resto } = corpo.data;
     return c.json(
       reposConfig.definir(db, {
         ...resto,
+        // Mesmo motivo das temperaturas: mudar o nível de um idioma não pode
+        // devolver o do outro ao padrão.
+        ...(nivel_idioma ? { nivel_idioma: { ...reposConfig.obterTodas(db).nivel_idioma, ...nivel_idioma } } : {}),
         // A tabela de temperaturas é guardada como um valor só (JSON): um PUT com
         // uma chave apenas precisa ser mesclado sobre o que já está gravado,
         // senão salvar "tradução" devolveria os outros papéis ao padrão.

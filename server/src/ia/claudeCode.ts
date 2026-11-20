@@ -29,6 +29,12 @@ import {
   type PartesSistema,
 } from './prompts.js';
 import {
+  sistemaCorrigirTutorPartes,
+  sistemaExplicarTutorPartes,
+  usuarioCorrigirTutor,
+  usuarioExplicarTutor,
+} from './promptTutor.js';
+import {
   CONTRATO_ADJUDICACAO_LITERARIA,
   CONTRATO_CONTRACAPA,
   CONTRATO_EXTRAIR_TERMOS,
@@ -39,6 +45,8 @@ import {
   CONTRATO_REVISAO_LITERARIA,
   CONTRATO_TRADUCAO,
   type Contrato,
+  CONTRATO_TUTOR_CORRIGIR,
+  CONTRATO_TUTOR_EXPLICAR,
 } from './contratos.js';
 import { usoDoClaude } from './uso.js';
 
@@ -360,6 +368,28 @@ export const provedorClaudeCode: ProvedorIA = {
       usuarioAdjudicacaoLiteraria(req),
       req,
       'adjudicação literária',
+    );
+    return { ...r.dados, bruta: r.bruta, uso: r.uso };
+  },
+
+  async explicarFraseTutor(_chave, req) {
+    const r = await chamar(
+      CONTRATO_TUTOR_EXPLICAR,
+      sistemaExplicarTutorPartes(req),
+      usuarioExplicarTutor(req),
+      req,
+      'explicação do tutor',
+    );
+    return { ...r.dados, bruta: r.bruta, uso: r.uso };
+  },
+
+  async corrigirTentativaTutor(_chave, req) {
+    const r = await chamar(
+      CONTRATO_TUTOR_CORRIGIR,
+      sistemaCorrigirTutorPartes(req),
+      usuarioCorrigirTutor(req),
+      req,
+      'correção do tutor',
     );
     return { ...r.dados, bruta: r.bruta, uso: r.uso };
   },

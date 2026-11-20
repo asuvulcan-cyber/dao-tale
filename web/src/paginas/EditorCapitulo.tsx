@@ -18,6 +18,7 @@ import { Aviso, Botao, MenuMais, REGRA_ESTILO_ROTULO, STATUS_CAPITULO_ROTULO } f
 import { orientacaoDaRegra } from '../util/rotuloRegra';
 import { CapturaTermo } from '../componentes/CapturaTermo';
 import { GavetaRevisao } from '../componentes/GavetaRevisao';
+import { GavetaTutor } from '../componentes/GavetaTutor';
 import { IndicadorCota } from '../componentes/IndicadorCota';
 import { ComparacaoRevisaoLiteraria } from '../componentes/ComparacaoRevisaoLiteraria';
 import {
@@ -91,12 +92,13 @@ const CHAVE_LARGURA = 'dao-tale-leitura-largura';
 // Prioridade: problemas primeiro (erro/regra), depois atenção (pergunta),
 // depois intervenção humana (editada), depois selo de qualidade (confirmada).
 // Frase "normal" (original da IA ou pendente) fica limpa.
-type EstadoFrase = 'erro' | 'regra' | 'pergunta' | 'editada' | 'confirmada' | 'original' | 'pendente';
+type EstadoFrase = 'erro' | 'regra' | 'pergunta' | 'tutor' | 'editada' | 'confirmada' | 'original' | 'pendente';
 
 const ESTADO_FRASE_INFO: Partial<Record<EstadoFrase, { lava: string; chip: string; texto: string; rotulo: string }>> = {
   erro: { lava: 'frase-lava--erro', chip: 'bg-selo-tint text-selo-forte', texto: 'erro', rotulo: 'Erro na tradução' },
   regra: { lava: 'frase-lava--regra', chip: 'bg-selo-tint text-selo-forte', texto: 'regra', rotulo: 'Revisão pediu regra nova' },
   pergunta: { lava: 'frase-lava--pergunta', chip: 'bg-ocre-tint text-ocre-forte', texto: 'pergunta', rotulo: 'Pergunta de revisão pendente' },
+  tutor: { lava: 'frase-lava--confirmada', chip: 'bg-jade-tint text-jade-forte', texto: 'sua', rotulo: 'Traduzida por você no modo tutor' },
   editada: { lava: 'frase-lava--editada', chip: 'bg-indigo-tint text-indigo-forte', texto: 'editada', rotulo: 'Editada à mão' },
   confirmada: { lava: 'frase-lava--confirmada', chip: 'bg-jade-tint text-jade-forte', texto: 'confirmada', rotulo: 'Confirmada na revisão' },
 };
@@ -106,6 +108,7 @@ function estadoDaFrase(frase: Frase, casos: CasoTeste[] | undefined): EstadoFras
   if (frase.status_traducao === 'pendente') return 'pendente';
   if (casos?.some((c) => c.status === 'regra-nova-necessaria')) return 'regra';
   if (casos?.some((c) => c.status === 'pendente')) return 'pergunta';
+  if (frase.origem_edicao === 'tutor') return 'tutor';
   if (frase.editado_manualmente) return 'editada';
   if (casos?.some((c) => c.status === 'confirmado' || c.status === 'corrigido')) return 'confirmada';
   return 'original';
@@ -593,10 +596,23 @@ export function EditorCapitulo() {
         {/* onMouseUp aqui em vez de por frase: delegação — soltar uma seleção em
             qualquer LinhaFrase/FraseSpan (marcadas com data-lado) borbulha até aqui. */}
         <div onMouseUp={aoSoltarSelecao}>
-          {modo === 'segmentado' ? (
+          {modo === 'segmentado' || modo === 'tutor' ? (
             /* Folha contínua: uma única superfície; parágrafos separados por
                respiro, não por molduras. */
             <div className="cartao py-3">
+              {modo === 'tutor' && (
+                <p className="mx-4 mb-3 rounded bg-papel-fundo/60 px-3 py-2 text-sm text-tinta-2">
+                  <strong className="text-tinta">Modo tutor.</strong> Clique numa frase para estudar: tente traduzir,
+                  peça dica quando travar e peça correção. A tradução que já existe fica oculta até você pedir.{' '}
+                  <span className="tabular-nums">
+                    {frases.filter((f) => f.origem_edicao === 'tutor').length} de {frases.length} frases traduzidas
+                    por você.
+                  </span>{' '}
+                  <Link to="/vocabulario" className="text-jade-forte underline">
+                    Vocabulário
+                  </Link>
+                </p>
+              )}
               {paragrafos.map(([idx, frasesDoParagrafo]) => (
                 // content-visibility: parágrafos fora da tela não são renderizados —
                 // mantém capítulos muito longos (600+ frases) fluidos sem virtualização.
@@ -615,6 +631,7 @@ export function EditorCapitulo() {
                       aoSelecionar={() => setFraseSelecionada(frase.id === fraseSelecionada ? null : frase.id)}
                       capituloId={capituloId!}
                       aoEditarTexto={aoEditarTexto}
+                      tutor={modo === 'tutor'}
                       emVoo={
                         !!progresso.em_voo &&
                         frase.ordem >= progresso.em_voo.de &&
@@ -705,8 +722,26 @@ export function EditorCapitulo() {
           </div>
         )}
 
-        {/* Gaveta de revisão (flutuante) */}
-        {selecionada && (
+        {/* Gaveta do tutor no modo Tutor; de revisão nos demais (flutuantes). */}
+        {selecionada && modo === 'tutor' && (
+          <GavetaTutor
+            key={selecionada.id}
+            frase={selecionada}
+            referencia={`${capitulo.numero}.${selecionada.ordem}`}
+            obraId={obraId!}
+            capituloId={capituloId!}
+            anterior={frases.find((f) => f.ordem === selecionada.ordem - 1) ?? null}
+            proxima={frases.find((f) => f.ordem === selecionada.ordem + 1) ?? null}
+            aoIrPara={(fraseId) => {
+              setFraseSelecionada(fraseId);
+              requestAnimationFrame(() =>
+                document.getElementById(`frase-${fraseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+              );
+            }}
+            aoFechar={() => setFraseSelecionada(null)}
+          />
+        )}
+        {selecionada && modo !== 'tutor' && (
           <GavetaRevisao
             frase={selecionada}
             referencia={`${capitulo.numero}.${selecionada.ordem}`}
@@ -811,6 +846,7 @@ function LinhaFrase({
   aoSelecionar,
   capituloId,
   aoEditarTexto,
+  tutor = false,
   emVoo = false,
 }: {
   frase: Frase;
@@ -822,12 +858,16 @@ function LinhaFrase({
   capituloId: string;
   /** Avisa a página da edição manual — alimenta a correção rápida de termo. */
   aoEditarTexto: (antes: string, depois: string, fraseId: number) => void;
+  /** Modo tutor: a tradução que não é sua fica oculta até você pedir. */
+  tutor?: boolean;
   /** A frase está no bloco enviado ao provedor, aguardando resposta. */
   emVoo?: boolean;
 }) {
   const clienteQuery = useQueryClient();
   const [texto, setTexto] = useState(frase.texto_pt);
   const [editando, setEditando] = useState(false);
+  const [revelada, setRevelada] = useState(false);
+  const oculta = tutor && !revelada && !!frase.texto_pt && frase.origem_edicao !== 'tutor';
 
   // Sincroniza quando a tradução chega por fora (job em lote, correção aplicada).
   useEffect(() => setTexto(frase.texto_pt), [frase.texto_pt]);
@@ -850,7 +890,7 @@ function LinhaFrase({
         data-lado="zh"
         className="texto-zh cursor-pointer select-text break-words border-r border-linha/50 py-1 pr-4 text-tinta-2"
         onClick={seSemSelecao(aoSelecionar)}
-        title="Clique para revisar esta frase"
+        title={tutor ? 'Clique para estudar esta frase' : 'Clique para revisar esta frase'}
       >
         <span
           className="mr-2 font-mono text-[10px] tabular-nums text-tinta-2/70"
@@ -862,7 +902,17 @@ function LinhaFrase({
       </div>
       {/* Estado B aprovado: lavagem + filete na célula da tradução. */}
       <div className={`frase-lava ${info?.lava ?? ''} rounded-r py-1`}>
-        {editando ? (
+        {oculta ? (
+          <button
+            type="button"
+            onClick={() => setRevelada(true)}
+            className="min-h-6 w-full rounded text-left text-sm italic text-tinta-2 hover:bg-papel-fundo/60"
+            title="A tradução fica oculta no modo tutor para não entregar a resposta"
+          >
+            <span className="select-none blur-[3px]">{frase.texto_pt.slice(0, 60)}</span>{' '}
+            <span className="not-italic text-xs text-jade-forte">mostrar</span>
+          </button>
+        ) : editando ? (
           <textarea
             value={texto}
             autoFocus
@@ -898,7 +948,7 @@ function LinhaFrase({
               <span className="animate-pulse italic text-info">(traduzindo…)</span>
             ) : (
               <span className="italic text-tinta-2">
-                {frase.status_traducao === 'pendente' ? '(pendente de tradução)' : '(vazio)'}
+                {tutor ? '(sua vez — clique no original)' : frase.status_traducao === 'pendente' ? '(pendente de tradução)' : '(vazio)'}
               </span>
             )}
           </div>
