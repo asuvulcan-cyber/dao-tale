@@ -17,6 +17,8 @@ npm run start   # compila a interface na 1ª vez, sobe em http://127.0.0.1:8317 
 
 Sem chave de API dá para usar tudo com o provedor **Simulado**. Chaves reais (Claude/Gemini) são cadastradas em Configurações e guardadas no cofre de credenciais do sistema.
 
+**Motor pela assinatura (provedor `claude-code`):** em vez da API paga, o app pode rodar o [Claude Code](https://claude.com/claude-code) em modo não interativo (`claude -p`), um processo por chamada, com os mesmos prompts e contratos JSON do provedor Claude. Não precisa de chave: usa o login do Claude Code. A conta é a da pasta `~/.claude-conta2` quando ela existe (troque com `DAO_TALE_CLAUDE_CONFIG_DIR`), e o executável é procurado em `~/.local/bin/claude` (troque com `DAO_TALE_CLAUDE_BIN`). Não há controle de temperatura nesse provedor, e o "thinking" vira nível de esforço.
+
 **Primeiro teste?** Siga o roteiro de [`docs/07-guia-de-teste.md`](docs/07-guia-de-teste.md) — inclui uma obra de exemplo pronta (`exemplos/obra-exemplo.json`, importável com um clique) e soluções para os tropeços comuns.
 
 Desenvolvimento: `npm run dev` (servidor + Vite com reload) · testes: `npm test` · tipos: `npm run typecheck` · atalho de área de trabalho: `npm run atalho`.

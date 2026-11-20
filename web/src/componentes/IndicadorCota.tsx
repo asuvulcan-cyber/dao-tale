@@ -7,6 +7,7 @@ import { api } from '../api';
 // Configurações. Some quando o limite do provedor é 0.
 
 export const NOME_CURTO: Record<string, string> = {
+  'claude-code': 'Claude Code',
   gemini: 'Gemini',
   claude: 'Claude',
   deepseek: 'DeepSeek',

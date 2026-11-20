@@ -56,6 +56,12 @@ export function Configuracoes() {
     <div className="max-w-3xl space-y-6">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Configurações</h1>
 
+      {provedores
+        .filter((p) => p.id === 'claude-code')
+        .map((p) => (
+          <CartaoAssinatura key={p.id} provedor={p} />
+        ))}
+
       <section className="cartao p-4">
         <h2 className="olho mb-1">Chaves de API</h2>
         <p className="mb-3 text-sm text-tinta-2">
@@ -455,6 +461,34 @@ function TabelaPrecos({
         Salvar preço novo não reescreve o passado sozinho — use “Recalcular” para aplicar a tabela vigente ao histórico
         já gravado.
       </p>
+    </section>
+  );
+}
+
+// O provedor `claude-code` não tem chave: usa o login do Claude Code na conta do
+// motor (pasta ~/.claude-conta2). O que dá para fazer daqui é conferir o login —
+// entrar ou trocar de conta é no terminal, com `claude2`.
+function CartaoAssinatura({ provedor }: { provedor: ProvedorInfo }) {
+  const testar = useMutation({
+    mutationFn: () => api<{ ok: boolean; mensagem: string }>('POST', `/credenciais/${provedor.id}/testar`),
+  });
+
+  return (
+    <section className="cartao p-4">
+      <h2 className="olho mb-1">Motor pela assinatura</h2>
+      <p className="mb-3 text-sm text-tinta-2">
+        O provedor <strong>{provedor.nome}</strong> roda o Claude Code em segundo plano, um processo por chamada, com
+        o login da conta do motor (<code>~/.claude-conta2</code>, a do atalho <code>claude2</code>). Não usa chave nem
+        cobra por token; o que pesa é o limite de uso do plano. Se o teste disser que não há login, abra um terminal,
+        rode <code>claude2</code> e entre na conta.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Botao variante="secundario" onClick={() => testar.mutate()} disabled={testar.isPending}>
+          {testar.isPending ? 'Conferindo…' : 'Conferir login'}
+        </Botao>
+      </div>
+      {testar.data && <Aviso tipo={testar.data.ok ? 'ok' : 'erro'}>{testar.data.mensagem}</Aviso>}
+      {testar.error && <Aviso tipo="erro">{mensagemDeErro(testar.error)}</Aviso>}
     </section>
   );
 }

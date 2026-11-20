@@ -35,7 +35,16 @@ export * from './idiomaOrigem.js';
 
 // ── Domínio ────────────────────────────────────────────────────────────────
 
-export const PROVEDORES_IDS = ['claude', 'gemini', 'deepseek', 'openrouter', 'groq', 'mistral', 'mock'] as const;
+export const PROVEDORES_IDS = [
+  'claude-code',
+  'claude',
+  'gemini',
+  'deepseek',
+  'openrouter',
+  'groq',
+  'mistral',
+  'mock',
+] as const;
 export type ProvedorId = (typeof PROVEDORES_IDS)[number];
 
 // 'parcial': job terminou com frases em erro ou foi interrompido no meio —
@@ -809,6 +818,9 @@ export const CONFIG_PADRAO: Configuracoes = {
   // promocional de 2/10 até 31/08/2026 — aqui fica o cheio (melhor superestimar
   // custo que subestimar); ajuste em Configurações se quiser o promocional.
   precos_modelos: {
+    // Claude Code pela assinatura: sem cobrança por token. O zero é explícito
+    // para o painel contar as chamadas como medidas, não como "sem preço".
+    'claude-code:*': { entrada: 0, saida: 0, cache_leitura: 0, cache_criacao: 0 },
     'claude:claude-fable-5': { entrada: 10, saida: 50 },
     'claude:claude-opus-5': { entrada: 5, saida: 25 },
     'claude:claude-opus-4-8': { entrada: 5, saida: 25 },

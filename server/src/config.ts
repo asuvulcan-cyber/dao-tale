@@ -81,3 +81,27 @@ export function ehInstanciaCanonica(): boolean {
   if (ehHospedado()) return true;
   return !process.env.DAO_TALE_DIR && !process.env.DAO_TALE_BANCO && PORTA === PORTA_PADRAO;
 }
+
+// ── Motor Claude Code (provedor `claude-code`) ──────────────────────────────
+// O app pode ser aberto pelo atalho da área de trabalho, que não lê o .bashrc:
+// por isso os padrões abaixo não dependem de variável de ambiente nem de PATH.
+
+/** Pasta de configuração do Claude Code que o motor usa — é ela que decide QUAL
+ *  conta atende as chamadas. `DAO_TALE_CLAUDE_CONFIG_DIR` sobrepõe; sem ela,
+ *  vale `~/.claude-conta2` (a conta separada para o motor, a mesma do alias
+ *  `claude2`) quando existir, e senão `null` = o padrão do próprio Claude Code. */
+export function pastaContaClaudeCode(): string | null {
+  const explicita = process.env.DAO_TALE_CLAUDE_CONFIG_DIR;
+  if (explicita) return explicita;
+  const conta2 = path.join(os.homedir(), '.claude-conta2');
+  return fs.existsSync(conta2) ? conta2 : null;
+}
+
+/** Executável do Claude Code. O instalador oficial põe em `~/.local/bin`, que
+ *  nem toda sessão gráfica tem no PATH. */
+export function executavelClaudeCode(): string {
+  const explicito = process.env.DAO_TALE_CLAUDE_BIN;
+  if (explicito) return explicito;
+  const local = path.join(os.homedir(), '.local', 'bin', 'claude');
+  return fs.existsSync(local) ? local : 'claude';
+}

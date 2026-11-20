@@ -1,6 +1,7 @@
 import type { ProvedorId } from '@dao-tale/shared';
 import type { ProvedorIA } from './provedor.js';
 import { provedorClaude } from './claude.js';
+import { provedorClaudeCode } from './claudeCode.js';
 import { provedorGemini } from './gemini.js';
 import { provedorMock } from './mock.js';
 import { criarProvedorCompat } from './compat.js';
@@ -18,6 +19,7 @@ const PEQUENO_DEMAIS = /nano|tiny|dolphin|(?<![a-z])mini(?!max)|-[1-9](\.\d)?b\b
 
 // Adicionar um provedor novo = criar o arquivo (ou usar criarProvedorCompat) e registrar aqui.
 const provedores: Record<string, ProvedorIA> = {
+  'claude-code': provedorClaudeCode,
   claude: provedorClaude,
   gemini: provedorGemini,
   deepseek: criarProvedorCompat({

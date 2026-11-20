@@ -50,6 +50,32 @@ function descreverClaude(id: string): { descricao: string; recomendado: boolean 
   return { descricao: 'Modelo de texto da Anthropic.', recomendado: false };
 }
 
+// Claude pela assinatura: os três apelidos do Claude Code. As descrições vêm da
+// comparação no cap. 1 do Sutra dos Mortos (20/11/2026), lida frase a frase.
+function descreverClaudeCode(id: string): { descricao: string; recomendado: boolean } {
+  if (/opus/.test(id)) {
+    return {
+      descricao:
+        'O melhor na comparação: tempo verbal estável, unidades convertidas e expressões naturalizadas. Gasta o limite do plano cerca de 2× mais rápido que o Sonnet. Indicado para tradução, revisão e contracapa.',
+      recomendado: true,
+    };
+  }
+  if (/sonnet/.test(id)) {
+    return {
+      descricao:
+        'Fluente e mais rápido, mas na tradução deixou unidades sem converter e expressões ao pé da letra. Usado no QA, como segunda opinião de um modelo diferente do tradutor.',
+      recomendado: true,
+    };
+  }
+  if (/haiku/.test(id)) {
+    return {
+      descricao: 'O mais leve. Na tradução escorregou no tempo verbal e no tratamento; serve para tarefas curtas.',
+      recomendado: false,
+    };
+  }
+  return { descricao: 'Modelo do Claude pela assinatura.', recomendado: false };
+}
+
 function descreverDeepSeek(id: string): { descricao: string; recomendado: boolean } {
   if (/flash|chat/.test(id)) {
     return { descricao: 'Muito barato e forte em chinês — excelente custo-benefício para tradução.', recomendado: true };
@@ -103,6 +129,7 @@ export function classificarModelos(provedor: string, modelos: ModeloInfo[]): Mod
 
   const descritores: Record<string, (id: string) => { descricao: string; recomendado: boolean }> = {
     gemini: descreverGemini,
+    'claude-code': descreverClaudeCode,
     claude: descreverClaude,
     deepseek: descreverDeepSeek,
     openrouter: descreverOpenRouter,

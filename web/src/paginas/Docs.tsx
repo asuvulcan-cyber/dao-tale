@@ -6,6 +6,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 const SECOES = [
   { id: 'comecando', titulo: 'Começando' },
+  { id: 'assinatura', titulo: 'Motor pela assinatura' },
   { id: 'chaves', titulo: 'Chaves de API' },
   { id: 'traduzindo', titulo: 'Traduzindo um capítulo' },
   { id: 'glossario', titulo: 'Glossário e termos sugeridos' },
@@ -113,6 +114,7 @@ export function Docs() {
             itens={[
               <>
                 <strong>Configure um provedor de IA</strong> em <Link className="text-jade-forte underline" to="/configuracoes">Configurações</Link>:
+                use o <a href="#assinatura" className="text-jade-forte underline">Claude Code pela assinatura</a> ou
                 cole uma chave de API (veja <a href="#chaves" className="text-jade-forte underline">como criar uma</a>) e
                 escolha provedor e modelo padrão. Sem chave nenhuma, o provedor <em>Simulado</em> permite testar o
                 fluxo inteiro com traduções de mentira.
@@ -136,6 +138,44 @@ export function Docs() {
               </>,
             ]}
           />
+        </Secao>
+
+        <Secao id="assinatura" titulo="Motor pela assinatura">
+          <p>
+            O provedor <strong>Claude Code (assinatura)</strong> traduz e revisa sem chave de API: o aplicativo roda o
+            Claude Code em segundo plano, um processo por chamada, com os mesmos prompts e formatos de resposta do
+            provedor Claude. Não há cobrança por token; o que pesa é o limite de uso do plano da conta.
+          </p>
+          <p>
+            A conta usada é a da pasta <code>~/.claude-conta2</code> (a do atalho <code>claude2</code> no terminal),
+            separada da conta do editor de código. Para entrar ou trocar de conta, rode <code>claude2</code> no
+            terminal e faça login; depois confira em{' '}
+            <Link className="text-jade-forte underline" to="/configuracoes">Configurações → Conferir login</Link>.
+          </p>
+          <Sub>Qual modelo em cada função</Sub>
+          <p>
+            Comparação feita retraduzindo o capítulo 1 do zero com cada modelo e lendo as frases contra o texto
+            final:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <strong>Opus</strong> — tradução, revisão e contracapa. Manteve o tempo verbal, converteu li/chi/jin
+              como a obra pede e naturalizou as expressões. Gasta o limite cerca de 2× mais rápido que o Sonnet.
+            </li>
+            <li>
+              <strong>Sonnet</strong> — QA. Fluente, mas na tradução deixou unidades sem converter e expressões ao pé
+              da letra; como segunda opinião, vale justamente por ser outro modelo.
+            </li>
+            <li>
+              <strong>Haiku</strong> — não recomendado para traduzir: escorregou para o presente e errou o
+              tratamento entre personagens.
+            </li>
+          </ul>
+          <p className="text-tinta-2">
+            Se a conta começar a bater no limite, o primeiro ajuste é trocar só a tradução para o Sonnet e conferir as
+            unidades na revisão. Baixar o esforço do modelo quase não economizou e piorou o texto. Esse provedor não
+            tem controle de temperatura; o "thinking" da obra vira o nível de esforço.
+          </p>
         </Secao>
 
         <Secao id="chaves" titulo="Chaves de API">
