@@ -100,6 +100,23 @@ describe('recall do mais-que-perfeito', () => {
     expect(r.violacoes.map((v) => v.trecho)).toEqual(['achara', 'ouvira']);
   });
 
+  it('não acusa adjetivo em -ora: o único mais-que-perfeito nessa terminação é "fora"', () => {
+    // Os quatro casos reais da auditoria integral da 死人经 (20/11/2026).
+    const r = analisarEstilo(
+      frases(['Uma dúvida perturbadora, uma carreira promissora.', 'A lutadora tinha uma presença ameaçadora.']),
+      { ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'evitar' },
+    );
+    expect(r.violacoes).toEqual([]);
+  });
+
+  it('não acusa nada em -eira nem as -era da auditoria, e segue pegando -era de verbo', () => {
+    const r = analisarEstilo(
+      frases(['Uma resposta grosseira e sincera na véspera.', 'Ele fizera, dissera e pusera tudo no lugar.']),
+      { ...PREFERENCIAS_PADRAO, mais_que_perfeito: 'evitar' },
+    );
+    expect(r.violacoes.map((v) => v.trecho)).toEqual(['fizera', 'dissera', 'pusera']);
+  });
+
   it('continua sem acusar as curtas que não são verbo', () => {
     const r = analisarEstilo(
       frases(['Para na hora, espera, prepara e admira a cadeira clara de madeira.']),

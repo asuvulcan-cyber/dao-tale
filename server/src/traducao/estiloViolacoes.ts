@@ -28,7 +28,7 @@ export interface RelatorioEstilo {
   por_terco: [number, number, number];
 }
 
-/** Palavras que terminam em -ara/-era/-ira/-ora/-íra sem serem mais-que-perfeito.
+/** Palavras que terminam em -ara/-era/-ira/-íra sem serem mais-que-perfeito.
  *  Lista de substantivos/adjetivos comuns — o que escapar aqui vira falso
  *  positivo visível no relatório, nunca correção automática silenciosa. */
 const NAO_VERBOS = new Set([
@@ -58,6 +58,10 @@ const NAO_VERBOS = new Set([
   'voadora', 'caçadora', 'matadora', 'errante', 'guerreira', 'feiticeira', 'traiçoeira',
   'carnívora',
   'câmara', 'terceira', 'assustadora',
+  // Adjetivos e nomes em -era: "sincera" e "véspera" foram falsos positivos na
+  // auditoria integral da 死人经 (20/11/2026). -era é o sufixo de mais-que-perfeito
+  // mais produtivo, então aqui não cabe regra por terminação, só lista.
+  'sincera', 'véspera', 'austera', 'primavera', 'atmosfera', 'cratera',
 ]);
 
 // {2,} e não {4,}: o quantificador conta os caracteres ANTES do sufixo, então
@@ -70,12 +74,26 @@ const NAO_VERBOS = new Set([
 // destruíra. Havia um "saíra" real no capítulo 3 da 死人经 que só a leitura
 // humana pegou: o falso negativo que o comentário acima diz ser o que dói,
 // acontecendo na prática.
-const RE_MQP = /(?<!\p{L})\p{L}{2,}(?:ara|era|ira|ora|íra)(?!\p{L})/giu;
+//
+// Sem "ora": o único mais-que-perfeito em -ora é "fora" (de ser/ir), que já está
+// em NAO_VERBOS por ser também preposição — então o sufixo não tinha nenhum
+// acerto possível e só gerava ruído. Na auditoria integral da 死人经 (20/11/2026),
+// 6 dos 9 alertas de mais-que-perfeito eram adjetivos em -dora/-ora
+// ("perturbadora", "lutadora", "promissora", "ameaçadora"). "fora" segue na
+// leitura humana, como a skill revisar-capitulo manda.
+const RE_MQP = /(?<!\p{L})\p{L}{2,}(?:ara|era|ira|íra)(?!\p{L})/giu;
+
+// Nenhum mais-que-perfeito termina em -eira: exigiria verbo da 3ª conjugação com
+// radical em -e, e não há. A classe (grosseira, cegueira, madeira…) é produtiva
+// demais para lista — "grosseira" escapou dela na mesma auditoria.
+const RE_EIRA = /eira$/i;
 
 /** Verbo no mais-que-perfeito simples ("fizera")? Heurística por sufixo, com
  *  lista de exceções — pensada para ACUSAR e ser conferida, não para corrigir. */
 function candidatosMaisQuePerfeito(texto: string): string[] {
-  return [...texto.matchAll(RE_MQP)].map((m) => m[0]).filter((p) => !NAO_VERBOS.has(p.toLowerCase()));
+  return [...texto.matchAll(RE_MQP)]
+    .map((m) => m[0])
+    .filter((p) => !NAO_VERBOS.has(p.toLowerCase()) && !RE_EIRA.test(p));
 }
 
 /** Aspas de diálogo num texto cuja obra escolheu travessão, e vice-versa. */
