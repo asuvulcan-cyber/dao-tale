@@ -12,6 +12,7 @@ import {
   MARCADOR_PREFERENCIAS_COMPACTAS,
   MARCADOR_PREFERENCIAS_COMPACTAS_V2,
   MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V4,
 } from '../db/promptPadraoInicial.js';
 
 export interface AvisoCamada {
@@ -57,7 +58,8 @@ export function avisosDeAlfa(conteudo: string): AvisoCamada[] {
     !conteudo.includes(MARCADOR_PREFERENCIAS) &&
     !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS) &&
     !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2) &&
-    !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+    !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3) &&
+    !conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V4)
   ) {
     avisos.push({
       tema: 'marcador_preferencias',

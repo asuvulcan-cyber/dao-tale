@@ -52,6 +52,12 @@ describe('avisosDeAlfa', () => {
     ).toEqual([]);
   });
 
+  it('reconhece o marcador compacto V4 como Beta válida', () => {
+    expect(
+      avisosDeAlfa(`# Alfa\n\nProsa, não legenda.\n\n{{PREFERENCIAS_OBRA_COMPACTAS_V4}}\n\n{{DELTA_OBRA}}`),
+    ).toEqual([]);
+  });
+
   // Este é o Alfa que estava rodando no VPS em 2026-08-05 e produziu o sintoma.
   it('o v1.0 legado acenderia os dois tipos de aviso', () => {
     const avisos = avisosDeAlfa('# Padrão\n\n**Diálogo:** aspas duplas, nunca travessão.\n\n{{DELTA_OBRA}}');

@@ -32,6 +32,8 @@ export const MARCADOR_PREFERENCIAS_COMPACTAS_V2 = '{{PREFERENCIAS_OBRA_COMPACTAS
 export const MARCADOR_CHECKLIST_FINAL_V2 = '{{CHECKLIST_FINAL_V2}}';
 export const MARCADOR_PREFERENCIAS_COMPACTAS_V3 = '{{PREFERENCIAS_OBRA_COMPACTAS_V3}}';
 export const MARCADOR_CHECKLIST_FINAL_V3 = '{{CHECKLIST_FINAL_V3}}';
+/** Beta curta v4: só a anterioridade muda (ver renderizarPreferenciasCompactasV4). */
+export const MARCADOR_PREFERENCIAS_COMPACTAS_V4 = '{{PREFERENCIAS_OBRA_COMPACTAS_V4}}';
 /** Marcadores do perfil inglês. São próprios, e não uma v4, para `comporOmega`
  *  ganhar só mais um par de `replace` em vez de ramificar por idioma — e para
  *  nenhum byte dos Alfas mandarins históricos precisar mudar. */
@@ -436,6 +438,22 @@ export function renderizarPreferenciasCompactasV3(prefs: PreferenciasEstilo): st
       '**Tom e registro local:** antes de redigir, identifique no chinês a voz, oralidade ou formalidade, densidade sintática, ritmo, distância emocional e intenção deste trecho. Reproduza esse efeito em PT-BR natural. Não imponha ao capítulo uma voz global de “webnovel” nem normalize tudo como moderno, simples, formal, rápido ou literário.',
       `**Acessibilidade:** ${acessibilidade} Não use flexão verbal de “tu” sem evidência no original e decisão editorial específica.`,
     ].join('\n\n'),
+  );
+}
+
+/** Beta curta v4: diz QUANDO a perífrase é obrigatória. A v1–v3 dizia "use
+ * tinha/havia só quando necessário" sem dizer quando é necessário. Na auditoria
+ * integral da 死人经 (20/11/2026), 9 frases conferidas saíram no perfeito simples
+ * sem nada que marcasse a anterioridade ("não sabiam o que aconteceu", "a parte
+ * que combinaram antes"). A IA tinha escrito o sintético proibido ("acontecera");
+ * a revisão literária, impedida de trocá-lo mecanicamente por "tinha +
+ * particípio", caiu no perfeito simples, que torna simultâneo o fato anterior. */
+export function renderizarPreferenciasCompactasV4(prefs: PreferenciasEstilo): string {
+  const base = renderizarPreferenciasCompactasV3(prefs);
+  if (prefs.mais_que_perfeito !== 'evitar') return base;
+  return base.replace(
+    /^\*\*Anterioridade:\*\*.*$/m,
+    '**Anterioridade:** quando um advérbio ou o contexto já marcam a anterioridade, use o perfeito simples (`nunca aprendeu`, `treinou anos antes disso`). Sem esse marcador, o perfeito simples a apaga: use “tinha/havia + particípio”, sobretudo em oração ligada a verbo de saber, perceber ou contar no passado (`não sabiam o que tinha acontecido`, não `o que aconteceu`). Alterne os dois auxiliares e não os empilhe; nunca o sintético em -ara/-era/-ira.',
   );
 }
 

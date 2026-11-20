@@ -12,6 +12,7 @@ import {
   MARCADOR_PREFERENCIAS_COMPACTAS,
   MARCADOR_PREFERENCIAS_COMPACTAS_V2,
   MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V4,
 } from '@dao-tale/shared';
 
 // C2 (cinto de segurança): promessa órfã de um job nunca deve derrubar o
@@ -80,7 +81,8 @@ function avisarSeAlfaIgnoraPreferencias(banco: typeof db): void {
     alfa.conteudo.includes(MARCADOR_PREFERENCIAS) ||
     alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS) ||
     alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2) ||
-    alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
+    alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3) ||
+    alfa.conteudo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V4)
   )
     return;
   const obras = banco.prepare('SELECT COUNT(*) n FROM prompts WHERE ativo = 1 AND tipo = ?').get('delta') as {

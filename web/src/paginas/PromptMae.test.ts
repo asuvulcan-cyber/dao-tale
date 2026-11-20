@@ -4,6 +4,7 @@ import {
   MARCADOR_PREFERENCIAS_COMPACTAS,
   MARCADOR_PREFERENCIAS_COMPACTAS_V2,
   MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V4,
 } from '@dao-tale/shared';
 import { nucleoAceitaPreferencias } from './PromptMae';
 
@@ -13,6 +14,7 @@ describe('nucleoAceitaPreferencias', () => {
     MARCADOR_PREFERENCIAS_COMPACTAS,
     MARCADOR_PREFERENCIAS_COMPACTAS_V2,
     MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+    MARCADOR_PREFERENCIAS_COMPACTAS_V4,
   ])('reconhece o marcador Beta %s', (marcador) => {
     expect(nucleoAceitaPreferencias(`núcleo\n${marcador}\nfim`)).toBe(true);
   });

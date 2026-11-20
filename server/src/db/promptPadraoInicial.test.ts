@@ -9,6 +9,7 @@ import {
   MARCADOR_PREFERENCIAS_COMPACTAS,
   NUCLEO_ANTI_DILUICAO_V2,
   NUCLEO_ANTI_DILUICAO_V4,
+  NUCLEO_ANTI_DILUICAO_V5,
   NUCLEO_CANDIDATO_6_4,
   NUCLEO_ANTI_DILUICAO,
   NUCLEO_ENXUTO,
@@ -53,11 +54,29 @@ describe('o Alfa distribuído respeita a partição', () => {
     expect(NUCLEO_ANTI_DILUICAO_V4).not.toContain('{{PREFERENCIAS_OBRA_COMPACTAS_V2}}');
   });
 
+  it('o Alfa 6.3.1 muda só a linha do insulto e o marcador da Beta, sem invadir Beta', () => {
+    const v4 = NUCLEO_ANTI_DILUICAO_V4.split('\n');
+    const v5 = NUCLEO_ANTI_DILUICAO_V5.split('\n');
+    expect(v5).toHaveLength(v4.length);
+    const mudadas = v4.map((l, i) => [l, v5[i]]).filter(([a, b]) => a !== b);
+    expect(mudadas.map(([a]) => a)).toEqual([
+      '- Gíria, insulto e obscenidade conservam o grau do original — nunca suavize nem aumente.',
+      '{{PREFERENCIAS_OBRA_COMPACTAS_V3}}',
+    ]);
+    expect(NUCLEO_ANTI_DILUICAO_V5).toContain('Palavrão cristalizado (王八蛋, 他妈的, 操你奶奶的) é expressão cristalizada, não imagem viva');
+    expect(NUCLEO_ANTI_DILUICAO_V5).toContain('{{PREFERENCIAS_OBRA_COMPACTAS_V4}}');
+    expect(NUCLEO_ANTI_DILUICAO_V5).toContain('{{CHECKLIST_FINAL_V3}}');
+    // A frase nova não pode acender tema de Beta que a 6.3 não acendia.
+    const temasBeta = (t: string) => temasNoTexto(t).filter((o) => o.tema.dono === 'beta').map((o) => o.tema.id);
+    expect(temasBeta(NUCLEO_ANTI_DILUICAO_V5)).toEqual(temasBeta(NUCLEO_ANTI_DILUICAO_V4));
+  });
+
   it('o candidato 6.4 elimina a precedência contraditória sem mudar as camadas', () => {
     expect(NUCLEO_CANDIDATO_6_4).toContain('original = sentido e tom');
     expect(NUCLEO_CANDIDATO_6_4).toContain('Delta = exceções específicas da obra');
     expect(NUCLEO_CANDIDATO_6_4).not.toContain('Beta > Delta');
-    expect(NUCLEO_CANDIDATO_6_4).toContain('{{PREFERENCIAS_OBRA_COMPACTAS_V3}}');
+    expect(NUCLEO_CANDIDATO_6_4).toContain('{{PREFERENCIAS_OBRA_COMPACTAS_V4}}');
+    expect(NUCLEO_CANDIDATO_6_4).toContain('Palavrão cristalizado');
     expect(NUCLEO_CANDIDATO_6_4).toContain(MARCADOR_DELTA_V2);
     expect(NUCLEO_CANDIDATO_6_4).not.toContain(MARCADOR_DELTA);
   });

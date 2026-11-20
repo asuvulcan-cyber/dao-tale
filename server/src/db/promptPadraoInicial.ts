@@ -12,6 +12,7 @@ import {
   MARCADOR_PREFERENCIAS_COMPACTAS,
   MARCADOR_PREFERENCIAS_COMPACTAS_V2,
   MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V4,
   MARCADOR_CHECKLIST_FINAL,
   MARCADOR_CHECKLIST_FINAL_V2,
   MARCADOR_CHECKLIST_FINAL_V3,
@@ -23,6 +24,7 @@ import {
   renderizarPreferenciasCompactas,
   renderizarPreferenciasCompactasV2,
   renderizarPreferenciasCompactasV3,
+  renderizarPreferenciasCompactasV4,
   renderizarPreferenciasCompactasEn,
   renderizarChecklistFinal,
   renderizarChecklistFinalV2,
@@ -37,6 +39,7 @@ export {
   MARCADOR_PREFERENCIAS_COMPACTAS,
   MARCADOR_PREFERENCIAS_COMPACTAS_V2,
   MARCADOR_PREFERENCIAS_COMPACTAS_V3,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V4,
 };
 
 export const VERSAO_PROMPT_PADRAO_INICIAL = '1.0';
@@ -81,6 +84,8 @@ export function comporOmega(
   const prefs = preferencias ?? PREFERENCIAS_PADRAO;
   const comPreferencias = nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_EN)
     ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_EN, renderizarPreferenciasCompactasEn(prefs))
+    : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V4)
+    ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_V4, renderizarPreferenciasCompactasV4(prefs))
     : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V3)
     ? nucleo.replace(MARCADOR_PREFERENCIAS_COMPACTAS_V3, renderizarPreferenciasCompactasV3(prefs))
     : nucleo.includes(MARCADOR_PREFERENCIAS_COMPACTAS_V2)
@@ -424,11 +429,28 @@ export const NUCLEO_ANTI_DILUICAO_V4 = NUCLEO_ANTI_DILUICAO_V3
   .replace(MARCADOR_PREFERENCIAS_COMPACTAS_V2, MARCADOR_PREFERENCIAS_COMPACTAS_V3)
   .replace(MARCADOR_CHECKLIST_FINAL_V2, MARCADOR_CHECKLIST_FINAL_V3);
 
+/** Alfa 6.3.1: remendo da 6.3 com duas regras da auditoria integral da 死人经
+ * (20/11/2026), ambas vindas de contradição e não de desobediência:
+ * (1) A Seção 1 manda preservar "imagens vivas" e também dar equivalente natural
+ *     a expressão cristalizada. A revisão literária leu 王八蛋 como imagem viva e
+ *     trocou o "desgraçado" da IA por "filho da tartaruga" (e "Porra!" por "que
+ *     se foda a avó dele"). A frase nova decide o choque: palavrão cristalizado
+ *     não tem imagem viva.
+ * (2) Beta curta v4: diz quando "tinha/havia + particípio" é obrigatório.
+ * Numerada como remendo para não colidir com o candidato 6.4 abaixo. */
+export const NUCLEO_ANTI_DILUICAO_V5 = NUCLEO_ANTI_DILUICAO_V4
+  .replace(
+    '- Gíria, insulto e obscenidade conservam o grau do original — nunca suavize nem aumente.',
+    '- Gíria, insulto e obscenidade conservam o grau do original — nunca suavize nem aumente. Palavrão cristalizado (王八蛋, 他妈的, 操你奶奶的) é expressão cristalizada, não imagem viva: vira o palavrão brasileiro de mesmo grau, nunca a tradução literal.',
+  )
+  .replace(MARCADOR_PREFERENCIAS_COMPACTAS_V3, MARCADOR_PREFERENCIAS_COMPACTAS_V4);
+
 /** Candidato Alfa 6.4 — NÃO é semeado nem ativado automaticamente.
  * A hierarquia linear anterior dizia Beta > Delta, enquanto a ressalva da
  * Seção 6 dizia que Delta prevalecia sobre as demais camadas. Responsabilidades
  * ortogonais são mais testáveis e não obrigam o modelo a resolver uma
- * contradição artificial. */
+ * contradição artificial. Deriva da 6.3.1 para não perder as duas regras dela
+ * quando for adotado. */
 /** ALFA DO PERFIL INGLÊS — irmão do 6.4 mandarim, não uma versão dele.
  *
  * Mesma arquitetura (Responsabilidades, Beta/Gama/Delta nos marcadores, checklist
@@ -482,7 +504,7 @@ Converta medidas imperiais — pés, polegadas, jardas, milhas, libras, onças, 
 {{CHECKLIST_FINAL_EN}}
 `;
 
-export const NUCLEO_CANDIDATO_6_4 = NUCLEO_ANTI_DILUICAO_V4.replace(
+export const NUCLEO_CANDIDATO_6_4 = NUCLEO_ANTI_DILUICAO_V5.replace(
   '**Prioridade em conflito:** Gama (glossário aplicável) > conteúdo do original > Beta > Delta > naturalidade. Gama decide termos; Beta decide convenções; Delta contém apenas particularidades desta obra.',
   '**Responsabilidades:** original = sentido e tom; Gama = forma do termo quando aplicável; Beta = convenções editoriais; Delta = exceções específicas da obra. Entre soluções compatíveis, escolha a mais natural em PT-BR. Nenhuma camada autoriza contrariar o original.',
 ).replace(MARCADOR_DELTA, MARCADOR_DELTA_V2);

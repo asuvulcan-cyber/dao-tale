@@ -8,12 +8,15 @@ import {
   preferenciasSaoPadrao,
   renderizarPreferencias,
   renderizarPreferenciasCompactas,
+  renderizarPreferenciasCompactasV3,
+  renderizarPreferenciasCompactasV4,
   renderizarChecklistFinal,
   type PreferenciasEstilo,
 } from '@dao-tale/shared';
 import {
   MARCADOR_DELTA,
   MARCADOR_PREFERENCIAS,
+  MARCADOR_PREFERENCIAS_COMPACTAS_V4,
   NUCLEO_ANTI_DILUICAO,
   NUCLEO_ENXUTO,
   comporOmega,
@@ -226,6 +229,44 @@ describe('anterioridade: procedimento em vez de proibição', () => {
     const texto = renderizarPreferencias(com({ mais_que_perfeito: 'permitir' }));
     expect(texto).toContain('as três formas estão liberadas');
     expect(texto).toMatch(/sem empilhar/i);
+  });
+});
+
+describe('anterioridade v4: quando a perífrase é obrigatória', () => {
+  // Auditoria integral da 死人经 (20/11/2026): sem dizer QUANDO "tinha" é
+  // necessário, a revisão trocou o sintético proibido pelo perfeito simples
+  // mesmo sem marcador ("não sabiam o que aconteceu").
+  it('diz que, sem marcador, o perfeito simples apaga a anterioridade', () => {
+    const texto = renderizarPreferenciasCompactasV4(PREFERENCIAS_PADRAO);
+    expect(texto).toMatch(/Sem esse marcador, o perfeito simples a apaga/);
+    expect(texto).toContain('`não sabiam o que tinha acontecido`, não `o que aconteceu`');
+    expect(texto).toContain('nunca o sintético em -ara/-era/-ira');
+  });
+
+  it('o exemplo concorda com a prosa: marcado → perfeito simples, sem marcador → perífrase', () => {
+    const linha = renderizarPreferenciasCompactasV4(PREFERENCIAS_PADRAO).match(/^\*\*Anterioridade:\*\*.*$/m)![0];
+    expect(linha.indexOf('perfeito simples (`nunca aprendeu`')).toBeLessThan(linha.indexOf('Sem esse marcador'));
+    expect(linha.indexOf('Sem esse marcador')).toBeLessThan(linha.indexOf('`não sabiam o que tinha acontecido`'));
+  });
+
+  it('muda só a linha da anterioridade em relação à v3 — o resto da Beta é byte a byte o mesmo', () => {
+    const v3 = renderizarPreferenciasCompactasV3(PREFERENCIAS_PADRAO).split('\n');
+    const v4 = renderizarPreferenciasCompactasV4(PREFERENCIAS_PADRAO).split('\n');
+    expect(v4).toHaveLength(v3.length);
+    const diferentes = v3.filter((l, i) => l !== v4[i]);
+    expect(diferentes).toHaveLength(1);
+    expect(diferentes[0]).toMatch(/^\*\*Anterioridade:\*\*/);
+  });
+
+  it('com mais-que-perfeito permitido, a v4 é idêntica à v3', () => {
+    const prefs = com({ mais_que_perfeito: 'permitir' });
+    expect(renderizarPreferenciasCompactasV4(prefs)).toBe(renderizarPreferenciasCompactasV3(prefs));
+  });
+
+  it('a composição troca o marcador v4 pela Beta v4', () => {
+    const omega = comporOmega(`# Alfa\n\n${MARCADOR_PREFERENCIAS_COMPACTAS_V4}\n\n${MARCADOR_DELTA}`, '');
+    expect(omega).toContain('Sem esse marcador, o perfeito simples a apaga');
+    expect(omega).not.toContain(MARCADOR_PREFERENCIAS_COMPACTAS_V4);
   });
 });
 
